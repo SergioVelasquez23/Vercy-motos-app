@@ -1,0 +1,151 @@
+package com.prog3.security.Models;
+
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
+
+@Document
+public class Producto {
+
+    @Id
+    private String _id;
+    private String nombre;
+    private double precio;
+    private double costo;
+    private double impuestos;
+    private double utilidad;
+    private boolean tieneVariantes;
+    private String estado;
+    private String imagenUrl;
+    private String categoriaId; // Referencia a Categoria
+    private String descripcion;
+    private int cantidad;
+    private String nota;
+
+    public Producto() {
+        // Inicializar campos que pueden ser null con valores por defecto
+        this.estado = "Activo";
+        this.tieneVariantes = false;
+        this.cantidad = 1;
+        this.impuestos = 0.0;
+        this.imagenUrl = "";
+        this.categoriaId = "";
+        this.descripcion = "";
+        this.nota = "";
+    }
+
+    public Producto(String nombre, double precio, double costo, double utilidad) {
+        this.nombre = nombre;
+        this.precio = precio;
+        this.costo = costo;
+        this.utilidad = utilidad;
+        this.impuestos = 0.0;
+        this.tieneVariantes = false;
+        this.estado = "Activo";
+        this.cantidad = 1;
+    }
+
+    // Getters y Setters
+    public String get_id() {
+        return _id;
+    }
+
+    public void set_id(String _id) {
+        this._id = _id;
+    }
+
+    public String getNombre() {
+        return nombre;
+    }
+
+    public void setNombre(String nombre) {
+        this.nombre = nombre;
+    }
+
+    public double getPrecio() {
+        return precio;
+    }
+
+    public void setPrecio(double precio) {
+        this.precio = precio;
+    }
+
+    public double getCosto() {
+        return costo;
+    }
+
+    public void setCosto(double costo) {
+        this.costo = costo;
+    }
+
+    public double getImpuestos() {
+        return impuestos;
+    }
+
+    public void setImpuestos(double impuestos) {
+        this.impuestos = impuestos;
+    }
+
+    public double getUtilidad() {
+        return utilidad;
+    }
+
+    public void setUtilidad(double utilidad) {
+        this.utilidad = utilidad;
+    }
+
+    public boolean isTieneVariantes() {
+        return tieneVariantes;
+    }
+
+    public void setTieneVariantes(boolean tieneVariantes) {
+        this.tieneVariantes = tieneVariantes;
+    }
+
+    public String getEstado() {
+        return estado;
+    }
+
+    public void setEstado(String estado) {
+        this.estado = estado;
+    }
+
+    public String getImagenUrl() {
+        return imagenUrl;
+    }
+
+    public void setImagenUrl(String imagenUrl) {
+        this.imagenUrl = imagenUrl;
+    }
+
+    public String getCategoriaId() {
+        return categoriaId;
+    }
+
+    public void setCategoriaId(String categoriaId) {
+        this.categoriaId = categoriaId;
+    }
+
+    public String getDescripcion() {
+        return descripcion;
+    }
+
+    public void setDescripcion(String descripcion) {
+        this.descripcion = descripcion;
+    }
+
+    public int getCantidad() {
+        return cantidad;
+    }
+
+    public void setCantidad(int cantidad) {
+        this.cantidad = cantidad;
+    }
+
+    public String getNota() {
+        return nota;
+    }
+
+    public void setNota(String nota) {
+        this.nota = nota;
+    }
+}
