@@ -1,13 +1,9 @@
 package com.prog3.security.Controllers;
 
 import java.util.List;
-import java.util.Map;
-import java.util.HashMap;
-import java.util.Date;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,6 +17,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.prog3.security.Models.Producto;
 import com.prog3.security.Repositories.ProductoRepository;
+import com.prog3.security.Services.ResponseService;
+import com.prog3.security.Utils.ApiResponse;
 
 @CrossOrigin
 @RestController
@@ -28,57 +26,49 @@ import com.prog3.security.Repositories.ProductoRepository;
 public class ProductosController {
 
     @Autowired
-    ProductoRepository theProductoRepository;
+    private ProductoRepository theProductoRepository;
+
+    @Autowired
+    private ResponseService responseService;
 
     @GetMapping("")
-    public ResponseEntity<Map<String, Object>> find() {
+    public ResponseEntity<ApiResponse<List<Producto>>> find() {
         try {
             List<Producto> productos = this.theProductoRepository.findAll();
-            Map<String, Object> response = createSuccessResponse(productos, "Productos obtenidos exitosamente");
-            System.out.println("Productos obtenidos: " + productos.size()); // Log simple
-            return ResponseEntity.ok(response);
+            return responseService.success(productos, "Productos obtenidos exitosamente");
         } catch (Exception e) {
-            System.err.println("Error al obtener productos: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(createErrorResponse("Error al obtener productos", e.getMessage()));
+            return responseService.internalError("Error al obtener productos: " + e.getMessage());
         }
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> findById(@PathVariable String id) {
+    public ResponseEntity<ApiResponse<Producto>> findById(@PathVariable String id) {
         try {
             Producto producto = this.theProductoRepository.findById(id).orElse(null);
             if (producto == null) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(createErrorResponse("Producto no encontrado", "ID: " + id));
+                return responseService.notFound("Producto no encontrado con ID: " + id);
             }
-            Map<String, Object> response = createSuccessResponse(producto, "Producto encontrado");
-            return ResponseEntity.ok(response);
+            return responseService.success(producto, "Producto encontrado");
         } catch (Exception e) {
-            System.err.println("Error al buscar producto " + id + ": " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(createErrorResponse("Error al buscar producto", e.getMessage()));
+            return responseService.internalError("Error al buscar producto: " + e.getMessage());
         }
     }
 
     @PostMapping
-    public ResponseEntity<Map<String, Object>> create(@RequestBody Producto newProducto) {
+    public ResponseEntity<ApiResponse<Producto>> create(@RequestBody Producto newProducto) {
         try {
             // Validar que no exista un producto con el mismo nombre
             if (this.theProductoRepository.existsByNombre(newProducto.getNombre())) {
-                return ResponseEntity.status(HttpStatus.CONFLICT)
-                        .body(createErrorResponse("Producto ya existe", "Ya existe un producto con el nombre: " + newProducto.getNombre()));
+                return responseService.conflict("Ya existe un producto con el nombre: " + newProducto.getNombre());
             }
 
             // Validaciones de negocio
             if (newProducto.getPrecio() <= 0) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(createErrorResponse("Precio inválido", "El precio debe ser mayor a 0"));
+                return responseService.badRequest("El precio debe ser mayor a 0");
             }
 
             if (newProducto.getCosto() < 0) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(createErrorResponse("Costo inválido", "El costo no puede ser negativo"));
+                return responseService.badRequest("El costo no puede ser negativo");
             }
 
             // Calcular utilidad si no se especifica
@@ -88,104 +78,78 @@ public class ProductosController {
             }
 
             Producto savedProducto = this.theProductoRepository.save(newProducto);
-
-            Map<String, Object> response = createSuccessResponse(savedProducto, "Producto creado exitosamente");
-            System.out.println("Producto creado: " + savedProducto.get_id() + " - " + savedProducto.getNombre());
-
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+            return responseService.created(savedProducto, "Producto creado exitosamente");
         } catch (Exception e) {
-            System.err.println("Error al crear producto: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(createErrorResponse("Error al crear producto", e.getMessage()));
+            return responseService.internalError("Error al crear producto: " + e.getMessage());
         }
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> delete(@PathVariable String id) {
+    public ResponseEntity<ApiResponse<Object>> delete(@PathVariable String id) {
         try {
             Producto producto = this.theProductoRepository.findById(id).orElse(null);
             if (producto == null) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(createErrorResponse("Producto no encontrado", "ID: " + id));
+                return responseService.notFound("Producto no encontrado con ID: " + id);
             }
 
             this.theProductoRepository.delete(producto);
-
-            Map<String, Object> response = createSuccessResponse(null, "Producto eliminado exitosamente");
-            System.out.println("Producto eliminado: " + id + " - " + producto.getNombre());
-
-            return ResponseEntity.ok(response);
+            return responseService.success(null, "Producto eliminado exitosamente");
         } catch (Exception e) {
-            System.err.println("Error al eliminar producto " + id + ": " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(createErrorResponse("Error al eliminar producto", e.getMessage()));
+            return responseService.internalError("Error al eliminar producto: " + e.getMessage());
         }
     }
 
     @GetMapping("/categoria/{categoriaId}")
-    public ResponseEntity<Map<String, Object>> findByCategoria(@PathVariable String categoriaId) {
+    public ResponseEntity<ApiResponse<List<Producto>>> findByCategoria(@PathVariable String categoriaId) {
         try {
             List<Producto> productos = this.theProductoRepository.findByCategoriaId(categoriaId);
-            Map<String, Object> response = createSuccessResponse(productos, "Productos por categoría obtenidos");
-            return ResponseEntity.ok(response);
+            return responseService.success(productos, "Productos por categoría obtenidos");
         } catch (Exception e) {
-            System.err.println("Error al buscar productos por categoría: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(createErrorResponse("Error al buscar productos por categoría", e.getMessage()));
+            return responseService.internalError("Error al buscar productos por categoría: " + e.getMessage());
         }
     }
 
     @GetMapping("/buscar")
-    public ResponseEntity<Map<String, Object>> findByNombreContaining(@RequestParam String nombre) {
+    public ResponseEntity<ApiResponse<List<Producto>>> findByNombreContaining(@RequestParam String nombre) {
         try {
             List<Producto> productos = this.theProductoRepository.findByNombreContainingIgnoreCase(nombre);
-            Map<String, Object> response = createSuccessResponse(productos, "Búsqueda completada");
-            return ResponseEntity.ok(response);
+            return responseService.success(productos, "Búsqueda completada");
         } catch (Exception e) {
-            System.err.println("Error en la búsqueda: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(createErrorResponse("Error en la búsqueda", e.getMessage()));
+            return responseService.internalError("Error en la búsqueda: " + e.getMessage());
         }
     }
 
     @GetMapping("/estado/{estado}")
-    public ResponseEntity<Map<String, Object>> findByEstado(@PathVariable String estado) {
+    public ResponseEntity<ApiResponse<List<Producto>>> findByEstado(@PathVariable String estado) {
         try {
             List<Producto> productos = this.theProductoRepository.findByEstado(estado);
-            Map<String, Object> response = createSuccessResponse(productos, "Productos por estado obtenidos");
-            return ResponseEntity.ok(response);
+            return responseService.success(productos, "Productos por estado obtenidos");
         } catch (Exception e) {
-            System.err.println("Error al buscar productos por estado: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(createErrorResponse("Error al buscar productos por estado", e.getMessage()));
+            return responseService.internalError("Error al buscar productos por estado: " + e.getMessage());
         }
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> update(@PathVariable String id, @RequestBody Producto newProducto) {
+    public ResponseEntity<ApiResponse<Producto>> update(@PathVariable String id, @RequestBody Producto newProducto) {
         try {
             Producto actualProducto = this.theProductoRepository.findById(id).orElse(null);
             if (actualProducto == null) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(createErrorResponse("Producto no encontrado", "ID: " + id));
+                return responseService.notFound("Producto no encontrado con ID: " + id);
             }
 
             // Validar que el nombre no exista si se está cambiando
             if (!actualProducto.getNombre().equals(newProducto.getNombre())
                     && this.theProductoRepository.existsByNombre(newProducto.getNombre())) {
-                return ResponseEntity.status(HttpStatus.CONFLICT)
-                        .body(createErrorResponse("Nombre ya existe", "Ya existe otro producto con el nombre: " + newProducto.getNombre()));
+                return responseService.conflict("Ya existe otro producto con el nombre: " + newProducto.getNombre());
             }
 
             // Validaciones de negocio
             if (newProducto.getPrecio() <= 0) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(createErrorResponse("Precio inválido", "El precio debe ser mayor a 0"));
+                return responseService.badRequest("El precio debe ser mayor a 0");
             }
 
             if (newProducto.getCosto() < 0) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(createErrorResponse("Costo inválido", "El costo no puede ser negativo"));
+                return responseService.badRequest("El costo no puede ser negativo");
             }
 
             // Actualizar campos
@@ -209,34 +173,9 @@ public class ProductosController {
             }
 
             Producto updatedProducto = this.theProductoRepository.save(actualProducto);
-            Map<String, Object> response = createSuccessResponse(updatedProducto, "Producto actualizado exitosamente");
-            System.out.println("Producto actualizado: " + id + " - " + updatedProducto.getNombre());
-
-            return ResponseEntity.ok(response);
+            return responseService.success(updatedProducto, "Producto actualizado exitosamente");
         } catch (Exception e) {
-            System.err.println("Error al actualizar producto " + id + ": " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(createErrorResponse("Error al actualizar producto", e.getMessage()));
+            return responseService.internalError("Error al actualizar producto: " + e.getMessage());
         }
-    }
-
-    // Métodos auxiliares para respuestas consistentes
-    private Map<String, Object> createSuccessResponse(Object data, String message) {
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", true);
-        response.put("data", data);
-        response.put("message", message);
-        response.put("timestamp", new Date());
-        return response;
-    }
-
-    private Map<String, Object> createErrorResponse(String message, String error) {
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", false);
-        response.put("data", null);
-        response.put("message", message);
-        response.put("error", error);
-        response.put("timestamp", new Date());
-        return response;
     }
 }
