@@ -240,6 +240,11 @@ public class Pedido {
         return totalPagado;
     }
 
+    // Método para calcular el total real del pedido basado en todos los items
+    public double calcularTotalReal() {
+        return calcularTotalPendiente() + calcularTotalPagado();
+    }
+
     // Getters y Setters para los nuevos campos
     public double getPropina() {
         return propina;

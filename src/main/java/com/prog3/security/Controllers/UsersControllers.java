@@ -13,8 +13,12 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.prog3.security.Models.Role;
 import com.prog3.security.Models.User;
+import com.prog3.security.Models.UserRole;
+import com.prog3.security.Repositories.RoleRepository;
 import com.prog3.security.Repositories.UserRepository;
+import com.prog3.security.Repositories.UserRoleRepository;
 import com.prog3.security.Services.EncryptionService;
 
 @CrossOrigin
@@ -24,6 +28,10 @@ public class UsersControllers {
 
     @Autowired
     UserRepository theUserRepository;
+    @Autowired
+    RoleRepository roleRepository;
+    @Autowired
+    UserRoleRepository userRoleRepository;
     @Autowired
     EncryptionService theEncryptionService;
 
@@ -40,7 +48,18 @@ public class UsersControllers {
     @PostMapping
     public User create(@RequestBody User newUser) {
         newUser.setPassword(this.theEncryptionService.convertSHA256(newUser.getPassword()));
-        return this.theUserRepository.save(newUser);
+        User savedUser = this.theUserRepository.save(newUser);
+
+        // Assign default MESERO role to new users
+        Role meseroRole = this.roleRepository.findByName("MESERO");
+        if (meseroRole != null) {
+            UserRole newUserRole = new UserRole();
+            newUserRole.setUser(savedUser);
+            newUserRole.setRole(meseroRole);
+            userRoleRepository.save(newUserRole);
+        }
+
+        return savedUser;
     }
 
     @PutMapping("/{id}")

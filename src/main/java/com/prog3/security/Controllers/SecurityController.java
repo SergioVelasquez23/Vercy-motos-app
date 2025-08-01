@@ -60,25 +60,27 @@ public class SecurityController {
 
         if (theActualUser != null
                 && theActualUser.getPassword().equals(theEncryptionService.convertSHA256(theNewUser.getPassword()))) {
-
             // Generar un único código de dos factores
             String twoFactorCode = theEncryptionService.generateValidationCode();
 
-            // Crear una nueva sesión
+            // Crear una nueva sesión y guardar el código
             Session newSession = new Session();
             newSession.setUser(theActualUser);
             newSession.setValidationCode(twoFactorCode);
             newSession.setExpirationDate(new Date(System.currentTimeMillis() + 3600000)); // 1 hora de expiración
             this.theSessionRepository.save(newSession);
 
-            // Enviar el código de dos factores por correo electrónico usando RequestURL
-            theRequestURL.sendEmail("Tu código de autenticación es: " + twoFactorCode, theActualUser.getEmail());
+            // Generar el token JWT
+            HashMap<String, Object> tokenResponse = theJwtService.generateToken(theActualUser);
+            String token = tokenResponse.get("token").toString();
+            Date expirationDate = (Date) tokenResponse.get("expiration");
 
-            // No devolver la contraseña en la respuesta
+            // No enviar el código por correo ni devolverlo en la respuesta
             theActualUser.setPassword("");
             theActualUser.setNumeroDeSesiones(0);
-            theResponse.put("twoFactorCode", twoFactorCode); // Este es el mismo código que se envió al correo
             theResponse.put("user", theActualUser);
+            theResponse.put("token", token);
+            theResponse.put("expiration", expirationDate);
         } else {
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
         }
@@ -145,6 +147,33 @@ public class SecurityController {
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
         }
         return theResponse;
+    }
+
+    // Endpoint to get user roles
+    @GetMapping("/me/roles")
+    public HashMap<String, Object> getUserRoles(HttpServletRequest request) {
+        HashMap<String, Object> response = new HashMap<>();
+
+        try {
+            // Get the token from the Authorization header
+            String authHeader = request.getHeader("Authorization");
+            if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                String token = authHeader.substring(7);
+
+                // Get roles from token
+                List<String> roles = theJwtService.getRolesFromToken(token);
+                response.put("roles", roles);
+                response.put("success", true);
+            } else {
+                response.put("success", false);
+                response.put("message", "No authorization token provided");
+            }
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("message", "Error: " + e.getMessage());
+        }
+
+        return response;
     }
     // Método auxiliar: Validación de dos factores
 

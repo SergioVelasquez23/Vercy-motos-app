@@ -1,9 +1,7 @@
 package com.prog3.security.Controllers;
 
 import java.time.LocalDateTime;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -22,8 +20,10 @@ import org.springframework.web.bind.annotation.RestController;
 import com.prog3.security.Models.Pedido;
 import com.prog3.security.Models.TotalVentasResponse;
 import com.prog3.security.Repositories.PedidoRepository;
+import com.prog3.security.Services.InventarioService;
 import com.prog3.security.Services.ResponseService;
 import com.prog3.security.Utils.ApiResponse;
+import com.prog3.security.DTOs.PagarPedidoRequest;
 
 @CrossOrigin
 @RestController
@@ -35,6 +35,9 @@ public class PedidosController {
 
     @Autowired
     private ResponseService responseService;
+
+    @Autowired
+    private InventarioService inventarioService;
 
     @GetMapping("")
     public ResponseEntity<ApiResponse<List<Pedido>>> find() {
@@ -145,15 +148,6 @@ public class PedidosController {
     @PostMapping
     public ResponseEntity<ApiResponse<Pedido>> create(@RequestBody Pedido newPedido) {
         try {
-            // Validaciones básicas
-            if (newPedido.getTipo() == null || newPedido.getTipo().isEmpty()) {
-                return responseService.badRequest("El tipo de pedido es requerido");
-            }
-
-            if (newPedido.getItems() == null || newPedido.getItems().isEmpty()) {
-                return responseService.badRequest("El pedido debe tener al menos un item");
-            }
-
             // Asegurar que la fecha esté establecida
             if (newPedido.getFecha() == null) {
                 newPedido.setFecha(LocalDateTime.now());
@@ -164,37 +158,35 @@ public class PedidosController {
                 newPedido.setEstado("pendiente");
             }
 
-            // Si es un pedido de mesa, validar que la mesa no sea null
-            if ("normal".equals(newPedido.getTipo()) && (newPedido.getMesa() == null || newPedido.getMesa().isEmpty())) {
-                return responseService.badRequest("Para pedidos normales, la mesa es requerida");
-            }
-
-            // Calcular el total del pedido si no viene establecido
-            if (newPedido.getTotal() == 0.0 && !newPedido.getItems().isEmpty()) {
-                double total = newPedido.getItems().stream()
-                        .mapToDouble(item -> item.getPrecio() * item.getCantidad())
-                        .sum();
-                newPedido.setTotal(total);
-            }
+            // Limpiar ID antes de guardar para que MongoDB genere uno nuevo
+            newPedido.set_id(null);
 
             Pedido pedidoCreado = this.thePedidoRepository.save(newPedido);
 
-            // Log para debug
-            System.out.println("Pedido creado con ID: " + pedidoCreado.get_id());
-
-            // Verificar que el ID no sea null antes de retornar
+            // Verificar que el pedido se guardó correctamente con un ID válido
             if (pedidoCreado.get_id() == null || pedidoCreado.get_id().isEmpty()) {
-                System.out.println("ERROR: El pedido se guardó pero el ID está vacío");
-                // Intentar recuperar el pedido recién creado de la base de datos
-                List<Pedido> ultimosPedidos = this.thePedidoRepository.findByFechaGreaterThanEqual(LocalDateTime.now().minusMinutes(1));
-                if (!ultimosPedidos.isEmpty()) {
-                    pedidoCreado = ultimosPedidos.get(ultimosPedidos.size() - 1);
-                    System.out.println("Pedido recuperado con ID: " + pedidoCreado.get_id());
+                // Intentar obtener el pedido recién creado por otros campos únicos
+                List<Pedido> pedidosRecientes = this.thePedidoRepository.findByMesaAndFechaBetween(
+                        newPedido.getMesa(),
+                        LocalDateTime.now().minusMinutes(1),
+                        LocalDateTime.now().plusMinutes(1)
+                );
+
+                if (!pedidosRecientes.isEmpty()) {
+                    pedidoCreado = pedidosRecientes.get(pedidosRecientes.size() - 1); // El más reciente
+                } else {
+                    throw new RuntimeException("Error: El pedido se guardó pero no se pudo recuperar el ID");
                 }
             }
 
-            if (pedidoCreado.get_id() == null) {
-                return responseService.internalError("Error al generar el ID del pedido");
+            // Procesar el pedido para descontar del inventario
+            try {
+                System.out.println("Procesando pedido para inventario: " + pedidoCreado.get_id());
+                inventarioService.procesarPedidoParaInventario(pedidoCreado);
+                System.out.println("Inventario actualizado correctamente");
+            } catch (Exception e) {
+                System.err.println("Error al procesar inventario: " + e.getMessage());
+                // No interrumpimos la creación del pedido si hay error en inventario
             }
 
             return responseService.created(pedidoCreado, "Pedido creado exitosamente");
@@ -224,6 +216,17 @@ public class PedidosController {
             actualPedido.setEstado(newPedido.getEstado());
 
             Pedido pedidoActualizado = this.thePedidoRepository.save(actualPedido);
+
+            // Procesar el pedido actualizado para ajustar el inventario
+            try {
+                System.out.println("Procesando pedido actualizado para inventario: " + pedidoActualizado.get_id());
+                inventarioService.procesarPedidoParaInventario(pedidoActualizado);
+                System.out.println("Inventario actualizado correctamente");
+            } catch (Exception e) {
+                System.err.println("Error al procesar inventario: " + e.getMessage());
+                // No interrumpimos la actualización del pedido si hay error en inventario
+            }
+
             return responseService.success(pedidoActualizado, "Pedido actualizado exitosamente");
         } catch (Exception e) {
             return responseService.internalError("Error al actualizar pedido: " + e.getMessage());
@@ -280,10 +283,7 @@ public class PedidosController {
             // Calculate total from completed (canceled) orders
             double total = pedidos.stream()
                     .filter(pedido -> pedido != null)
-                    .mapToDouble(pedido -> {
-                        Double orderTotal = pedido.getTotal();
-                        return orderTotal != null ? orderTotal : 0.0;
-                    })
+                    .mapToDouble(Pedido::getTotal)
                     .sum();
 
             System.out.println("Total calculado: " + total);
@@ -301,193 +301,90 @@ public class PedidosController {
         }
     }
 
-    @DeleteMapping("/eliminar-todo")
-    public ResponseEntity<?> eliminarTodosPedidos() {
-        try {
-            long cantidadPedidos = thePedidoRepository.count();
-            thePedidoRepository.deleteAll();
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("mensaje", "Todos los pedidos han sido eliminados exitosamente");
-            response.put("cantidadEliminada", cantidadPedidos);
-
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.status(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error al eliminar los pedidos: " + e.getMessage());
-        }
-    }
-
-    @DeleteMapping("/eliminar-por-estado/{estado}")
-    public ResponseEntity<?> eliminarPedidosPorEstado(@PathVariable String estado) {
-        try {
-            List<Pedido> pedidos = thePedidoRepository.findByEstado(estado);
-            thePedidoRepository.deleteAllByEstado(estado);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("mensaje", "Pedidos con estado '" + estado + "' han sido eliminados exitosamente");
-            response.put("cantidadEliminada", pedidos.size());
-
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.status(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error al eliminar los pedidos: " + e.getMessage());
-        }
-    }
-
-    // Endpoints específicos para pedidos internos y cortesía
-    @GetMapping("/internos")
-    public ResponseEntity<ApiResponse<List<Pedido>>> findPedidosInternos() {
-        try {
-            List<Pedido> pedidosInternos = this.thePedidoRepository.findByTipo("interno");
-            return responseService.success(pedidosInternos, "Pedidos internos obtenidos");
-        } catch (Exception e) {
-            return responseService.internalError("Error al obtener pedidos internos: " + e.getMessage());
-        }
-    }
-
-    @GetMapping("/cortesia")
-    public ResponseEntity<ApiResponse<List<Pedido>>> findPedidosCortesia() {
-        try {
-            List<Pedido> pedidosCortesia = this.thePedidoRepository.findByTipo("cortesia");
-            return responseService.success(pedidosCortesia, "Pedidos de cortesía obtenidos");
-        } catch (Exception e) {
-            return responseService.internalError("Error al obtener pedidos de cortesía: " + e.getMessage());
-        }
-    }
-
-    @GetMapping("/guardado-por/{guardadoPor}")
-    public ResponseEntity<ApiResponse<List<Pedido>>> findByGuardadoPor(@PathVariable String guardadoPor) {
-        try {
-            List<Pedido> pedidos = this.thePedidoRepository.findByGuardadoPor(guardadoPor);
-            return responseService.success(pedidos, "Pedidos guardados por usuario obtenidos");
-        } catch (Exception e) {
-            return responseService.internalError("Error al obtener pedidos por guardadoPor: " + e.getMessage());
-        }
-    }
-
-    @GetMapping("/pedido-por/{pedidoPor}")
-    public ResponseEntity<ApiResponse<List<Pedido>>> findByPedidoPor(@PathVariable String pedidoPor) {
-        try {
-            List<Pedido> pedidos = this.thePedidoRepository.findByPedidoPor(pedidoPor);
-            return responseService.success(pedidos, "Pedidos solicitados por usuario obtenidos");
-        } catch (Exception e) {
-            return responseService.internalError("Error al obtener pedidos por pedidoPor: " + e.getMessage());
-        }
-    }
-
-    @GetMapping("/pendientes-internos")
-    public ResponseEntity<ApiResponse<List<Pedido>>> findPendientesInternos() {
-        try {
-            LocalDateTime inicioHoy = LocalDateTime.now().withHour(0).withMinute(0).withSecond(0);
-            // Buscar pedidos internos pendientes de hoy
-            List<Pedido> pedidos = this.thePedidoRepository.findByTipoAndEstadoAndFechaGreaterThanEqual("interno", "pendiente", inicioHoy);
-            return responseService.success(pedidos, "Pedidos internos pendientes obtenidos");
-        } catch (Exception e) {
-            return responseService.internalError("Error al obtener pedidos internos pendientes: " + e.getMessage());
-        }
-    }
-
-    @PutMapping("/{id}/completar")
-    public ResponseEntity<ApiResponse<Pedido>> completarPedido(@PathVariable String id) {
-        try {
-            Pedido pedido = this.thePedidoRepository.findById(id).orElse(null);
-            if (pedido == null) {
-                return responseService.notFound("Pedido no encontrado con ID: " + id);
-            }
-
-            pedido.setEstado("completado");
-            Pedido pedidoActualizado = this.thePedidoRepository.save(pedido);
-            return responseService.success(pedidoActualizado, "Pedido completado exitosamente");
-        } catch (Exception e) {
-            return responseService.internalError("Error al completar pedido: " + e.getMessage());
-        }
-    }
-
     @PutMapping("/{id}/pagar")
-    public ResponseEntity<ApiResponse<Pedido>> pagarPedido(@PathVariable String id, @RequestBody Map<String, Object> datosPago) {
+    public ResponseEntity<ApiResponse<Pedido>> pagarPedido(@PathVariable String id, @RequestBody PagarPedidoRequest pagarRequest) {
         try {
             Pedido pedido = this.thePedidoRepository.findById(id).orElse(null);
             if (pedido == null) {
                 return responseService.notFound("Pedido no encontrado con ID: " + id);
             }
 
-            // Validar que el pedido se pueda pagar
-            if ("pagado".equals(pedido.getEstado()) || "cancelado".equals(pedido.getEstado())) {
-                return responseService.conflict("El pedido ya está pagado o cancelado");
+            // Validar que el tipo de pago esté especificado
+            if (pagarRequest.getTipoPago() == null || pagarRequest.getTipoPago().isEmpty()) {
+                return responseService.badRequest("El tipo de pago es requerido");
             }
 
-            // Extraer datos del request con manejo de errores mejorado
-            String formaPago = datosPago.getOrDefault("formaPago", "efectivo").toString();
+            // Actualizar información según el tipo de pago
+            String nuevoEstado = pagarRequest.getTipoPago(); // "pagado", "cortesia", "consumo_interno", "cancelado"
+            pedido.setEstado(nuevoEstado);
 
-            double propina = 0.0;
-            try {
-                Object propinaObj = datosPago.getOrDefault("propina", "0");
-                if (propinaObj instanceof Number) {
-                    propina = ((Number) propinaObj).doubleValue();
-                } else {
-                    propina = Double.parseDouble(propinaObj.toString());
-                }
-            } catch (NumberFormatException e) {
-                return responseService.badRequest("El valor de propina debe ser un número válido");
+            // Actualizar el campo pagadoPor (que ya existe en el modelo)
+            pedido.setPagadoPor(pagarRequest.getProcesadoPor());
+
+            // Agregar información adicional en las notas
+            String notasAdicionales = pagarRequest.getNotas() != null ? pagarRequest.getNotas() : "";
+
+            // Solo para pagos normales
+            if (pagarRequest.esPagado()) {
+                pedido.setFormaPago(pagarRequest.getFormaPago());
+                pedido.setPropina(pagarRequest.getPropina());
+
+                // Calcular total pagado incluyendo propina
+                double totalConPropina = pedido.getTotal() + pagarRequest.getPropina();
+                pedido.setTotalPagado(totalConPropina);
+                pedido.setIncluyePropina(pagarRequest.getPropina() > 0);
+
+                // Establecer fecha de pago solo para pagos reales
+                pedido.setFechaPago(LocalDateTime.now());
+
+                pedido.setNotas(notasAdicionales);
+
+            } else if (pagarRequest.esCortesia()) {
+                // Para cortesías
+                pedido.setFechaCortesia(LocalDateTime.now());
+                pedido.setPropina(0);
+                pedido.setTotalPagado(0);
+
+                // Agregar motivo de cortesía a las notas
+                String motivoCortesia = pagarRequest.getMotivoCortesia() != null ? pagarRequest.getMotivoCortesia() : "";
+                pedido.setNotas("CORTESÍA - " + motivoCortesia + " - " + notasAdicionales);
+
+            } else if (pagarRequest.esConsumoInterno()) {
+                // Para consumo interno
+                pedido.setPropina(0);
+                pedido.setTotalPagado(0);
+
+                // Agregar tipo de consumo interno a las notas
+                String tipoConsumo = pagarRequest.getTipoConsumoInterno() != null ? pagarRequest.getTipoConsumoInterno() : "";
+                pedido.setNotas("CONSUMO INTERNO - " + tipoConsumo + " - " + notasAdicionales);
+
+            } else if (pagarRequest.esCancelado()) {
+                // Para cancelados
+                pedido.setPropina(0);
+                pedido.setTotalPagado(0);
+                pedido.setFechaCancelacion(LocalDateTime.now());
+                pedido.setCanceladoPor(pagarRequest.getProcesadoPor());
+                pedido.setMotivoCancelacion(notasAdicionales);
             }
 
-            String pagadoPor = datosPago.getOrDefault("pagadoPor", "").toString();
+            Pedido pedidoProcesado = this.thePedidoRepository.save(pedido);
 
-            // Usar el método de utilidad del modelo
-            pedido.pagar(formaPago, propina, pagadoPor);
+            String mensaje = switch (pagarRequest.getTipoPago()) {
+                case "pagado" ->
+                    "Pedido pagado exitosamente";
+                case "cortesia" ->
+                    "Pedido marcado como cortesía exitosamente";
+                case "consumo_interno" ->
+                    "Pedido marcado como consumo interno exitosamente";
+                case "cancelado" ->
+                    "Pedido cancelado exitosamente";
+                default ->
+                    "Pedido procesado exitosamente";
+            };
 
-            Pedido pedidoActualizado = this.thePedidoRepository.save(pedido);
-            return responseService.success(pedidoActualizado, "Pedido pagado exitosamente");
+            return responseService.success(pedidoProcesado, mensaje);
         } catch (Exception e) {
-            return responseService.internalError("Error al pagar pedido: " + e.getMessage());
-        }
-    }
-
-    @PutMapping("/{id}/cancelar")
-    public ResponseEntity<ApiResponse<Pedido>> cancelarPedido(@PathVariable String id, @RequestBody Map<String, Object> datosCancelacion) {
-        try {
-            Pedido pedido = this.thePedidoRepository.findById(id).orElse(null);
-            if (pedido == null) {
-                return responseService.notFound("Pedido no encontrado con ID: " + id);
-            }
-
-            // Validar que el pedido se pueda cancelar
-            if ("pagado".equals(pedido.getEstado()) || "cancelado".equals(pedido.getEstado())) {
-                return responseService.conflict("No se puede cancelar un pedido que ya está pagado o cancelado");
-            }
-
-            // Extraer datos del request
-            String motivo = datosCancelacion.getOrDefault("motivo", "Sin motivo especificado").toString();
-            String canceladoPor = datosCancelacion.getOrDefault("canceladoPor", "").toString();
-
-            // Usar el método de utilidad del modelo
-            pedido.cancelar(motivo, canceladoPor);
-
-            Pedido pedidoActualizado = this.thePedidoRepository.save(pedido);
-            return responseService.success(pedidoActualizado, "Pedido cancelado exitosamente");
-        } catch (Exception e) {
-            return responseService.internalError("Error al cancelar pedido: " + e.getMessage());
-        }
-    }
-
-    @GetMapping("/pagados")
-    public ResponseEntity<ApiResponse<List<Pedido>>> findPedidosPagados() {
-        try {
-            List<Pedido> pedidosPagados = this.thePedidoRepository.findByEstado("pagado");
-            return responseService.success(pedidosPagados, "Pedidos pagados obtenidos");
-        } catch (Exception e) {
-            return responseService.internalError("Error al obtener pedidos pagados: " + e.getMessage());
-        }
-    }
-
-    @GetMapping("/cancelados")
-    public ResponseEntity<ApiResponse<List<Pedido>>> findPedidosCancelados() {
-        try {
-            List<Pedido> pedidosCancelados = this.thePedidoRepository.findByEstado("cancelado");
-            return responseService.success(pedidosCancelados, "Pedidos cancelados obtenidos");
-        } catch (Exception e) {
-            return responseService.internalError("Error al obtener pedidos cancelados: " + e.getMessage());
+            return responseService.internalError("Error al procesar pedido: " + e.getMessage());
         }
     }
 }

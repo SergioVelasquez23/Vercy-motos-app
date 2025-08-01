@@ -106,6 +106,7 @@ public class CategoriasController {
             }
 
             actualCategoria.setNombre(newCategoria.getNombre());
+            actualCategoria.setDescripcion(newCategoria.getDescripcion());
             actualCategoria.setImagenUrl(newCategoria.getImagenUrl());
             Categoria categoriaActualizada = this.theCategoriaRepository.save(actualCategoria);
             return responseService.success(categoriaActualizada, "Categoría actualizada exitosamente");

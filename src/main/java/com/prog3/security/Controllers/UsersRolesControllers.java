@@ -18,6 +18,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("api/usersroles")
 public class UsersRolesControllers {
+
     @Autowired
     UserRoleRepository theUserRoleRepository;
     @Autowired
@@ -26,7 +27,7 @@ public class UsersRolesControllers {
     RoleRepository theRoleRepository;
 
     @GetMapping("/all")
-    public ResponseEntity<?> getAll(){
+    public ResponseEntity<?> getAll() {
         return ResponseEntity.ok(this.theUserRoleRepository.findAll());
     }
 
@@ -45,13 +46,13 @@ public class UsersRolesControllers {
         // Extract the users from the user roles
         List<UserRole> theUsersRoles = this.theUserRoleRepository.getUsersByRoleId(roleId);
 
-        return  theUsersRoles.stream()
+        return theUsersRoles.stream()
                 .map(UserRole::getUser)
                 .collect(Collectors.toList());
     }
 
     @PostMapping("/user/{userId}/role/{roleId}")
-    public ResponseEntity<?> create(@PathVariable String userId, @PathVariable String roleId){
+    public ResponseEntity<?> create(@PathVariable String userId, @PathVariable String roleId) {
         User theUser = this.theUserRepository.findById(userId).orElse(null);
         Role theRole = this.theRoleRepository.findById(roleId).orElse(null);
 
@@ -66,8 +67,8 @@ public class UsersRolesControllers {
         return ResponseEntity.status(404).body("No se encontró el usuario o el rol");
     }
 
-    @DeleteMapping
-    public void delete(@PathVariable String id){
+    @DeleteMapping("/{id}")
+    public void delete(@PathVariable String id) {
         this.theUserRoleRepository.findById(id).ifPresent(theUserRole -> this.theUserRoleRepository.delete(theUserRole));
     }
 }

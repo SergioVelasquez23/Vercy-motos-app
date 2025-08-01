@@ -15,10 +15,15 @@ import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import com.prog3.security.Services.RoleValidatorService;
+
+import jakarta.servlet.http.HttpServletRequest;
 
 import com.prog3.security.DTOs.CuadreCajaRequest;
 import com.prog3.security.Models.Factura;
@@ -34,6 +39,7 @@ import com.prog3.security.Services.ResponseService;
 
 import com.prog3.security.Utils.ApiResponse;
 import com.prog3.security.Services.ReporteService;
+import com.prog3.security.Services.JwtService;
 
 @CrossOrigin
 @RestController
@@ -59,15 +65,43 @@ public class ReportesController {
     private ResponseService responseService;
 
     @Autowired
+    private RoleValidatorService roleValidator;
+
+    @Autowired
     private ProductoRepository productoRepository;
 
+    @Autowired
+    private JwtService jwtService;
+
     @GetMapping("/dashboard")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getDashboard() {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getDashboard(HttpServletRequest request) {
         try {
+            // Obtenemos el token del encabezado para verificar manualmente los roles
+            String authHeader = request.getHeader("Authorization");
+            if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                String token = authHeader.substring(7);
+                List<String> roles = jwtService.getRolesFromToken(token);
+
+                System.out.println("Roles del usuario: " + roles);
+
+                // Verificar si el usuario tiene alguno de los roles requeridos
+                if (!(roles.contains("SUPERADMIN") || roles.contains("ADMIN"))) {
+                    System.out.println("Usuario no tiene roles requeridos para dashboard");
+                    return responseService.forbidden("No tienes permisos para acceder al dashboard. Requiere rol ADMIN o SUPERADMIN.");
+                }
+            } else {
+                System.out.println("No se proporcionó token de autenticación");
+                return responseService.unauthorized("No se proporcionó token de autenticación");
+            }
+
+            // Si llegó hasta aquí, tiene los permisos correctos
             Map<String, Object> dashboard = reporteService.getDashboard();
 
             return responseService.success(dashboard, "Dashboard obtenido exitosamente");
         } catch (Exception e) {
+            e.printStackTrace(); // Agregamos esto para tener más detalles del error en los logs
+            System.out.println("Error específico en dashboard: " + e.getMessage());
+            System.out.println("Causa: " + (e.getCause() != null ? e.getCause().getMessage() : "desconocida"));
             return responseService.internalError("Error al obtener dashboard: " + e.getMessage());
         }
     }
@@ -77,123 +111,10 @@ public class ReportesController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaInicio,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaFin) {
         try {
-            List<Factura> facturas = facturaRepository.findByFechaBetween(fechaInicio, fechaFin);
-            // En el modelo simplificado no hay estado, todas las facturas son válidas
-            List<Factura> facturasValidas = facturas;
-
-            Map<String, Object> reporte = new HashMap<>();
-
-            double totalVentas = facturasValidas.stream().mapToDouble(Factura::getTotal).sum();
-
-            reporte.put("periodo", Map.of(
-                    "inicio", fechaInicio.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
-                    "fin", fechaFin.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-            ));
-
-            reporte.put("resumen", Map.of(
-                    "cantidadFacturas", facturasValidas.size(),
-                    "totalVentas", totalVentas,
-                    "totalImpuestos", 0.0, // No hay impuestos en el modelo simplificado
-                    "totalDescuentos", 0.0, // No hay descuentos en el modelo simplificado
-                    "totalPropinas", 0.0, // No hay propinas en el modelo simplificado
-                    "promedioVenta", facturasValidas.isEmpty() ? 0 : totalVentas / facturasValidas.size()
-            ));
-
-            // Ventas por método de pago
-            Map<String, Double> ventasPorMetodoPago = facturasValidas.stream()
-                    .collect(Collectors.groupingBy(
-                            Factura::getMedioPago,
-                            Collectors.summingDouble(Factura::getTotal)
-                    ));
-            reporte.put("ventasPorMetodoPago", ventasPorMetodoPago);
-
-            // En el modelo simplificado no hay tipo de servicio
-            reporte.put("ventasPorTipoServicio", new HashMap<>());
-
+            Map<String, Object> reporte = reporteService.getVentasPorPeriodo(fechaInicio, fechaFin);
             return responseService.success(reporte, "Reporte de ventas por período obtenido exitosamente");
         } catch (Exception e) {
             return responseService.internalError("Error al obtener reporte de ventas: " + e.getMessage());
-        }
-    }
-
-    @GetMapping("/productos-mas-vendidos")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getProductosMasVendidos(
-            @RequestParam(defaultValue = "30") int dias,
-            @RequestParam(defaultValue = "10") int limite) {
-        try {
-            LocalDateTime fechaInicio = LocalDateTime.now().minusDays(dias);
-
-            // Obtener facturas del período
-            List<Factura> facturas = facturaRepository.findByFechaGreaterThanEqual(fechaInicio);
-
-            // Obtener pedidos pagados del período
-            List<Pedido> pedidosPagados = pedidoRepository.findByFechaBetween(fechaInicio, LocalDateTime.now())
-                    .stream()
-                    .filter(p -> "pagado".equals(p.getEstado()))
-                    .collect(Collectors.toList());
-
-            Map<String, Object> estadisticas = new HashMap<>();
-            Map<String, Integer> conteoProductos = new HashMap<>();
-            Map<String, Double> ventasProductos = new HashMap<>();
-
-            // Procesar facturas
-            for (Factura factura : facturas) {
-                if (factura.getItems() != null) {
-                    for (var item : factura.getItems()) {
-                        String nombreProducto = item.getProductoNombre();
-                        conteoProductos.merge(nombreProducto, item.getCantidad(), Integer::sum);
-                        ventasProductos.merge(nombreProducto, item.getTotalItem(), Double::sum);
-                    }
-                }
-            }
-
-            // Procesar pedidos pagados
-            for (Pedido pedido : pedidosPagados) {
-                if (pedido.getItems() != null) {
-                    for (var item : pedido.getItems()) {
-                        // Para pedidos, necesitamos usar el ID del producto
-                        String productoId = item.getProductoId();
-                        String nombreProducto = productoId; // Por defecto usar el ID
-
-                        // Buscar el nombre del producto
-                        try {
-                            var producto = productoRepository.findById(productoId);
-                            if (producto.isPresent()) {
-                                nombreProducto = producto.get().getNombre();
-                            }
-                        } catch (Exception e) {
-                            // En caso de error, usar el ID como nombre
-                            nombreProducto = "Producto ID: " + productoId;
-                        }
-
-                        conteoProductos.merge(nombreProducto, item.getCantidad(), Integer::sum);
-                        ventasProductos.merge(nombreProducto, item.getSubtotal(), Double::sum);
-                    }
-                }
-            }
-
-            // Ordenar por cantidad vendida
-            List<Map<String, Object>> topProductos = conteoProductos.entrySet()
-                    .stream()
-                    .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
-                    .limit(limite)
-                    .map(entry -> {
-                        Map<String, Object> producto = new HashMap<>();
-                        producto.put("nombre", entry.getKey());
-                        producto.put("cantidad", entry.getValue());
-                        producto.put("totalVentas", ventasProductos.getOrDefault(entry.getKey(), 0.0));
-                        return producto;
-                    })
-                    .collect(Collectors.toList());
-
-            estadisticas.put("periodo", dias + " días");
-            estadisticas.put("topProductos", topProductos);
-            estadisticas.put("totalProductosVendidos", conteoProductos.values().stream().mapToInt(Integer::intValue).sum());
-            estadisticas.put("totalVentasProductos", ventasProductos.values().stream().mapToDouble(Double::doubleValue).sum());
-
-            return responseService.success(estadisticas, "Productos más vendidos obtenidos exitosamente");
-        } catch (Exception e) {
-            return responseService.internalError("Error al obtener productos más vendidos: " + e.getMessage());
         }
     }
 
@@ -492,6 +413,17 @@ public class ReportesController {
         }
     }
 
+    @GetMapping("/top-productos")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getTopProductos(
+            @RequestParam(defaultValue = "5") int limite) {
+        try {
+            List<Map<String, Object>> topProductos = reporteService.getTopProductos(limite);
+            return responseService.success(topProductos, "Top productos obtenidos exitosamente");
+        } catch (Exception e) {
+            return responseService.internalError("Error al obtener top productos: " + e.getMessage());
+        }
+    }
+
     // Método auxiliar para calcular total de pedido
     private double calcularTotalPedido(Pedido pedido) {
         if (pedido == null || pedido.getItems() == null || pedido.getItems().isEmpty()) {
@@ -579,77 +511,11 @@ public class ReportesController {
     }
 
     @GetMapping("/ingresos-egresos")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getIngresosVsEgresos(
-            @RequestParam(defaultValue = "30") int dias) {
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getIngresosVsEgresos(
+            @RequestParam(defaultValue = "12") int ultimosMeses) {
         try {
-            LocalDateTime fechaInicio = LocalDateTime.now().minusDays(dias);
-
-            // Calcular ingresos (facturas + pedidos pagados)
-            List<Factura> facturas = facturaRepository.findByFechaBetween(fechaInicio, LocalDateTime.now());
-            List<Pedido> pedidosPagados = pedidoRepository.findByFechaBetween(fechaInicio, LocalDateTime.now())
-                    .stream()
-                    .filter(p -> "pagado".equals(p.getEstado()))
-                    .collect(Collectors.toList());
-
-            double totalIngresos = facturas.stream().mapToDouble(Factura::getTotal).sum()
-                    + pedidosPagados.stream().mapToDouble(Pedido::getTotalPagado).sum();
-
-            // Calcular egresos (movimientos de salida de inventario)
-            List<MovimientoInventario> movimientosSalida = movimientoInventarioRepository.findByFechaGreaterThanEqual(fechaInicio)
-                    .stream()
-                    .filter(m -> "salida".equals(m.getTipoMovimiento()))
-                    .collect(Collectors.toList());
-
-            double totalEgresos = movimientosSalida.stream()
-                    .mapToDouble(MovimientoInventario::getCostoTotal)
-                    .sum();
-
-            // Calcular por día para gráfica
-            Map<String, Double> ingresosPorDia = new HashMap<>();
-            Map<String, Double> egresosPorDia = new HashMap<>();
-
-            // Agrupar ingresos por día
-            facturas.forEach(f -> {
-                String dia = f.getFecha().toLocalDate().toString();
-                ingresosPorDia.merge(dia, f.getTotal(), Double::sum);
-            });
-
-            pedidosPagados.forEach(p -> {
-                String dia = p.getFecha().toLocalDate().toString();
-                ingresosPorDia.merge(dia, p.getTotalPagado(), Double::sum);
-            });
-
-            // Agrupar egresos por día
-            movimientosSalida.forEach(m -> {
-                String dia = m.getFecha().toLocalDate().toString();
-                egresosPorDia.merge(dia, m.getCostoTotal(), Double::sum);
-            });
-
-            // Crear lista ordenada para gráfica
-            List<Map<String, Object>> grafica = new java.util.ArrayList<>();
-            Set<String> todasLasFechas = new java.util.HashSet<>();
-            todasLasFechas.addAll(ingresosPorDia.keySet());
-            todasLasFechas.addAll(egresosPorDia.keySet());
-
-            todasLasFechas.stream()
-                    .sorted()
-                    .forEach(fecha -> {
-                        Map<String, Object> diaGrafica = new HashMap<>();
-                        diaGrafica.put("fecha", fecha);
-                        diaGrafica.put("ingresos", ingresosPorDia.getOrDefault(fecha, 0.0));
-                        diaGrafica.put("egresos", egresosPorDia.getOrDefault(fecha, 0.0));
-                        grafica.add(diaGrafica);
-                    });
-
-            Map<String, Object> resultado = new HashMap<>();
-            resultado.put("periodo", dias + " días");
-            resultado.put("totalIngresos", totalIngresos);
-            resultado.put("totalEgresos", totalEgresos);
-            resultado.put("utilidad", totalIngresos - totalEgresos);
-            resultado.put("margenUtilidad", totalIngresos > 0 ? ((totalIngresos - totalEgresos) / totalIngresos) * 100 : 0);
-            resultado.put("grafica", grafica);
-
-            return responseService.success(resultado, "Ingresos vs Egresos obtenidos exitosamente");
+            List<Map<String, Object>> ingresosVsEgresos = reporteService.getIngresosVsEgresos(ultimosMeses);
+            return responseService.success(ingresosVsEgresos, "Ingresos vs egresos obtenidos exitosamente");
         } catch (Exception e) {
             return responseService.internalError("Error al obtener ingresos vs egresos: " + e.getMessage());
         }
@@ -722,6 +588,57 @@ public class ReportesController {
             return responseService.success(pedidos, "Últimos pedidos obtenidos exitosamente");
         } catch (Exception e) {
             return responseService.internalError("Error al obtener últimos pedidos: " + e.getMessage());
+        }
+    }
+
+    @PutMapping("/objetivo")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> actualizarObjetivo(@RequestBody Map<String, Object> request) {
+        try {
+            String periodo = (String) request.get("periodo");
+            Double objetivo = null;
+
+            // Manejar diferentes tipos de datos para el objetivo
+            Object objetivoObj = request.get("objetivo");
+            if (objetivoObj instanceof Number) {
+                objetivo = ((Number) objetivoObj).doubleValue();
+            } else if (objetivoObj instanceof String) {
+                try {
+                    objetivo = Double.parseDouble((String) objetivoObj);
+                } catch (NumberFormatException e) {
+                    return responseService.badRequest("El objetivo debe ser un número válido");
+                }
+            }
+
+            if (periodo == null || periodo.trim().isEmpty()) {
+                return responseService.badRequest("El período es requerido");
+            }
+
+            if (objetivo == null || objetivo <= 0) {
+                return responseService.badRequest("El objetivo debe ser un número mayor a 0");
+            }
+
+            System.out.println("🎯 Actualizando objetivo para período: " + periodo + " a $" + objetivo);
+
+            // Llamar al servicio para actualizar el objetivo
+            boolean actualizado = reporteService.actualizarObjetivo(periodo, objetivo);
+
+            if (actualizado) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("periodo", periodo);
+                response.put("objetivo", objetivo);
+                response.put("mensaje", "Objetivo actualizado exitosamente");
+
+                System.out.println("✅ Objetivo actualizado exitosamente para " + periodo);
+                return responseService.success(response, "Objetivo actualizado exitosamente");
+            } else {
+                System.out.println("❌ Error al actualizar objetivo para " + periodo);
+                return responseService.internalError("Error al actualizar el objetivo");
+            }
+
+        } catch (Exception e) {
+            System.out.println("❌ Excepción al actualizar objetivo: " + e.getMessage());
+            e.printStackTrace();
+            return responseService.internalError("Error interno al actualizar objetivo: " + e.getMessage());
         }
     }
 }

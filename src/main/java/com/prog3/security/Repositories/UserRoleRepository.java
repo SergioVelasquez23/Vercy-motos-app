@@ -7,9 +7,10 @@ import org.springframework.data.mongodb.repository.Query;
 import java.util.List;
 
 public interface UserRoleRepository extends MongoRepository<UserRole, String> {
-    @Query("{ 'user.$id' : ObjectId(?0) }")
+
+    @Query("{ 'user._id' : ?0 }")
     public List<UserRole> getRolesByUserId(String userId);
 
-    @Query("{ 'role.$id' : ObjectId(?0) }")
+    @Query("{ 'role._id' : ?0 }")
     List<UserRole> getUsersByRoleId(String roleId);
 }

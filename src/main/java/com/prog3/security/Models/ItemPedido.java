@@ -4,6 +4,7 @@ public class ItemPedido {
 
     private String id;
     private String productoId;
+    private String productoNombre; // Nuevo campo para el nombre del producto
     private int cantidad;
     private double precioUnitario;
     private String notas;
@@ -38,6 +39,14 @@ public class ItemPedido {
 
     public void setProductoId(String productoId) {
         this.productoId = productoId;
+    }
+
+    public String getProductoNombre() {
+        return productoNombre;
+    }
+
+    public void setProductoNombre(String productoNombre) {
+        this.productoNombre = productoNombre;
     }
 
     public int getCantidad() {

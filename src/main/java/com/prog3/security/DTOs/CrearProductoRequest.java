@@ -1,15 +1,10 @@
-package com.prog3.security.Models;
+package com.prog3.security.DTOs;
 
 import java.util.List;
 import java.util.ArrayList;
-import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.mapping.Document;
 
-@Document
-public class Producto {
+public class CrearProductoRequest {
 
-    @Id
-    private String _id;
     private String nombre;
     private double precio;
     private double costo;
@@ -18,45 +13,21 @@ public class Producto {
     private boolean tieneVariantes;
     private String estado;
     private String imagenUrl;
-    private String categoriaId; // Referencia a Categoria
+    private String categoriaId;
     private String descripcion;
     private int cantidad;
     private String nota;
-    private List<String> ingredientesDisponibles; // IDs de ingredientes que pueden ser opciones (carnes, etc.)
+    private List<String> ingredientesDisponibles; // IDs de ingredientes que pueden ser opciones
 
-    public Producto() {
-        // Inicializar campos que pueden ser null con valores por defecto
-        this.estado = "Activo";
-        this.tieneVariantes = false;
-        this.cantidad = 1;
-        this.impuestos = 0.0;
-        this.imagenUrl = "";
-        this.categoriaId = "";
-        this.descripcion = "";
-        this.nota = "";
+    public CrearProductoRequest() {
         this.ingredientesDisponibles = new ArrayList<>();
-    }
-
-    public Producto(String nombre, double precio, double costo, double utilidad) {
-        this.nombre = nombre;
-        this.precio = precio;
-        this.costo = costo;
-        this.utilidad = utilidad;
-        this.impuestos = 0.0;
-        this.tieneVariantes = false;
         this.estado = "Activo";
+        this.tieneVariantes = false;
         this.cantidad = 1;
+        this.impuestos = 0.0;
     }
 
     // Getters y Setters
-    public String get_id() {
-        return _id;
-    }
-
-    public void set_id(String _id) {
-        this._id = _id;
-    }
-
     public String getNombre() {
         return nombre;
     }

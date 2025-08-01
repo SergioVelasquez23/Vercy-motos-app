@@ -41,4 +41,9 @@ public class ResponseService {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(ApiResponse.error(message, "UNAUTHORIZED"));
     }
+
+    public <T> ResponseEntity<ApiResponse<T>> forbidden(String message) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.error(message, "FORBIDDEN"));
+    }
 }

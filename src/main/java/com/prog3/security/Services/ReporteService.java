@@ -1,28 +1,29 @@
 package com.prog3.security.Services;
 
-import com.prog3.security.Models.Reporte;
+import com.prog3.security.Entities.ObjetivoVenta;
 import com.prog3.security.Models.Pedido;
 import com.prog3.security.Models.Factura;
 import com.prog3.security.Models.Inventario;
-import com.prog3.security.Repositories.ReporteRepository;
 import com.prog3.security.Repositories.PedidoRepository;
 import com.prog3.security.Repositories.FacturaRepository;
 import com.prog3.security.Repositories.InventarioRepository;
+import com.prog3.security.Repositories.ObjetivoVentaRepository;
+import com.prog3.security.Repositories.ProductoRepository;
+
+import jakarta.annotation.PostConstruct;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
 public class ReporteService {
-
-    @Autowired
-    private ReporteRepository reporteRepository;
 
     @Autowired
     private PedidoRepository pedidoRepository;
@@ -33,160 +34,255 @@ public class ReporteService {
     @Autowired
     private InventarioRepository inventarioRepository;
 
+    @Autowired
+    private ProductoRepository productoRepository;
+
+    @Autowired
+    private ObjetivoVentaRepository objetivoVentaRepository;
+
+    // Valores por defecto para los objetivos
+    private static final Map<String, Double> OBJETIVOS_DEFAULT = Map.of(
+            "hoy", 100000.0, // $100,000 por día
+            "semana", 700000.0, // $700,000 por semana
+            "mes", 3000000.0, // $3,000,000 por mes
+            "año", 36000000.0 // $36,000,000 por año
+    );
+
+    @PostConstruct
+    public void inicializarObjetivos() {
+        // Verificar si ya existen objetivos en la base de datos
+        // Si no existen, crear con valores por defecto
+        for (Map.Entry<String, Double> entry : OBJETIVOS_DEFAULT.entrySet()) {
+            String periodo = entry.getKey();
+            Double valorDefault = entry.getValue();
+
+            ObjetivoVenta objetivo = objetivoVentaRepository.findByPeriodo(periodo);
+            if (objetivo == null) {
+                System.out.println("🎯 Inicializando objetivo para " + periodo + " con valor $" + valorDefault);
+                objetivoVentaRepository.save(new ObjetivoVenta(periodo, valorDefault));
+            }
+        }
+    }
+
     public Map<String, Object> getDashboard() {
-        LocalDateTime inicioDia = LocalDateTime.now().withHour(0).withMinute(0).withSecond(0);
-        LocalDateTime finDia = inicioDia.plusDays(1);
+        System.out.println("=== DEBUG DASHBOARD ===");
+        try {
+            // Calcular diferentes períodos de tiempo
+            LocalDateTime ahora = LocalDateTime.now();
 
-        // Calcular ventas del día (facturas + pedidos pagados)
-        List<Factura> facturas = facturaRepository.findByFechaBetween(inicioDia, finDia);
-        double totalVentasFacturas = facturas.stream()
-                .mapToDouble(Factura::getTotal)
-                .sum();
+            // HOY: Últimas 24 horas (incluye ayer si es necesario)
+            LocalDateTime inicio24h = ahora.minusHours(24);
 
-        // Incluir pedidos pagados en las ventas del día
-        List<Pedido> pedidosPagados = pedidoRepository.findByFechaBetween(inicioDia, finDia)
-                .stream()
-                .filter(p -> "pagado".equals(p.getEstado()))
-                .collect(Collectors.toList());
+            // SEMANA: Últimos 7 días
+            LocalDateTime inicioSemana = ahora.minusDays(7);
 
-        double totalVentasPedidos = pedidosPagados.stream()
-                .mapToDouble(Pedido::getTotalPagado)
-                .sum();
+            // MES: Últimos 30 días
+            LocalDateTime inicioMes = ahora.minusDays(30);
 
-        double totalVentas = totalVentasFacturas + totalVentasPedidos;
+            // AÑO: Desde inicio del año calendario
+            LocalDateTime inicioAño = ahora.withDayOfYear(1).withHour(0).withMinute(0).withSecond(0);
 
-        // Calcular ventas últimos 7 días (facturas + pedidos pagados)
-        LocalDateTime inicio7Dias = LocalDateTime.now().minusDays(7);
-        List<Factura> facturas7Dias = facturaRepository.findByFechaBetween(inicio7Dias, LocalDateTime.now());
-        double totalVentasFacturas7Dias = facturas7Dias.stream().mapToDouble(Factura::getTotal).sum();
+            System.out.println("Período HOY (24h): " + inicio24h + " hasta " + ahora);
+            System.out.println("Período SEMANA (7d): " + inicioSemana + " hasta " + ahora);
+            System.out.println("Período MES (30d): " + inicioMes + " hasta " + ahora);
+            System.out.println("Período AÑO: " + inicioAño + " hasta " + ahora);
 
-        List<Pedido> pedidosPagados7Dias = pedidoRepository.findByFechaBetween(inicio7Dias, LocalDateTime.now())
-                .stream()
-                .filter(p -> "pagado".equals(p.getEstado()))
-                .collect(Collectors.toList());
+            // === VENTAS HOY (24 horas) ===
+            Map<String, Object> ventasHoy = calcularVentasPeriodo(inicio24h, ahora, "HOY");
+            double objetivoHoy = obtenerObjetivo("hoy");
+            double totalVentasHoy = (Double) ventasHoy.get("total");
+            double porcentajeHoy = (totalVentasHoy / objetivoHoy) * 100.0;
 
-        double totalVentasPedidos7Dias = pedidosPagados7Dias.stream()
-                .mapToDouble(Pedido::getTotalPagado)
-                .sum();
+            ventasHoy.put("objetivo", objetivoHoy);
+            ventasHoy.put("porcentaje", porcentajeHoy);
 
-        double ventas7Dias = totalVentasFacturas7Dias + totalVentasPedidos7Dias;
+            System.out.println("=== VENTAS HOY ===");
+            System.out.println("Total: " + totalVentasHoy + " | Objetivo: " + objetivoHoy + " | Porcentaje: " + porcentajeHoy);
 
-        // Calcular ventas últimos 30 días (facturas + pedidos pagados)
-        LocalDateTime inicio30Dias = LocalDateTime.now().minusDays(30);
-        List<Factura> facturas30Dias = facturaRepository.findByFechaBetween(inicio30Dias, LocalDateTime.now());
-        double totalVentasFacturas30Dias = facturas30Dias.stream().mapToDouble(Factura::getTotal).sum();
+            // === VENTAS SEMANA (7 días) ===
+            Map<String, Object> ventasSemana = calcularVentasPeriodo(inicioSemana, ahora, "SEMANA");
+            double objetivoSemana = obtenerObjetivo("semana");
+            double totalVentasSemana = (Double) ventasSemana.get("total");
+            double porcentajeSemana = (totalVentasSemana / objetivoSemana) * 100.0;
 
-        List<Pedido> pedidosPagados30Dias = pedidoRepository.findByFechaBetween(inicio30Dias, LocalDateTime.now())
-                .stream()
-                .filter(p -> "pagado".equals(p.getEstado()))
-                .collect(Collectors.toList());
+            ventasSemana.put("objetivo", objetivoSemana);
+            ventasSemana.put("porcentaje", porcentajeSemana);
 
-        double totalVentasPedidos30Dias = pedidosPagados30Dias.stream()
-                .mapToDouble(Pedido::getTotalPagado)
-                .sum();
+            System.out.println("=== VENTAS SEMANA ===");
+            System.out.println("Total: " + totalVentasSemana + " | Objetivo: " + objetivoSemana + " | Porcentaje: " + porcentajeSemana);
 
-        double ventas30Dias = totalVentasFacturas30Dias + totalVentasPedidos30Dias;
+            // === VENTAS MES (30 días) ===
+            Map<String, Object> ventasMes = calcularVentasPeriodo(inicioMes, ahora, "MES");
+            double objetivoMes = obtenerObjetivo("mes");
+            double totalVentasMes = (Double) ventasMes.get("total");
+            double porcentajeMes = (totalVentasMes / objetivoMes) * 100.0;
 
-        // Calcular ventas año actual (facturas + pedidos pagados)
-        LocalDateTime inicioAño = LocalDateTime.now().withDayOfYear(1).withHour(0).withMinute(0).withSecond(0);
-        List<Factura> facturasAño = facturaRepository.findByFechaBetween(inicioAño, LocalDateTime.now());
-        double totalVentasFacturasAño = facturasAño.stream().mapToDouble(Factura::getTotal).sum();
+            ventasMes.put("objetivo", objetivoMes);
+            ventasMes.put("porcentaje", porcentajeMes);
 
-        List<Pedido> pedidosPagadosAño = pedidoRepository.findByFechaBetween(inicioAño, LocalDateTime.now())
-                .stream()
-                .filter(p -> "pagado".equals(p.getEstado()))
-                .collect(Collectors.toList());
+            System.out.println("=== VENTAS MES ===");
+            System.out.println("Total: " + totalVentasMes + " | Objetivo: " + objetivoMes + " | Porcentaje: " + porcentajeMes);
 
-        double totalVentasPedidosAño = pedidosPagadosAño.stream()
-                .mapToDouble(Pedido::getTotalPagado)
-                .sum();
+            // === VENTAS AÑO ===
+            Map<String, Object> ventasAño = calcularVentasPeriodo(inicioAño, ahora, "AÑO");
+            double objetivoAño = obtenerObjetivo("año");
+            double totalVentasAño = (Double) ventasAño.get("total");
+            double porcentajeAño = (totalVentasAño / objetivoAño) * 100.0;
 
-        double ventasAño = totalVentasFacturasAño + totalVentasPedidosAño;
+            ventasAño.put("objetivo", objetivoAño);
+            ventasAño.put("porcentaje", porcentajeAño);
 
-        // Definir objetivos (estos deberían venir de configuración)
-        double objetivoHoy = 1800000;
-        double objetivo7Dias = 18000000;
-        double objetivo30Dias = 70000000;
-        double objetivoAño = 1200000000;
+            System.out.println("=== VENTAS AÑO ===");
+            System.out.println("Total: " + totalVentasAño + " | Objetivo: " + objetivoAño + " | Porcentaje: " + porcentajeAño);
 
-        // Calcular porcentajes
-        double porcentajeHoy = (totalVentas / objetivoHoy) * 100;
-        double porcentaje7Dias = (ventas7Dias / objetivo7Dias) * 100;
-        double porcentaje30Dias = (ventas30Dias / objetivo30Dias) * 100;
-        double porcentajeAño = (ventasAño / objetivoAño) * 100;
+            // === DATOS ADICIONALES DEL DASHBOARD ===
+            // Para pedidos del día usar día calendario actual
+            LocalDateTime inicioDiaCalendario = ahora.withHour(0).withMinute(0).withSecond(0);
+            LocalDateTime finDiaCalendario = inicioDiaCalendario.plusDays(1);
 
-        // Obtener pedidos del día
-        List<Pedido> pedidos = pedidoRepository.findByFechaGreaterThanEqual(inicioDia);
-        long pedidosPendientes = pedidos.stream().filter(p -> "pendiente".equals(p.getEstado())).count();
-        long pedidosCompletados = pedidos.stream().filter(p -> "completado".equals(p.getEstado())).count();
+            List<Pedido> pedidosHoy = pedidoRepository.findByFechaBetween(inicioDiaCalendario, finDiaCalendario);
+            long pedidosPendientes = pedidosHoy.stream().filter(p -> "pendiente".equals(p.getEstado())).count();
+            long pedidosCompletados = pedidosHoy.stream().filter(p -> "completado".equals(p.getEstado())).count();
 
-        // Obtener estado del inventario
-        List<Inventario> stockBajo = inventarioRepository.findProductosConStockBajo();
-        List<Inventario> agotados = inventarioRepository.findProductosAgotados();
+            // Estado del inventario
+            List<Inventario> stockBajo = inventarioRepository.findProductosConStockBajo();
+            List<Inventario> agotados = inventarioRepository.findProductosAgotados();
 
-        // Obtener facturas pendientes
-        List<Factura> facturasPendientes = facturaRepository.findFacturasPendientesPago();
-        double montoPendiente = facturasPendientes.stream()
-                .mapToDouble(Factura::getTotal)
-                .sum();
+            // Facturas pendientes
+            List<Factura> facturasPendientes = facturaRepository.findFacturasPendientesPago();
+            double montoPendiente = facturasPendientes.stream()
+                    .mapToDouble(Factura::getTotal)
+                    .sum();
 
-        // Construir respuesta
-        Map<String, Object> dashboard = new HashMap<>();
+            // === CONSTRUIR RESPUESTA FINAL ===
+            Map<String, Object> dashboard = new HashMap<>();
 
-        // Ventas del día con porcentajes (incluye conteo total de transacciones)
-        Map<String, Object> ventasHoy = new HashMap<>();
-        ventasHoy.put("cantidad", facturas.size() + pedidosPagados.size()); // Total de transacciones
-        ventasHoy.put("total", totalVentas);
-        ventasHoy.put("objetivo", objetivoHoy);
-        ventasHoy.put("porcentaje", Math.round(porcentajeHoy * 100.0) / 100.0);
-        ventasHoy.put("facturas", facturas.size());
-        ventasHoy.put("pedidosPagados", pedidosPagados.size());
-        dashboard.put("ventasHoy", ventasHoy);
+            dashboard.put("ventasHoy", ventasHoy);
+            dashboard.put("ventasSemana", ventasSemana);
+            dashboard.put("ventasMes", ventasMes);
+            dashboard.put("ventasAño", ventasAño);
 
-        // Ventas 7 días
-        Map<String, Object> ventas7DiasMap = new HashMap<>();
-        ventas7DiasMap.put("total", ventas7Dias);
-        ventas7DiasMap.put("objetivo", objetivo7Dias);
-        ventas7DiasMap.put("porcentaje", Math.round(porcentaje7Dias * 100.0) / 100.0);
-        dashboard.put("ventas7Dias", ventas7DiasMap);
+            // Resumen de pedidos del día
+            Map<String, Object> pedidosResumen = new HashMap<>();
+            pedidosResumen.put("total", pedidosHoy.size());
+            pedidosResumen.put("pendientes", pedidosPendientes);
+            pedidosResumen.put("completados", pedidosCompletados);
+            dashboard.put("pedidosHoy", pedidosResumen);
 
-        // Ventas 30 días
-        Map<String, Object> ventas30DiasMap = new HashMap<>();
-        ventas30DiasMap.put("total", ventas30Dias);
-        ventas30DiasMap.put("objetivo", objetivo30Dias);
-        ventas30DiasMap.put("porcentaje", Math.round(porcentaje30Dias * 100.0) / 100.0);
-        dashboard.put("ventas30Dias", ventas30DiasMap);
+            // Inventario
+            Map<String, Object> inventario = new HashMap<>();
+            inventario.put("stockBajo", stockBajo.size());
+            inventario.put("agotados", agotados.size());
+            inventario.put("alertas", stockBajo.size() + agotados.size());
+            dashboard.put("inventario", inventario);
 
-        // Ventas año
-        Map<String, Object> ventasAñoMap = new HashMap<>();
-        ventasAñoMap.put("total", ventasAño);
-        ventasAñoMap.put("objetivo", objetivoAño);
-        ventasAñoMap.put("porcentaje", Math.round(porcentajeAño * 100.0) / 100.0);
-        dashboard.put("ventasAño", ventasAñoMap);
+            // Facturación
+            Map<String, Object> facturacion = new HashMap<>();
+            facturacion.put("pendientesPago", facturasPendientes.size());
+            facturacion.put("montoPendiente", montoPendiente);
+            dashboard.put("facturacion", facturacion);
 
-        // Pedidos del día
-        Map<String, Object> pedidosHoy = new HashMap<>();
-        pedidosHoy.put("total", pedidos.size());
-        pedidosHoy.put("pendientes", pedidosPendientes);
-        pedidosHoy.put("completados", pedidosCompletados);
-        dashboard.put("pedidosHoy", pedidosHoy);
+            dashboard.put("fecha", ahora);
 
-        // Inventario
-        Map<String, Object> inventarioMap = new HashMap<>();
-        inventarioMap.put("stockBajo", stockBajo.size());
-        inventarioMap.put("agotados", agotados.size());
-        inventarioMap.put("alertas", stockBajo.size() + agotados.size());
-        dashboard.put("inventario", inventarioMap);
+            System.out.println("Dashboard response: " + dashboard);
+            return dashboard;
 
-        // Facturación
-        Map<String, Object> facturacionMap = new HashMap<>();
-        facturacionMap.put("pendientesPago", facturasPendientes.size());
-        facturacionMap.put("montoPendiente", montoPendiente);
-        dashboard.put("facturacion", facturacionMap);
+        } catch (Exception e) {
+            System.out.println("Error en getDashboard: " + e.getMessage());
+            e.printStackTrace();
 
-        dashboard.put("fecha", LocalDateTime.now());
+            // Crear un dashboard mínimo con error
+            Map<String, Object> dashboardError = new HashMap<>();
+            dashboardError.put("error", "Error generando el dashboard: " + e.getMessage());
+            dashboardError.put("fecha", LocalDateTime.now());
+            return dashboardError;
+        }
+    }
 
-        return dashboard;
+    private Map<String, Object> calcularVentasPeriodo(LocalDateTime inicio, LocalDateTime fin, String periodo) {
+        System.out.println("=== Calculando ventas para " + periodo + " ===");
+        System.out.println("Desde: " + inicio + " Hasta: " + fin);
+
+        try {
+            // Obtener facturas del período
+            List<Factura> facturas = facturaRepository.findByFechaBetween(inicio, fin);
+            double totalFacturas = facturas.stream().mapToDouble(Factura::getTotal).sum();
+
+            // Debug facturas
+            System.out.println("Facturas encontradas: " + facturas.size());
+            for (Factura f : facturas) {
+                System.out.println("  - Factura - Fecha: " + f.getFecha() + " - Total: " + f.getTotal());
+            }
+
+            // Obtener TODOS los pedidos del período primero
+            List<Pedido> todosPedidos = pedidoRepository.findByFechaBetween(inicio, fin);
+            System.out.println("Todos los pedidos en el período: " + todosPedidos.size());
+
+            for (Pedido p : todosPedidos) {
+                double totalReal = p.calcularTotalReal();
+                System.out.println("  - Pedido ID: " + p.get_id() + " - Estado: " + p.getEstado() + " - Fecha: " + p.getFecha() + " - Total: " + p.getTotal() + " - TotalPagado: " + p.getTotalPagado() + " - TotalReal: " + totalReal + " - FormaPago: " + p.getFormaPago());
+            }
+
+            // Filtrar pedidos pagados del período (incluir tanto "pagado" como "completado")
+            List<Pedido> pedidosPagados = todosPedidos.stream()
+                    .filter(p -> "pagado".equals(p.getEstado()) || "completado".equals(p.getEstado()))
+                    .collect(Collectors.toList());
+
+            // Calcular total de pedidos - usar el total real calculado desde los items
+            double totalPedidos = pedidosPagados.stream()
+                    .mapToDouble(p -> {
+                        double totalReal = p.calcularTotalReal();
+                        double totalPagado = p.getTotalPagado();
+                        double total = p.getTotal();
+
+                        System.out.println("    -> Pedido " + p.get_id() + " - TotalReal: " + totalReal + " - TotalPagado: " + totalPagado + " - Total: " + total);
+
+                        // Usar el total real calculado desde items como primera opción
+                        if (totalReal > 0.0) {
+                            System.out.println("    -> Usando 'totalReal' para pedido " + p.get_id() + ": " + totalReal);
+                            return totalReal;
+                        }
+
+                        // Si totalPagado es 0 pero total tiene valor, usar total
+                        if (totalPagado == 0.0 && total > 0.0) {
+                            System.out.println("    -> Usando 'total' como fallback para pedido " + p.get_id() + ": " + total);
+                            return total;
+                        }
+
+                        System.out.println("    -> Usando 'totalPagado' para pedido " + p.get_id() + ": " + totalPagado);
+                        return totalPagado;
+                    })
+                    .sum();
+            double totalVentas = totalFacturas + totalPedidos;
+
+            System.out.println(periodo + " - Facturas: " + facturas.size() + " (Total: " + totalFacturas + ")");
+            System.out.println(periodo + " - Pedidos pagados/completados: " + pedidosPagados.size() + " (Total: " + totalPedidos + ")");
+            System.out.println(periodo + " - Total ventas: " + totalVentas);
+
+            Map<String, Object> resultado = new HashMap<>();
+            resultado.put("total", totalVentas);
+            resultado.put("totalFacturas", totalFacturas);
+            resultado.put("totalPedidos", totalPedidos);
+            resultado.put("cantidadFacturas", facturas.size());
+            resultado.put("cantidadPedidos", pedidosPagados.size());
+            resultado.put("cantidadTotal", facturas.size() + pedidosPagados.size());
+
+            return resultado;
+        } catch (Exception e) {
+            System.out.println("Error calculando ventas para periodo " + periodo + ": " + e.getMessage());
+            e.printStackTrace();
+
+            // Devolver un resultado vacío para no romper el flujo
+            Map<String, Object> resultadoError = new HashMap<>();
+            resultadoError.put("total", 0.0);
+            resultadoError.put("totalFacturas", 0.0);
+            resultadoError.put("totalPedidos", 0.0);
+            resultadoError.put("cantidadFacturas", 0);
+            resultadoError.put("cantidadPedidos", 0);
+            resultadoError.put("cantidadTotal", 0);
+            resultadoError.put("error", "Error en el cálculo: " + e.getMessage());
+            return resultadoError;
+        }
     }
 
     public Map<String, Object> getVentasPorPeriodo(LocalDateTime fechaInicio, LocalDateTime fechaFin) {
@@ -269,33 +365,45 @@ public class ReporteService {
                 .collect(Collectors.toList());
     }
 
-    public List<Map<String, Object>> getPedidosPorHora(LocalDateTime fecha) {
-        LocalDateTime inicioDia = fecha.withHour(0).withMinute(0).withSecond(0);
-        LocalDateTime finDia = inicioDia.plusDays(1);
+    public List<Map<String, Object>> getPedidosPorHora(LocalDateTime fechaDesde) {
+        LocalDateTime fechaHasta = LocalDateTime.now();
 
-        List<Pedido> pedidos = pedidoRepository.findByFechaBetween(inicioDia, finDia);
+        System.out.println("=== DEBUG getPedidosPorHora ===");
+        System.out.println("Fecha desde: " + fechaDesde);
+        System.out.println("Fecha hasta: " + fechaHasta);
 
-        // Inicializar contadores de pedidos por hora
-        Map<Integer, Long> pedidosPorHora = new HashMap<>();
-        for (int i = 0; i < 24; i++) {
-            pedidosPorHora.put(i, 0L);
+        List<Pedido> pedidos = pedidoRepository.findByFechaBetween(fechaDesde, fechaHasta);
+        System.out.println("Pedidos encontrados: " + pedidos.size());
+
+        // Crear mapa de horas desde fechaDesde hasta ahora
+        Map<String, Long> pedidosPorHora = new LinkedHashMap<>();
+
+        // Inicializar todas las horas en el rango
+        LocalDateTime current = fechaDesde.withMinute(0).withSecond(0);
+        while (current.isBefore(fechaHasta) || current.equals(fechaHasta.withMinute(0).withSecond(0))) {
+            String horaKey = current.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
+            pedidosPorHora.put(horaKey, 0L);
+            current = current.plusHours(1);
         }
 
         // Contar pedidos por hora
         pedidos.forEach(p -> {
-            int hora = p.getFecha().getHour();
-            pedidosPorHora.merge(hora, 1L, Long::sum);
+            String horaKey = p.getFecha().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
+            pedidosPorHora.merge(horaKey, 1L, Long::sum);
         });
 
-        // Convertir a lista de mapas para la respuesta
-        return pedidosPorHora.entrySet().stream()
+        // Convertir a lista
+        List<Map<String, Object>> resultado = pedidosPorHora.entrySet().stream()
                 .map(entry -> {
                     Map<String, Object> horaPedido = new HashMap<>();
-                    horaPedido.put("hora", String.format("%02d:00", entry.getKey()));
+                    horaPedido.put("hora", entry.getKey());
                     horaPedido.put("cantidad", entry.getValue());
                     return horaPedido;
                 })
                 .collect(Collectors.toList());
+
+        System.out.println("Resultado: " + resultado.size() + " registros");
+        return resultado;
     }
 
     public List<Map<String, Object>> getVentasPorDia(int ultimosDias) {
@@ -339,5 +447,186 @@ public class ReporteService {
                     return diaVenta;
                 })
                 .collect(Collectors.toList());
+    }
+
+    public List<Map<String, Object>> getIngresosVsEgresos(int ultimosMeses) {
+        LocalDateTime fechaInicio = LocalDateTime.now().minusMonths(ultimosMeses);
+        LocalDateTime fechaFin = LocalDateTime.now();
+
+        // Obtener facturas y pedidos pagados (ingresos)
+        List<Factura> facturas = facturaRepository.findByFechaBetween(fechaInicio, fechaFin);
+        List<Pedido> pedidosPagados = pedidoRepository.findByFechaBetween(fechaInicio, fechaFin)
+                .stream()
+                .filter(p -> "pagado".equals(p.getEstado()))
+                .collect(Collectors.toList());
+
+        // Agrupar ingresos por mes
+        Map<String, Double> ingresosPorMes = new HashMap<>();
+
+        // Procesar facturas
+        facturas.forEach(f -> {
+            String mesKey = f.getFecha().getYear() + "-" + String.format("%02d", f.getFecha().getMonthValue());
+            ingresosPorMes.merge(mesKey, f.getTotal(), Double::sum);
+        });
+
+        // Procesar pedidos pagados
+        pedidosPagados.forEach(p -> {
+            String mesKey = p.getFecha().getYear() + "-" + String.format("%02d", p.getFecha().getMonthValue());
+            ingresosPorMes.merge(mesKey, p.getTotalPagado(), Double::sum);
+        });
+
+        // Para egresos, por ahora usamos un estimado (70% de los ingresos)
+        // TODO: Implementar tabla de egresos reales
+        return ingresosPorMes.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(entry -> {
+                    String[] yearMonth = entry.getKey().split("-");
+                    String nombreMes = obtenerNombreMes(Integer.parseInt(yearMonth[1]));
+
+                    Map<String, Object> mesData = new HashMap<>();
+                    mesData.put("mes", nombreMes);
+                    mesData.put("ingresos", entry.getValue());
+                    mesData.put("egresos", entry.getValue() * 0.7); // Estimado
+                    return mesData;
+                })
+                .collect(Collectors.toList());
+    }
+
+    public List<Map<String, Object>> getTopProductos(int limite) {
+        LocalDateTime fechaInicio = LocalDateTime.now().withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0);
+        LocalDateTime fechaFin = LocalDateTime.now();
+
+        System.out.println("=== DEBUG getTopProductos ===");
+        System.out.println("Fecha inicio (mes actual): " + fechaInicio);
+        System.out.println("Fecha fin: " + fechaFin);
+
+        // Obtener facturas del mes actual
+        List<Factura> facturas = facturaRepository.findByFechaBetween(fechaInicio, fechaFin);
+        System.out.println("Facturas encontradas: " + facturas.size());
+
+        // Obtener pedidos pagados del mes actual
+        List<Pedido> pedidosPagados = pedidoRepository.findByFechaBetween(fechaInicio, fechaFin)
+                .stream()
+                .filter(p -> "pagado".equals(p.getEstado()) || "completado".equals(p.getEstado()))
+                .collect(Collectors.toList());
+        System.out.println("Pedidos pagados encontrados: " + pedidosPagados.size());
+
+        // Contar productos vendidos
+        Map<String, Integer> conteoProductos = new HashMap<>();
+        Map<String, Double> ventasProductos = new HashMap<>();
+
+        // Procesar facturas
+        for (Factura factura : facturas) {
+            if (factura.getItems() != null) {
+                for (var item : factura.getItems()) {
+                    String nombreProducto = item.getProductoNombre();
+                    conteoProductos.merge(nombreProducto, item.getCantidad(), Integer::sum);
+                    ventasProductos.merge(nombreProducto, item.getTotalItem(), Double::sum);
+                }
+            }
+        }
+
+        // Procesar pedidos pagados
+        for (Pedido pedido : pedidosPagados) {
+            if (pedido.getItems() != null) {
+                for (var item : pedido.getItems()) {
+                    // Buscar el nombre del producto desde el repositorio
+                    String nombreProducto = obtenerNombreProducto(item.getProductoId());
+                    if (nombreProducto != null) {
+                        conteoProductos.merge(nombreProducto, item.getCantidad(), Integer::sum);
+                        // Usar subtotal en lugar de getTotal()
+                        ventasProductos.merge(nombreProducto, item.getSubtotal(), Double::sum);
+                    }
+                }
+            }
+        }
+
+        // Calcular total de CANTIDAD para porcentajes (no de ventas)
+        int totalCantidad = conteoProductos.values().stream().mapToInt(Integer::intValue).sum();
+        System.out.println("Total cantidad productos vendidos: " + totalCantidad);
+        System.out.println("Productos únicos: " + conteoProductos.size());
+
+        // Convertir a lista ordenada por cantidad vendida
+        List<Map<String, Object>> resultado = conteoProductos.entrySet().stream()
+                .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
+                .limit(limite)
+                .map(entry -> {
+                    String producto = entry.getKey();
+                    Integer cantidad = entry.getValue();
+                    Double ventas = ventasProductos.getOrDefault(producto, 0.0);
+                    // Calcular porcentaje basado en cantidad, no en ventas
+                    double porcentaje = totalCantidad > 0 ? ((double) cantidad / totalCantidad) * 100 : 0;
+
+                    Map<String, Object> productoData = new HashMap<>();
+                    productoData.put("nombre", producto);
+                    productoData.put("cantidad", cantidad);
+                    productoData.put("ventas", ventas);
+                    productoData.put("porcentaje", Math.round(porcentaje * 100.0) / 100.0);
+
+                    System.out.println("Producto: " + producto + " - Cantidad: " + cantidad + " - Porcentaje: " + porcentaje);
+                    return productoData;
+                })
+                .collect(Collectors.toList());
+
+        System.out.println("Resultado final: " + resultado.size() + " productos");
+        return resultado;
+    }
+
+    private String obtenerNombreMes(int mes) {
+        String[] meses = {"", "Ene", "Feb", "Mar", "Abr", "May", "Jun",
+            "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"};
+        return meses[mes];
+    }
+
+    private String obtenerNombreProducto(String productoId) {
+        try {
+            var producto = productoRepository.findById(productoId);
+            return producto.isPresent() ? producto.get().getNombre() : "Producto Desconocido";
+        } catch (Exception e) {
+            return "Producto Desconocido";
+        }
+    }
+
+    public boolean actualizarObjetivo(String periodo, Double nuevoObjetivo) {
+        try {
+            System.out.println("🎯 Actualizando objetivo para período: " + periodo + " a $" + nuevoObjetivo);
+
+            // Validar período
+            if (!OBJETIVOS_DEFAULT.containsKey(periodo)) {
+                System.out.println("❌ Período no válido: " + periodo);
+                return false;
+            }
+
+            // Buscar objetivo existente o crear uno nuevo
+            ObjetivoVenta objetivo = objetivoVentaRepository.findByPeriodo(periodo);
+            if (objetivo == null) {
+                objetivo = new ObjetivoVenta(periodo, nuevoObjetivo);
+            } else {
+                objetivo.setValor(nuevoObjetivo);
+            }
+
+            // Guardar en la base de datos
+            objetivoVentaRepository.save(objetivo);
+
+            System.out.println("✅ Objetivo actualizado exitosamente:");
+            System.out.println("   Período: " + periodo);
+            System.out.println("   Nuevo objetivo: $" + nuevoObjetivo);
+
+            return true;
+
+        } catch (Exception e) {
+            System.out.println("❌ Error al actualizar objetivo: " + e.getMessage());
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    public Double obtenerObjetivo(String periodo) {
+        ObjetivoVenta objetivo = objetivoVentaRepository.findByPeriodo(periodo);
+        if (objetivo != null) {
+            return objetivo.getValor();
+        }
+        // Si no existe, retornar el valor por defecto
+        return OBJETIVOS_DEFAULT.getOrDefault(periodo, 0.0);
     }
 }

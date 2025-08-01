@@ -1,0 +1,90 @@
+package com.prog3.security.Controllers;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import com.prog3.security.Services.ResponseService;
+import com.prog3.security.Utils.ApiResponse;
+
+import java.io.IOException;
+import java.net.MalformedURLException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.util.UUID;
+
+@CrossOrigin
+@RestController
+@RequestMapping("/api/images")
+public class ImageController {
+
+    @Autowired
+    private ResponseService responseService;
+
+    // Directorio donde se guardarán las imágenes
+    private final Path imageLocation = Paths.get("src/main/resources/static/images/platos");
+
+    public ImageController() {
+        try {
+            // Crear el directorio si no existe
+            Files.createDirectories(imageLocation);
+        } catch (IOException e) {
+            throw new RuntimeException("No se pudo crear el directorio de imágenes", e);
+        }
+    }
+
+    @PostMapping("/upload")
+    public ResponseEntity<ApiResponse<String>> uploadImage(@RequestParam("file") MultipartFile file) {
+        try {
+            // Validar que el archivo no esté vacío
+            if (file.isEmpty()) {
+                return responseService.badRequest("El archivo está vacío");
+            }
+
+            // Validar tipo de archivo
+            String contentType = file.getContentType();
+            if (contentType == null || !contentType.startsWith("image/")) {
+                return responseService.badRequest("El archivo debe ser una imagen");
+            }
+
+            // Generar nombre único para el archivo
+            String originalFilename = file.getOriginalFilename();
+            String fileExtension = originalFilename.substring(originalFilename.lastIndexOf("."));
+            String uniqueFilename = UUID.randomUUID().toString() + fileExtension;
+
+            // Guardar el archivo
+            Path targetLocation = imageLocation.resolve(uniqueFilename);
+            Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
+
+            // Generar URL de acceso
+            String imageUrl = "/images/platos/" + uniqueFilename;
+
+            return responseService.success(imageUrl, "Imagen subida exitosamente");
+        } catch (IOException e) {
+            return responseService.internalError("Error al subir la imagen: " + e.getMessage());
+        }
+    }
+
+    @DeleteMapping("/platos/{filename:.+}")
+    public ResponseEntity<ApiResponse<Void>> deleteImage(@PathVariable String filename) {
+        try {
+            Path filePath = imageLocation.resolve(filename).normalize();
+
+            if (Files.exists(filePath)) {
+                Files.delete(filePath);
+                return responseService.success(null, "Imagen eliminada exitosamente");
+            } else {
+                return responseService.notFound("Imagen no encontrada");
+            }
+        } catch (IOException e) {
+            return responseService.internalError("Error al eliminar la imagen: " + e.getMessage());
+        }
+    }
+}

@@ -1,13 +1,18 @@
 package com.prog3.security.DTOs;
 
+import java.util.List;
+import java.util.ArrayList;
+
 public class ProductoMesaRequest {
 
     private String productoId;
     private int cantidad;
     private double precio;
     private String notas;
+    private List<String> ingredientesSeleccionados; // IDs de los ingredientes seleccionados (carnes, etc.)
 
     public ProductoMesaRequest() {
+        this.ingredientesSeleccionados = new ArrayList<>();
     }
 
     public ProductoMesaRequest(String productoId, int cantidad, double precio, String notas) {
@@ -15,6 +20,7 @@ public class ProductoMesaRequest {
         this.cantidad = cantidad;
         this.precio = precio;
         this.notas = notas;
+        this.ingredientesSeleccionados = new ArrayList<>();
     }
 
     // Getters y Setters
@@ -48,5 +54,13 @@ public class ProductoMesaRequest {
 
     public void setNotas(String notas) {
         this.notas = notas;
+    }
+
+    public List<String> getIngredientesSeleccionados() {
+        return ingredientesSeleccionados;
+    }
+
+    public void setIngredientesSeleccionados(List<String> ingredientesSeleccionados) {
+        this.ingredientesSeleccionados = ingredientesSeleccionados;
     }
 }

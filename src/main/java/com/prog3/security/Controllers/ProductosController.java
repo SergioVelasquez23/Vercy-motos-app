@@ -16,7 +16,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.prog3.security.Models.Producto;
+import com.prog3.security.Models.Ingrediente;
+import com.prog3.security.DTOs.CrearProductoRequest;
 import com.prog3.security.Repositories.ProductoRepository;
+import com.prog3.security.Repositories.IngredienteRepository;
 import com.prog3.security.Services.ResponseService;
 import com.prog3.security.Utils.ApiResponse;
 
@@ -27,6 +30,9 @@ public class ProductosController {
 
     @Autowired
     private ProductoRepository theProductoRepository;
+
+    @Autowired
+    private IngredienteRepository theIngredienteRepository;
 
     @Autowired
     private ResponseService responseService;
@@ -55,26 +61,52 @@ public class ProductosController {
     }
 
     @PostMapping
-    public ResponseEntity<ApiResponse<Producto>> create(@RequestBody Producto newProducto) {
+    public ResponseEntity<ApiResponse<Producto>> create(@RequestBody CrearProductoRequest request) {
         try {
             // Validar que no exista un producto con el mismo nombre
-            if (this.theProductoRepository.existsByNombre(newProducto.getNombre())) {
-                return responseService.conflict("Ya existe un producto con el nombre: " + newProducto.getNombre());
+            if (this.theProductoRepository.existsByNombre(request.getNombre())) {
+                return responseService.conflict("Ya existe un producto con el nombre: " + request.getNombre());
             }
 
             // Validaciones de negocio
-            if (newProducto.getPrecio() <= 0) {
+            if (request.getPrecio() <= 0) {
                 return responseService.badRequest("El precio debe ser mayor a 0");
             }
 
-            if (newProducto.getCosto() < 0) {
+            if (request.getCosto() < 0) {
                 return responseService.badRequest("El costo no puede ser negativo");
             }
 
+            // Validar que los ingredientes existan si se especificaron
+            if (request.getIngredientesDisponibles() != null && !request.getIngredientesDisponibles().isEmpty()) {
+                for (String ingredienteId : request.getIngredientesDisponibles()) {
+                    if (!theIngredienteRepository.existsById(ingredienteId)) {
+                        return responseService.badRequest("El ingrediente con ID " + ingredienteId + " no existe");
+                    }
+                }
+            }
+
+            // Crear el producto
+            Producto newProducto = new Producto();
+            newProducto.setNombre(request.getNombre());
+            newProducto.setPrecio(request.getPrecio());
+            newProducto.setCosto(request.getCosto());
+            newProducto.setImpuestos(request.getImpuestos());
+            newProducto.setTieneVariantes(request.isTieneVariantes());
+            newProducto.setEstado(request.getEstado());
+            newProducto.setImagenUrl(request.getImagenUrl());
+            newProducto.setCategoriaId(request.getCategoriaId());
+            newProducto.setDescripcion(request.getDescripcion());
+            newProducto.setCantidad(request.getCantidad());
+            newProducto.setNota(request.getNota());
+            newProducto.setIngredientesDisponibles(request.getIngredientesDisponibles());
+
             // Calcular utilidad si no se especifica
-            if (newProducto.getUtilidad() == 0.0) {
-                double utilidad = newProducto.getPrecio() - newProducto.getCosto() - newProducto.getImpuestos();
+            if (request.getUtilidad() == 0.0) {
+                double utilidad = request.getPrecio() - request.getCosto() - request.getImpuestos();
                 newProducto.setUtilidad(utilidad);
+            } else {
+                newProducto.setUtilidad(request.getUtilidad());
             }
 
             Producto savedProducto = this.theProductoRepository.save(newProducto);
@@ -165,6 +197,7 @@ public class ProductosController {
             actualProducto.setDescripcion(newProducto.getDescripcion());
             actualProducto.setCantidad(newProducto.getCantidad());
             actualProducto.setNota(newProducto.getNota());
+            actualProducto.setIngredientesDisponibles(newProducto.getIngredientesDisponibles());
 
             // Recalcular utilidad si es necesario
             if (newProducto.getUtilidad() == 0.0) {
@@ -176,6 +209,35 @@ public class ProductosController {
             return responseService.success(updatedProducto, "Producto actualizado exitosamente");
         } catch (Exception e) {
             return responseService.internalError("Error al actualizar producto: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/ingredientes-carnes")
+    public ResponseEntity<ApiResponse<List<Ingrediente>>> getIngredientesCarnes() {
+        try {
+            List<Ingrediente> carnes = this.theIngredienteRepository.findByCategoria("carne");
+            return responseService.success(carnes, "Ingredientes de carnes obtenidos exitosamente");
+        } catch (Exception e) {
+            return responseService.internalError("Error al obtener ingredientes de carnes: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/{id}/ingredientes")
+    public ResponseEntity<ApiResponse<List<Ingrediente>>> getIngredientesProducto(@PathVariable String id) {
+        try {
+            Producto producto = this.theProductoRepository.findById(id).orElse(null);
+            if (producto == null) {
+                return responseService.notFound("Producto no encontrado con ID: " + id);
+            }
+
+            if (producto.getIngredientesDisponibles() == null || producto.getIngredientesDisponibles().isEmpty()) {
+                return responseService.success(List.of(), "El producto no tiene ingredientes configurados");
+            }
+
+            List<Ingrediente> ingredientes = this.theIngredienteRepository.findAllById(producto.getIngredientesDisponibles());
+            return responseService.success(ingredientes, "Ingredientes del producto obtenidos exitosamente");
+        } catch (Exception e) {
+            return responseService.internalError("Error al obtener ingredientes del producto: " + e.getMessage());
         }
     }
 }
