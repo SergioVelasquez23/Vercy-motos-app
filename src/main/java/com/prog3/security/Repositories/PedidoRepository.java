@@ -56,6 +56,10 @@ public interface PedidoRepository extends MongoRepository<Pedido, String> {
     @Query("{ 'fecha': { $gte: ?0, $lte: ?1 }, 'estado': 'pagado' }")
     List<Pedido> findPedidosForTotalVentas(LocalDateTime fechaInicio, LocalDateTime fechaFin);
 
+    // Buscar pedidos por forma de pago y fecha
+    @Query("{ 'formaPago': ?0, 'fecha': { $gte: ?1 }, 'estado': 'pagado' }")
+    List<Pedido> findByFormaPagoAndFechaGreaterThanEqual(String formaPago, LocalDateTime fecha);
+
     // Eliminar todos los pedidos con estado específico
     @Query("{ 'estado': ?0 }")
     void deleteAllByEstado(String estado);
