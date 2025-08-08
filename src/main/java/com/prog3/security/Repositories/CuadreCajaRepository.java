@@ -33,4 +33,7 @@ public interface CuadreCajaRepository extends MongoRepository<CuadreCaja, String
 
     // Buscar cuadres aprobados por una persona específica
     List<CuadreCaja> findByAprobadoPor(String aprobador);
+
+    // Buscar cajas que no estén cerradas
+    List<CuadreCaja> findByCerradaFalse();
 }

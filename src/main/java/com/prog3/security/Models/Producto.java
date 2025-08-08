@@ -23,6 +23,10 @@ public class Producto {
     private int cantidad;
     private String nota;
     private List<String> ingredientesDisponibles; // IDs de ingredientes que pueden ser opciones (carnes, etc.)
+    private boolean tieneIngredientes; // Indica si el producto maneja ingredientes
+    private String tipoProducto; // "combo" o "individual" - determina si el cliente puede elegir ingredientes
+    private List<IngredienteProducto> ingredientesRequeridos; // Ingredientes fijos que siempre se consumen
+    private List<IngredienteProducto> ingredientesOpcionales; // Ingredientes opcionales que el cliente puede elegir (solo para combos)
 
     public Producto() {
         // Inicializar campos que pueden ser null con valores por defecto
@@ -35,6 +39,10 @@ public class Producto {
         this.descripcion = "";
         this.nota = "";
         this.ingredientesDisponibles = new ArrayList<>();
+        this.tieneIngredientes = false;
+        this.tipoProducto = "individual"; // Por defecto es individual
+        this.ingredientesRequeridos = new ArrayList<>();
+        this.ingredientesOpcionales = new ArrayList<>();
     }
 
     public Producto(String nombre, double precio, double costo, double utilidad) {
@@ -159,5 +167,45 @@ public class Producto {
 
     public void setIngredientesDisponibles(List<String> ingredientesDisponibles) {
         this.ingredientesDisponibles = ingredientesDisponibles;
+    }
+
+    public boolean isTieneIngredientes() {
+        return tieneIngredientes;
+    }
+
+    public void setTieneIngredientes(boolean tieneIngredientes) {
+        this.tieneIngredientes = tieneIngredientes;
+    }
+
+    public String getTipoProducto() {
+        return tipoProducto;
+    }
+
+    public void setTipoProducto(String tipoProducto) {
+        this.tipoProducto = tipoProducto;
+    }
+
+    public boolean esCombo() {
+        return "combo".equals(this.tipoProducto);
+    }
+
+    public boolean esIndividual() {
+        return "individual".equals(this.tipoProducto);
+    }
+
+    public List<IngredienteProducto> getIngredientesRequeridos() {
+        return ingredientesRequeridos;
+    }
+
+    public void setIngredientesRequeridos(List<IngredienteProducto> ingredientesRequeridos) {
+        this.ingredientesRequeridos = ingredientesRequeridos;
+    }
+
+    public List<IngredienteProducto> getIngredientesOpcionales() {
+        return ingredientesOpcionales;
+    }
+
+    public void setIngredientesOpcionales(List<IngredienteProducto> ingredientesOpcionales) {
+        this.ingredientesOpcionales = ingredientesOpcionales;
     }
 }

@@ -348,4 +348,42 @@ public class InventarioController {
             return responseService.internalError("Error al eliminar inventario: " + e.getMessage());
         }
     }
+
+    @GetMapping("/debug/estado-stock")
+    public ResponseEntity<Map<String, Object>> debugEstadoStock() {
+        try {
+            List<Inventario> inventarios = inventarioRepository.findAll();
+            Map<String, Object> debug = new HashMap<>();
+
+            debug.put("totalItems", inventarios.size());
+            debug.put("timestamp", LocalDateTime.now());
+
+            // Mostrar inventarios con stock bajo
+            List<Map<String, Object>> stockBajo = inventarios.stream()
+                    .filter(inv -> inv.getCantidadActual() <= inv.getCantidadMinima())
+                    .map(inv -> {
+                        Map<String, Object> item = new HashMap<>();
+                        item.put("id", inv.get_id());
+                        item.put("nombre", inv.getProductoNombre());
+                        item.put("stockActual", inv.getCantidadActual());
+                        item.put("stockMinimo", inv.getCantidadMinima());
+                        item.put("unidad", inv.getUnidadMedida());
+                        return item;
+                    })
+                    .toList();
+
+            debug.put("stockBajo", stockBajo);
+
+            // Mostrar últimos movimientos
+            List<MovimientoInventario> ultimosMovimientos = movimientoRepository
+                    .findTop10ByOrderByFechaDesc();
+            debug.put("ultimosMovimientos", ultimosMovimientos);
+
+            return ResponseEntity.ok(debug);
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.internalServerError().body(error);
+        }
+    }
 }

@@ -60,10 +60,25 @@ public interface PedidoRepository extends MongoRepository<Pedido, String> {
     @Query("{ 'formaPago': ?0, 'fecha': { $gte: ?1 }, 'estado': 'pagado' }")
     List<Pedido> findByFormaPagoAndFechaGreaterThanEqual(String formaPago, LocalDateTime fecha);
 
+    // Buscar pedidos pagados por fecha de pago (NUEVO - para cuadres de caja)
+    @Query("{ 'fechaPago': { $gte: ?0 }, 'estado': 'pagado' }")
+    List<Pedido> findByFechaPagoGreaterThanEqualAndEstado(LocalDateTime fechaPago, String estado);
+
     // Eliminar todos los pedidos con estado específico
     @Query("{ 'estado': ?0 }")
     void deleteAllByEstado(String estado);
 
     // Eliminar pedidos por rango de fechas
     void deleteByFechaBetween(LocalDateTime fechaInicio, LocalDateTime fechaFin);
+
+    // Buscar pedidos por mesa y nombre del pedido (para mesas especiales)
+    List<Pedido> findByMesaAndNombrePedido(String mesa, String nombrePedido);
+
+    // Buscar pedidos activos por mesa (para mesas especiales)
+    @Query("{ 'mesa': ?0, 'estado': { $in: ['activo', 'pendiente'] } }")
+    List<Pedido> findPedidosActivosByMesa(String mesa);
+
+    // Verificar si existe un pedido activo con el nombre especificado en una mesa
+    @Query("{ 'mesa': ?0, 'nombrePedido': ?1, 'estado': { $in: ['activo', 'pendiente'] } }")
+    List<Pedido> findPedidoActivoByMesaAndNombre(String mesa, String nombrePedido);
 }

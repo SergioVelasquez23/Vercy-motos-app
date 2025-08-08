@@ -3,6 +3,7 @@ package com.prog3.security.Services;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.ArrayList;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -33,61 +34,92 @@ public class InventarioService {
     @Autowired
     private MovimientoInventarioRepository movimientoRepository;
 
+    @Autowired
+    private InventarioIngredientesService inventarioIngredientesService;
+
     /**
      * SISTEMA ACTUALIZADO - SIN DATOS ESTÁTICOS
-     * 
-     * Procesa un pedido para descontar del inventario usando el nuevo sistema de ingredientes
-     * dinámico basado en base de datos. Ya no utiliza datos hardcodeados.
+     *
+     * Procesa un pedido para descontar del inventario usando el nuevo sistema
+     * de ingredientes dinámico basado en base de datos. Ya no utiliza datos
+     * hardcodeados.
      */
     public void procesarPedidoParaInventario(Pedido pedido) {
         // Solo procesar pedidos activos o pagados (no cancelados ni cortesías)
         if ("cancelado".equals(pedido.getEstado()) || "cortesia".equals(pedido.getTipo())) {
-            System.out.println("Pedido no procesado para inventario: Estado=" + pedido.getEstado() + ", Tipo=" + pedido.getTipo());
+            System.out.println("🚫 Pedido no procesado para inventario: Estado=" + pedido.getEstado() + ", Tipo=" + pedido.getTipo());
             return;
         }
 
-        System.out.println("======== PROCESANDO PEDIDO PARA INVENTARIO =========");
-        System.out.println("Pedido ID: " + pedido.get_id());
-        System.out.println("Mesa: " + pedido.getMesa());
-        System.out.println("Estado: " + pedido.getEstado());
-        System.out.println("Tipo: " + pedido.getTipo());
-        System.out.println("Fecha: " + pedido.getFecha());
+        System.out.println("🔄======== PROCESANDO PEDIDO PARA INVENTARIO =========🔄");
+        System.out.println("📋 Pedido ID: " + pedido.get_id());
+        System.out.println("🍽️ Mesa: " + pedido.getMesa());
+        System.out.println("📊 Estado: " + pedido.getEstado());
+        System.out.println("🏷️ Tipo: " + pedido.getTipo());
+        System.out.println("📅 Fecha: " + pedido.getFecha());
 
         // Procesar items del pedido si existen (sistema legacy)
         if (pedido.getItems() != null && !pedido.getItems().isEmpty()) {
+            System.out.println("🛒 Cantidad de items a procesar: " + pedido.getItems().size());
             procesarItemsPedidoLegacy(pedido.getItems(), pedido);
+        } else {
+            System.out.println("⚠️ El pedido no tiene items para procesar");
         }
 
-        System.out.println("======== FIN PROCESAMIENTO INVENTARIO =========");
+        System.out.println("✅======== FIN PROCESAMIENTO INVENTARIO =========✅");
     }
 
     /**
-     * Procesa items del pedido (sistema legacy actualizado)
+     * Procesa items del pedido (sistema actualizado)
      */
     private void procesarItemsPedidoLegacy(List<ItemPedido> items, Pedido pedido) {
-        System.out.println("Procesando " + items.size() + " items del pedido");
-        
+        System.out.println("📦 Procesando " + items.size() + " items del pedido");
+
         for (ItemPedido item : items) {
             System.out.println("------------------------------------------");
-            System.out.println("Procesando item: " + item.getProductoNombre() + ", ProductoID=" + item.getProductoId());
-            System.out.println("Cantidad: " + item.getCantidad());
+            System.out.println("🍽️ Procesando item: " + item.getProductoNombre() + ", ProductoID=" + item.getProductoId());
+            System.out.println("📊 Cantidad: " + item.getCantidad());
 
-            // Buscar el producto para ver si tiene ingredientes configurados
+            // Buscar el producto para verificar si tiene ingredientes configurados
             Optional<Producto> productoOpt = theProductoRepository.findById(item.getProductoId());
             if (productoOpt.isPresent()) {
                 Producto producto = productoOpt.get();
-                
-                // Si el producto tiene ingredientes configurados, usar el nuevo sistema
-                if (producto.getIngredientesDisponibles() != null && !producto.getIngredientesDisponibles().isEmpty()) {
-                    System.out.println("Producto tiene ingredientes configurados, procesando ingredientes");
+                System.out.println("✅ Producto encontrado: " + producto.getNombre());
+                System.out.println("🔧 Tiene ingredientes: " + producto.isTieneIngredientes());
+
+                // NUEVO SISTEMA: Verificar si el producto tiene ingredientes (combo o individual)
+                if (producto.isTieneIngredientes()) {
+                    System.out.println("🍽️ Producto con ingredientes detectado - usando NUEVO SISTEMA");
+                    System.out.println("📋 Tipo de producto: " + producto.getTipoProducto());
+
+                    try {
+                        System.out.println("🔄 Llamando a inventarioIngredientesService.descontarIngredientesDelInventario...");
+                        // Usar el nuevo servicio de ingredientes
+                        inventarioIngredientesService.descontarIngredientesDelInventario(
+                                producto.get_id(),
+                                item.getCantidad(),
+                                item.getIngredientesSeleccionados(),
+                                "Sistema" // procesadoPor
+                        );
+                        System.out.println("✅ Ingredientes descontados correctamente");
+                    } catch (Exception e) {
+                        System.err.println("❌ Error al descontar ingredientes: " + e.getMessage());
+                        e.printStackTrace();
+                        // Fallback al sistema legacy en caso de error
+                        System.out.println("🔄 Intentando fallback al sistema legacy...");
+                        descontarInventarioDirecto(item.getProductoId(), item.getCantidad(), pedido);
+                    }
+                } // SISTEMA LEGACY: Productos sin ingredientes configurados
+                else if (producto.getIngredientesDisponibles() != null && !producto.getIngredientesDisponibles().isEmpty()) {
+                    System.out.println("📋 Producto con ingredientes legacy - procesando ingredientes");
                     procesarIngredientesProducto(producto, item.getCantidad());
                 } else {
-                    System.out.println("Producto sin ingredientes configurados - procesamiento legacy");
+                    System.out.println("🔄 Producto sin ingredientes configurados - procesamiento legacy");
                     // Mantener lógica legacy para productos sin ingredientes
                     descontarInventarioDirecto(item.getProductoId(), item.getCantidad(), pedido);
                 }
             } else {
-                System.out.println("Producto no encontrado: " + item.getProductoId());
+                System.out.println("❌ Producto no encontrado: " + item.getProductoId());
                 // Intentar descuento directo por ID
                 descontarInventarioDirecto(item.getProductoId(), item.getCantidad(), pedido);
             }
@@ -99,28 +131,28 @@ public class InventarioService {
      */
     private void procesarIngredientesProducto(Producto producto, int cantidad) {
         System.out.println("Procesando ingredientes para producto: " + producto.getNombre());
-        
+
         for (String ingredienteId : producto.getIngredientesDisponibles()) {
             try {
                 Optional<Ingrediente> ingredienteOpt = theIngredienteRepository.findById(ingredienteId);
                 if (ingredienteOpt.isPresent()) {
                     Ingrediente ingrediente = ingredienteOpt.get();
-                    
+
                     // Cantidad por defecto: 1 unidad de ingrediente por producto
                     double cantidadADescontar = 1.0 * cantidad;
-                    
+
                     if (ingrediente.getStockActual() >= cantidadADescontar) {
                         ingrediente.setStockActual(ingrediente.getStockActual() - cantidadADescontar);
                         theIngredienteRepository.save(ingrediente);
-                        
-                        System.out.println("Descontado ingrediente: " + ingrediente.getNombre() + 
-                                         ", cantidad: " + cantidadADescontar + 
-                                         ", stock restante: " + ingrediente.getStockActual());
+
+                        System.out.println("Descontado ingrediente: " + ingrediente.getNombre()
+                                + ", cantidad: " + cantidadADescontar
+                                + ", stock restante: " + ingrediente.getStockActual());
                     } else {
-                        System.err.println("ADVERTENCIA: Stock insuficiente para ingrediente: " + 
-                                         ingrediente.getNombre() + 
-                                         ". Requerido: " + cantidadADescontar + 
-                                         ", Disponible: " + ingrediente.getStockActual());
+                        System.err.println("ADVERTENCIA: Stock insuficiente para ingrediente: "
+                                + ingrediente.getNombre()
+                                + ". Requerido: " + cantidadADescontar
+                                + ", Disponible: " + ingrediente.getStockActual());
                     }
                 } else {
                     System.err.println("ADVERTENCIA: Ingrediente no encontrado con ID: " + ingredienteId);
@@ -136,7 +168,7 @@ public class InventarioService {
      */
     private void descontarInventarioDirecto(String productoId, int cantidad, Pedido pedido) {
         System.out.println("LEGACY: Descuento directo del inventario para producto: " + productoId);
-        
+
         try {
             // Buscar en inventario por producto ID
             Inventario inventario = theInventarioRepository.findByProductoId(productoId);
@@ -186,8 +218,8 @@ public class InventarioService {
 
         movimientoRepository.save(movimiento);
 
-        System.out.println("Movimiento de inventario registrado: " + inventario.getProductoNombre() + 
-                         " - Cantidad: " + cantidad + " - Stock nuevo: " + inventario.getCantidadActual());
+        System.out.println("Movimiento de inventario registrado: " + inventario.getProductoNombre()
+                + " - Cantidad: " + cantidad + " - Stock nuevo: " + inventario.getCantidadActual());
     }
 
     /**
@@ -226,5 +258,115 @@ public class InventarioService {
         } else {
             System.err.println("No se encontró el ingrediente con ID: " + ingredienteId);
         }
+    }
+
+    /**
+     * Devuelve ingredientes específicos al inventario (para cancelaciones
+     * selectivas)
+     */
+    public void devolverIngredientesAlInventario(String pedidoId, String productoId,
+            List<com.prog3.security.DTOs.CancelarProductoRequest.IngredienteADevolver> ingredientesADevolver,
+            String procesadoPor) {
+        System.out.println("======== DEVOLVIENDO INGREDIENTES AL INVENTARIO =========");
+        System.out.println("Pedido ID: " + pedidoId);
+        System.out.println("Producto ID: " + productoId);
+        System.out.println("Procesado por: " + procesadoPor);
+
+        for (com.prog3.security.DTOs.CancelarProductoRequest.IngredienteADevolver ingredienteDevolver : ingredientesADevolver) {
+            if (ingredienteDevolver.isDevolver() && ingredienteDevolver.getCantidadADevolver() > 0) {
+                try {
+                    // Buscar el ingrediente
+                    Optional<Ingrediente> ingredienteOpt = theIngredienteRepository.findById(ingredienteDevolver.getIngredienteId());
+
+                    if (ingredienteOpt.isPresent()) {
+                        Ingrediente ingrediente = ingredienteOpt.get();
+                        double stockAnterior = ingrediente.getStockActual();
+                        double nuevoStock = stockAnterior + ingredienteDevolver.getCantidadADevolver();
+
+                        // Actualizar stock
+                        ingrediente.setStockActual(nuevoStock);
+                        theIngredienteRepository.save(ingrediente);
+
+                        // Registrar movimiento de devolución
+                        MovimientoInventario movimiento = new MovimientoInventario();
+                        movimiento.setProductoId(ingredienteDevolver.getIngredienteId()); // Usar como referencia
+                        movimiento.setProductoNombre(ingrediente.getNombre());
+                        movimiento.setTipoMovimiento("ENTRADA");
+                        movimiento.setCantidadMovimiento(ingredienteDevolver.getCantidadADevolver());
+                        movimiento.setCantidadAnterior(stockAnterior);
+                        movimiento.setCantidadNueva(nuevoStock);
+                        movimiento.setMotivo("DEVOLUCIÓN POR CANCELACIÓN");
+                        movimiento.setObservaciones("Devolución de " + ingrediente.getNombre()
+                                + " por cancelación de producto en pedido " + pedidoId);
+                        movimiento.setResponsable(procesadoPor);
+                        movimiento.setFecha(LocalDateTime.now());
+                        movimiento.setReferencia(pedidoId);
+
+                        movimientoRepository.save(movimiento);
+
+                        System.out.println("✅ Devuelto: " + ingrediente.getNombre()
+                                + " - Cantidad: " + ingredienteDevolver.getCantidadADevolver()
+                                + " - Stock anterior: " + stockAnterior
+                                + " - Stock nuevo: " + nuevoStock);
+                    } else {
+                        System.err.println("❌ No se encontró ingrediente con ID: " + ingredienteDevolver.getIngredienteId());
+                    }
+                } catch (Exception e) {
+                    System.err.println("❌ Error devolviendo ingrediente "
+                            + ingredienteDevolver.getNombreIngrediente() + ": " + e.getMessage());
+                }
+            } else {
+                System.out.println("⏭️ Saltando devolución de: " + ingredienteDevolver.getNombreIngrediente()
+                        + " - Motivo: " + ingredienteDevolver.getMotivoNoDevolucion());
+            }
+        }
+
+        System.out.println("======== FIN DEVOLUCIÓN INGREDIENTES =========");
+    }
+
+    /**
+     * Obtiene los ingredientes que fueron descontados para un producto
+     * específico en un pedido Para mostrar en el frontend qué se puede devolver
+     */
+    public List<com.prog3.security.DTOs.CancelarProductoRequest.IngredienteADevolver>
+            getIngredientesDescontadosParaProducto(String pedidoId, String productoId, int cantidadProducto) {
+
+        List<com.prog3.security.DTOs.CancelarProductoRequest.IngredienteADevolver> ingredientesDescontados
+                = new ArrayList<>();
+
+        try {
+            // Buscar el producto para obtener sus ingredientes
+            Optional<Producto> productoOpt = theProductoRepository.findById(productoId);
+
+            if (productoOpt.isPresent()) {
+                Producto producto = productoOpt.get();
+
+                if (producto.isTieneIngredientes()) {
+                    // Procesar ingredientes requeridos
+                    if (producto.getIngredientesRequeridos() != null) {
+                        for (com.prog3.security.Models.IngredienteProducto ingredienteProducto : producto.getIngredientesRequeridos()) {
+                            double cantidadDescontada = ingredienteProducto.getCantidadNecesaria() * cantidadProducto;
+
+                            com.prog3.security.DTOs.CancelarProductoRequest.IngredienteADevolver ingredienteADevolver
+                                    = new com.prog3.security.DTOs.CancelarProductoRequest.IngredienteADevolver(
+                                            ingredienteProducto.getIngredienteId(),
+                                            ingredienteProducto.getNombre(),
+                                            cantidadDescontada,
+                                            ingredienteProducto.getUnidad()
+                                    );
+
+                            ingredientesDescontados.add(ingredienteADevolver);
+                        }
+                    }
+
+                    // TODO: También procesar ingredientes opcionales seleccionados en el pedido
+                    // Esto requeriría modificar el modelo de pedido para guardar qué ingredientes fueron seleccionados
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Error obteniendo ingredientes descontados: " + e.getMessage());
+        }
+
+        return ingredientesDescontados;
     }
 }

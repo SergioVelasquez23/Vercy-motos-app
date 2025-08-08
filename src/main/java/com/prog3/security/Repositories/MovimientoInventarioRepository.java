@@ -51,4 +51,7 @@ public interface MovimientoInventarioRepository extends MongoRepository<Movimien
     // Obtener últimos movimientos por producto
     @Query("{ 'productoId': ?0 }")
     List<MovimientoInventario> findByProductoIdOrderByFechaDesc(String productoId);
+
+    // Obtener los últimos N movimientos ordenados por fecha
+    List<MovimientoInventario> findTop10ByOrderByFechaDesc();
 }

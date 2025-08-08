@@ -17,9 +17,13 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.prog3.security.Models.Producto;
 import com.prog3.security.Models.Ingrediente;
+import com.prog3.security.Models.Categoria;
+import com.prog3.security.Models.IngredienteProducto;
 import com.prog3.security.DTOs.CrearProductoRequest;
+import com.prog3.security.DTOs.IngredienteConCategoriaDTO;
 import com.prog3.security.Repositories.ProductoRepository;
 import com.prog3.security.Repositories.IngredienteRepository;
+import com.prog3.security.Repositories.CategoriaRepository;
 import com.prog3.security.Services.ResponseService;
 import com.prog3.security.Utils.ApiResponse;
 
@@ -33,6 +37,9 @@ public class ProductosController {
 
     @Autowired
     private IngredienteRepository theIngredienteRepository;
+
+    @Autowired
+    private CategoriaRepository theCategoriaRepository;
 
     @Autowired
     private ResponseService responseService;
@@ -78,10 +85,34 @@ public class ProductosController {
             }
 
             // Validar que los ingredientes existan si se especificaron
-            if (request.getIngredientesDisponibles() != null && !request.getIngredientesDisponibles().isEmpty()) {
-                for (String ingredienteId : request.getIngredientesDisponibles()) {
-                    if (!theIngredienteRepository.existsById(ingredienteId)) {
-                        return responseService.badRequest("El ingrediente con ID " + ingredienteId + " no existe");
+            if (request.getIngredientesRequeridos() != null) {
+                for (IngredienteProducto ingredienteReq : request.getIngredientesRequeridos()) {
+                    if (!theIngredienteRepository.existsById(ingredienteReq.getIngredienteId())) {
+                        return responseService.badRequest("El ingrediente requerido con ID " + ingredienteReq.getIngredienteId() + " no existe");
+                    }
+
+                    // Resolver el nombre si no está presente
+                    if (ingredienteReq.getNombre() == null || ingredienteReq.getNombre().isEmpty()) {
+                        Ingrediente ingrediente = this.theIngredienteRepository.findById(ingredienteReq.getIngredienteId()).orElse(null);
+                        if (ingrediente != null) {
+                            ingredienteReq.setNombre(ingrediente.getNombre());
+                        }
+                    }
+                }
+            }
+
+            if (request.getIngredientesOpcionales() != null) {
+                for (IngredienteProducto ingredienteOpc : request.getIngredientesOpcionales()) {
+                    if (!theIngredienteRepository.existsById(ingredienteOpc.getIngredienteId())) {
+                        return responseService.badRequest("El ingrediente opcional con ID " + ingredienteOpc.getIngredienteId() + " no existe");
+                    }
+
+                    // Resolver el nombre si no está presente
+                    if (ingredienteOpc.getNombre() == null || ingredienteOpc.getNombre().isEmpty()) {
+                        Ingrediente ingrediente = this.theIngredienteRepository.findById(ingredienteOpc.getIngredienteId()).orElse(null);
+                        if (ingrediente != null) {
+                            ingredienteOpc.setNombre(ingrediente.getNombre());
+                        }
                     }
                 }
             }
@@ -100,6 +131,12 @@ public class ProductosController {
             newProducto.setCantidad(request.getCantidad());
             newProducto.setNota(request.getNota());
             newProducto.setIngredientesDisponibles(request.getIngredientesDisponibles());
+
+            // Campos nuevos para combo/individual
+            newProducto.setTieneIngredientes(request.isTieneIngredientes());
+            newProducto.setTipoProducto(request.getTipoProducto());
+            newProducto.setIngredientesRequeridos(request.getIngredientesRequeridos());
+            newProducto.setIngredientesOpcionales(request.getIngredientesOpcionales());
 
             // Calcular utilidad si no se especifica
             if (request.getUtilidad() == 0.0) {
@@ -169,9 +206,9 @@ public class ProductosController {
                 return responseService.notFound("Producto no encontrado con ID: " + id);
             }
 
-            // Validar que el nombre no exista si se está cambiando
-            if (!actualProducto.getNombre().equals(newProducto.getNombre())
-                    && this.theProductoRepository.existsByNombre(newProducto.getNombre())) {
+            // Validar que el nombre no exista en otro producto
+            Producto existingByNombre = this.theProductoRepository.findByNombre(newProducto.getNombre());
+            if (existingByNombre != null && !existingByNombre.get_id().equals(id)) {
                 return responseService.conflict("Ya existe otro producto con el nombre: " + newProducto.getNombre());
             }
 
@@ -189,7 +226,6 @@ public class ProductosController {
             actualProducto.setPrecio(newProducto.getPrecio());
             actualProducto.setCosto(newProducto.getCosto());
             actualProducto.setImpuestos(newProducto.getImpuestos());
-            actualProducto.setUtilidad(newProducto.getUtilidad());
             actualProducto.setTieneVariantes(newProducto.isTieneVariantes());
             actualProducto.setEstado(newProducto.getEstado());
             actualProducto.setImagenUrl(newProducto.getImagenUrl());
@@ -199,10 +235,44 @@ public class ProductosController {
             actualProducto.setNota(newProducto.getNota());
             actualProducto.setIngredientesDisponibles(newProducto.getIngredientesDisponibles());
 
-            // Recalcular utilidad si es necesario
+            // Campos nuevos para combo/individual
+            actualProducto.setTieneIngredientes(newProducto.isTieneIngredientes());
+            actualProducto.setTipoProducto(newProducto.getTipoProducto());
+
+            // Resolver nombres de ingredientes requeridos antes de guardar
+            if (newProducto.getIngredientesRequeridos() != null) {
+                for (IngredienteProducto ingredienteReq : newProducto.getIngredientesRequeridos()) {
+                    if (ingredienteReq.getNombre() == null || ingredienteReq.getNombre().isEmpty()) {
+                        Ingrediente ingrediente = this.theIngredienteRepository.findById(ingredienteReq.getIngredienteId()).orElse(null);
+                        if (ingrediente != null) {
+                            ingredienteReq.setNombre(ingrediente.getNombre());
+                        }
+                    }
+                }
+            }
+
+            // Resolver nombres de ingredientes opcionales antes de guardar
+            if (newProducto.getIngredientesOpcionales() != null) {
+                for (IngredienteProducto ingredienteOpc : newProducto.getIngredientesOpcionales()) {
+                    if (ingredienteOpc.getNombre() == null || ingredienteOpc.getNombre().isEmpty()) {
+                        Ingrediente ingrediente = this.theIngredienteRepository.findById(ingredienteOpc.getIngredienteId()).orElse(null);
+                        if (ingrediente != null) {
+                            ingredienteOpc.setNombre(ingrediente.getNombre());
+                        }
+                    }
+                }
+            }
+
+            actualProducto.setIngredientesRequeridos(newProducto.getIngredientesRequeridos());
+            actualProducto.setIngredientesOpcionales(newProducto.getIngredientesOpcionales());
+
+            // Actualizar utilidad: si viene 0.0 en el request, calcular automáticamente
             if (newProducto.getUtilidad() == 0.0) {
                 double utilidad = newProducto.getPrecio() - newProducto.getCosto() - newProducto.getImpuestos();
                 actualProducto.setUtilidad(utilidad);
+            } else {
+                // Si viene un valor específico de utilidad, usarlo
+                actualProducto.setUtilidad(newProducto.getUtilidad());
             }
 
             Producto updatedProducto = this.theProductoRepository.save(actualProducto);
@@ -212,32 +282,169 @@ public class ProductosController {
         }
     }
 
-    @GetMapping("/ingredientes-carnes")
-    public ResponseEntity<ApiResponse<List<Ingrediente>>> getIngredientesCarnes() {
-        try {
-            List<Ingrediente> carnes = this.theIngredienteRepository.findByCategoria("carne");
-            return responseService.success(carnes, "Ingredientes de carnes obtenidos exitosamente");
-        } catch (Exception e) {
-            return responseService.internalError("Error al obtener ingredientes de carnes: " + e.getMessage());
-        }
-    }
-
-    @GetMapping("/{id}/ingredientes")
-    public ResponseEntity<ApiResponse<List<Ingrediente>>> getIngredientesProducto(@PathVariable String id) {
+    /**
+     * Obtiene las opciones de ingredientes para un producto (requeridos +
+     * opcionales)
+     */
+    @GetMapping("/{id}/opciones-ingredientes")
+    public ResponseEntity<ApiResponse<List<IngredienteConCategoriaDTO>>> getOpcionesIngredientes(@PathVariable String id) {
         try {
             Producto producto = this.theProductoRepository.findById(id).orElse(null);
             if (producto == null) {
                 return responseService.notFound("Producto no encontrado con ID: " + id);
             }
 
-            if (producto.getIngredientesDisponibles() == null || producto.getIngredientesDisponibles().isEmpty()) {
-                return responseService.success(List.of(), "El producto no tiene ingredientes configurados");
+            if (!producto.isTieneIngredientes()) {
+                return responseService.success(List.of(), "El producto no permite personalización de ingredientes");
             }
 
-            List<Ingrediente> ingredientes = this.theIngredienteRepository.findAllById(producto.getIngredientesDisponibles());
-            return responseService.success(ingredientes, "Ingredientes del producto obtenidos exitosamente");
+            // Obtener IDs de ingredientes opcionales únicamente
+            List<String> ingredientesIds = producto.getIngredientesOpcionales()
+                    .stream()
+                    .map(IngredienteProducto::getIngredienteId)
+                    .toList();
+
+            if (ingredientesIds.isEmpty()) {
+                return responseService.success(List.of(), "El producto no tiene ingredientes opcionales configurados");
+            }
+
+            List<Ingrediente> ingredientes = this.theIngredienteRepository.findAllById(ingredientesIds);
+
+            // Convertir a DTO con información de categorías
+            List<IngredienteConCategoriaDTO> ingredientesConCategoria = ingredientes.stream()
+                    .map(ingrediente -> {
+                        String categoriaNombre = "Sin categoría";
+                        if (ingrediente.getCategoriaId() != null) {
+                            Categoria categoria = this.theCategoriaRepository.findById(ingrediente.getCategoriaId()).orElse(null);
+                            if (categoria != null) {
+                                categoriaNombre = categoria.getNombre();
+                            }
+                        }
+
+                        return new IngredienteConCategoriaDTO(
+                                ingrediente.get_id(),
+                                ingrediente.getCategoriaId(),
+                                categoriaNombre,
+                                ingrediente.getNombre(),
+                                ingrediente.getUnidad(),
+                                ingrediente.getStockActual(),
+                                ingrediente.getStockMinimo()
+                        );
+                    })
+                    .toList();
+
+            return responseService.success(ingredientesConCategoria, "Opciones de ingredientes obtenidas exitosamente");
         } catch (Exception e) {
-            return responseService.internalError("Error al obtener ingredientes del producto: " + e.getMessage());
+            return responseService.internalError("Error al obtener opciones de ingredientes: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Verifica si un producto es tipo combo y puede tener ingredientes
+     * seleccionables
+     */
+    @GetMapping("/{id}/es-combo")
+    public ResponseEntity<ApiResponse<Boolean>> verificarSiEsCombo(@PathVariable String id) {
+        try {
+            Producto producto = this.theProductoRepository.findById(id).orElse(null);
+            if (producto == null) {
+                return responseService.notFound("Producto no encontrado con ID: " + id);
+            }
+
+            boolean esCombo = producto.isTieneIngredientes() && "combo".equals(producto.getTipoProducto());
+            return responseService.success(esCombo, "Verificación de tipo de producto completada");
+        } catch (Exception e) {
+            return responseService.internalError("Error al verificar tipo de producto: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Obtiene un producto con los nombres de los ingredientes resueltos
+     */
+    @GetMapping("/{id}/con-nombres-ingredientes")
+    public ResponseEntity<ApiResponse<Producto>> getProductoConNombresIngredientes(@PathVariable String id) {
+        try {
+            Producto producto = this.theProductoRepository.findById(id).orElse(null);
+            if (producto == null) {
+                return responseService.notFound("Producto no encontrado con ID: " + id);
+            }
+
+            // Resolver nombres de ingredientes requeridos
+            if (producto.getIngredientesRequeridos() != null) {
+                for (IngredienteProducto ingredienteProducto : producto.getIngredientesRequeridos()) {
+                    if (ingredienteProducto.getNombre() == null || ingredienteProducto.getNombre().isEmpty()) {
+                        Ingrediente ingrediente = this.theIngredienteRepository.findById(ingredienteProducto.getIngredienteId()).orElse(null);
+                        if (ingrediente != null) {
+                            ingredienteProducto.setNombre(ingrediente.getNombre());
+                        } else {
+                            ingredienteProducto.setNombre("Ingrediente no encontrado");
+                        }
+                    }
+                }
+            }
+
+            // Resolver nombres de ingredientes opcionales
+            if (producto.getIngredientesOpcionales() != null) {
+                for (IngredienteProducto ingredienteProducto : producto.getIngredientesOpcionales()) {
+                    if (ingredienteProducto.getNombre() == null || ingredienteProducto.getNombre().isEmpty()) {
+                        Ingrediente ingrediente = this.theIngredienteRepository.findById(ingredienteProducto.getIngredienteId()).orElse(null);
+                        if (ingrediente != null) {
+                            ingredienteProducto.setNombre(ingrediente.getNombre());
+                        } else {
+                            ingredienteProducto.setNombre("Ingrediente no encontrado");
+                        }
+                    }
+                }
+            }
+
+            return responseService.success(producto, "Producto con nombres de ingredientes obtenido exitosamente");
+        } catch (Exception e) {
+            return responseService.internalError("Error al obtener producto con nombres: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Obtiene todos los productos con los nombres de ingredientes resueltos
+     */
+    @GetMapping("/con-nombres-ingredientes")
+    public ResponseEntity<ApiResponse<List<Producto>>> getAllProductosConNombres() {
+        try {
+            List<Producto> productos = this.theProductoRepository.findAll();
+
+            // Resolver nombres para cada producto
+            for (Producto producto : productos) {
+                // Resolver nombres de ingredientes requeridos
+                if (producto.getIngredientesRequeridos() != null) {
+                    for (IngredienteProducto ingredienteProducto : producto.getIngredientesRequeridos()) {
+                        if (ingredienteProducto.getNombre() == null || ingredienteProducto.getNombre().isEmpty()) {
+                            Ingrediente ingrediente = this.theIngredienteRepository.findById(ingredienteProducto.getIngredienteId()).orElse(null);
+                            if (ingrediente != null) {
+                                ingredienteProducto.setNombre(ingrediente.getNombre());
+                            } else {
+                                ingredienteProducto.setNombre("Ingrediente no encontrado");
+                            }
+                        }
+                    }
+                }
+
+                // Resolver nombres de ingredientes opcionales
+                if (producto.getIngredientesOpcionales() != null) {
+                    for (IngredienteProducto ingredienteProducto : producto.getIngredientesOpcionales()) {
+                        if (ingredienteProducto.getNombre() == null || ingredienteProducto.getNombre().isEmpty()) {
+                            Ingrediente ingrediente = this.theIngredienteRepository.findById(ingredienteProducto.getIngredienteId()).orElse(null);
+                            if (ingrediente != null) {
+                                ingredienteProducto.setNombre(ingrediente.getNombre());
+                            } else {
+                                ingredienteProducto.setNombre("Ingrediente no encontrado");
+                            }
+                        }
+                    }
+                }
+            }
+
+            return responseService.success(productos, "Productos con nombres de ingredientes obtenidos exitosamente");
+        } catch (Exception e) {
+            return responseService.internalError("Error al obtener productos con nombres: " + e.getMessage());
         }
     }
 }

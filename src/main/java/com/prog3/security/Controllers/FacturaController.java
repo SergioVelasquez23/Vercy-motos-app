@@ -5,6 +5,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -24,8 +25,10 @@ import org.springframework.web.bind.annotation.RestController;
 import com.prog3.security.Models.Factura;
 import com.prog3.security.Models.ItemFactura;
 import com.prog3.security.Models.Pedido;
+import com.prog3.security.Models.Producto;
 import com.prog3.security.Repositories.FacturaRepository;
 import com.prog3.security.Repositories.PedidoRepository;
+import com.prog3.security.Repositories.ProductoRepository;
 
 @CrossOrigin
 @RestController
@@ -37,6 +40,9 @@ public class FacturaController {
 
     @Autowired
     private PedidoRepository pedidoRepository;
+
+    @Autowired
+    private ProductoRepository productoRepository;
 
     @GetMapping("")
     public ResponseEntity<List<Factura>> findAll() {
@@ -142,6 +148,22 @@ public class FacturaController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaFin) {
         try {
             List<Factura> facturas = facturaRepository.findByFechaBetween(fechaInicio, fechaFin);
+            return ResponseEntity.ok(facturas);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @GetMapping("/lista")
+    public ResponseEntity<List<Factura>> getFacturasPorFecha(
+            @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") String fechaInicio,
+            @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") String fechaFin) {
+        try {
+            // Convertir strings a LocalDateTime
+            LocalDateTime inicio = LocalDateTime.parse(fechaInicio + "T00:00:00");
+            LocalDateTime fin = LocalDateTime.parse(fechaFin + "T23:59:59");
+
+            List<Factura> facturas = facturaRepository.findByFechaBetween(inicio, fin);
             return ResponseEntity.ok(facturas);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
@@ -329,6 +351,169 @@ public class FacturaController {
             // En el modelo simplificado permitir eliminar cualquier factura
             facturaRepository.deleteById(id);
             return ResponseEntity.noContent().build();
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @GetMapping("/resumen-impresion/{pedidoId}")
+    public ResponseEntity<Map<String, Object>> generarResumenImpresion(@PathVariable String pedidoId) {
+        try {
+            Pedido pedido = pedidoRepository.findById(pedidoId).orElse(null);
+            if (pedido == null) {
+                return ResponseEntity.notFound().build();
+            }
+
+            Map<String, Object> resumen = new HashMap<>();
+
+            // Información básica del pedido
+            resumen.put("pedidoId", pedido.get_id());
+            resumen.put("mesa", pedido.getMesa());
+            resumen.put("mesero", pedido.getMesero());
+            resumen.put("fecha", pedido.getFecha().format(DateTimeFormatter.ofPattern("yyyy-MM-dd")));
+            resumen.put("hora", pedido.getFecha().format(DateTimeFormatter.ofPattern("HH:mm")));
+            resumen.put("tipo", pedido.getTipo());
+
+            // Detalle de productos con ingredientes
+            List<Map<String, Object>> detalleProductos = new ArrayList<>();
+
+            if (pedido.getItems() != null) {
+                for (var itemPedido : pedido.getItems()) {
+                    Map<String, Object> itemDetalle = new HashMap<>();
+
+                    // Información básica del item
+                    itemDetalle.put("cantidad", itemPedido.getCantidad());
+                    itemDetalle.put("productoId", itemPedido.getProductoId());
+
+                    // Obtener información del producto incluyendo ingredientes
+                    Producto producto = productoRepository.findById(itemPedido.getProductoId()).orElse(null);
+                    if (producto != null) {
+                        itemDetalle.put("nombre", producto.getNombre());
+                        itemDetalle.put("precio", producto.getPrecio());
+
+                        // Ingredientes del producto
+                        List<Map<String, Object>> ingredientes = new ArrayList<>();
+
+                        // Ingredientes requeridos
+                        if (producto.getIngredientesRequeridos() != null) {
+                            for (var ingrediente : producto.getIngredientesRequeridos()) {
+                                Map<String, Object> ingDetalle = new HashMap<>();
+                                ingDetalle.put("nombre", ingrediente.getNombre());
+                                ingDetalle.put("cantidad", ingrediente.getCantidadNecesaria());
+                                ingDetalle.put("unidad", ingrediente.getUnidad());
+                                ingDetalle.put("tipo", "requerido");
+                                ingredientes.add(ingDetalle);
+                            }
+                        }
+
+                        // Ingredientes opcionales
+                        if (producto.getIngredientesOpcionales() != null) {
+                            for (var ingrediente : producto.getIngredientesOpcionales()) {
+                                Map<String, Object> ingDetalle = new HashMap<>();
+                                ingDetalle.put("nombre", ingrediente.getNombre());
+                                ingDetalle.put("cantidad", ingrediente.getCantidadNecesaria());
+                                ingDetalle.put("unidad", ingrediente.getUnidad());
+                                ingDetalle.put("tipo", "opcional");
+                                ingredientes.add(ingDetalle);
+                            }
+                        }
+
+                        itemDetalle.put("ingredientes", ingredientes);
+                    } else {
+                        itemDetalle.put("nombre", "Producto no encontrado");
+                        itemDetalle.put("precio", 0.0);
+                        itemDetalle.put("ingredientes", new ArrayList<>());
+                    }
+
+                    // Observaciones del item
+                    if (itemPedido.getNotas() != null && !itemPedido.getNotas().trim().isEmpty()) {
+                        itemDetalle.put("observaciones", itemPedido.getNotas());
+                    }
+
+                    // Calcular subtotal
+                    double subtotal = itemPedido.getCantidad() * (producto != null ? producto.getPrecio() : 0.0);
+                    itemDetalle.put("subtotal", subtotal);
+
+                    detalleProductos.add(itemDetalle);
+                }
+            }
+
+            resumen.put("detalleProductos", detalleProductos);
+
+            // Calcular totales
+            double totalPedido = pedido.getTotal();
+            resumen.put("total", totalPedido);
+
+            // Información adicional
+            if (pedido.getNotas() != null && !pedido.getNotas().trim().isEmpty()) {
+                resumen.put("observacionesGenerales", pedido.getNotas());
+            }
+
+            resumen.put("estado", pedido.getEstado());
+
+            // Información para el encabezado de la impresión
+            resumen.put("nombreRestaurante", "Sopa y Carbón");
+            resumen.put("direccionRestaurante", "Dirección del restaurante");
+            resumen.put("telefonoRestaurante", "Teléfono del restaurante");
+
+            return ResponseEntity.ok(resumen);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @GetMapping("/factura-impresion/{facturaId}")
+    public ResponseEntity<Map<String, Object>> generarFacturaImpresion(@PathVariable String facturaId) {
+        try {
+            Factura factura = facturaRepository.findById(facturaId).orElse(null);
+            if (factura == null) {
+                return ResponseEntity.notFound().build();
+            }
+
+            Map<String, Object> resumen = new HashMap<>();
+
+            // Información básica de la factura
+            resumen.put("facturaId", factura.get_id());
+            resumen.put("numero", factura.getNumero());
+            resumen.put("fecha", factura.getFecha().format(DateTimeFormatter.ofPattern("yyyy-MM-dd")));
+            resumen.put("hora", factura.getFecha().format(DateTimeFormatter.ofPattern("HH:mm")));
+
+            // Información del cliente
+            resumen.put("nit", factura.getNit());
+            resumen.put("clienteTelefono", factura.getClienteTelefono());
+            resumen.put("clienteDireccion", factura.getClienteDireccion());
+            resumen.put("atendidoPor", factura.getAtendidoPor());
+
+            // Detalle de productos
+            List<Map<String, Object>> detalleProductos = new ArrayList<>();
+
+            if (factura.getItems() != null) {
+                for (ItemFactura item : factura.getItems()) {
+                    Map<String, Object> itemDetalle = new HashMap<>();
+                    itemDetalle.put("cantidad", item.getCantidad());
+                    itemDetalle.put("nombre", item.getProductoNombre());
+                    itemDetalle.put("precioUnitario", item.getPrecioUnitario());
+                    itemDetalle.put("subtotal", item.getCantidad() * item.getPrecioUnitario());
+
+                    if (item.getObservaciones() != null && !item.getObservaciones().trim().isEmpty()) {
+                        itemDetalle.put("observaciones", item.getObservaciones());
+                    }
+
+                    detalleProductos.add(itemDetalle);
+                }
+            }
+
+            resumen.put("detalleProductos", detalleProductos);
+            resumen.put("total", factura.getTotal());
+            resumen.put("medioPago", factura.getMedioPago());
+            resumen.put("formaPago", factura.getFormaPago());
+
+            // Información para el encabezado
+            resumen.put("nombreRestaurante", "Sopa y Carbón");
+            resumen.put("direccionRestaurante", "Dirección del restaurante");
+            resumen.put("telefonoRestaurante", "Teléfono del restaurante");
+
+            return ResponseEntity.ok(resumen);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }

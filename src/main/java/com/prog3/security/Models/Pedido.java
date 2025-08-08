@@ -17,6 +17,7 @@ public class Pedido {
     private String tipo; // normal, rt, interno, cancelado, cortesia
     private String mesa;
     private String cliente;
+    private String nombrePedido; // Nombre identificativo del pedido (usado en mesas especiales)
     private String mesero;
     private List<ItemPedido> items;
     private double total;
@@ -102,6 +103,14 @@ public class Pedido {
 
     public void setCliente(String cliente) {
         this.cliente = cliente;
+    }
+
+    public String getNombrePedido() {
+        return nombrePedido;
+    }
+
+    public void setNombrePedido(String nombrePedido) {
+        this.nombrePedido = nombrePedido;
     }
 
     public String getMesero() {

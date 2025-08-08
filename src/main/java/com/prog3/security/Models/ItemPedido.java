@@ -1,5 +1,8 @@
 package com.prog3.security.Models;
 
+import java.util.List;
+import java.util.ArrayList;
+
 public class ItemPedido {
 
     private String id;
@@ -12,9 +15,11 @@ public class ItemPedido {
     private double subtotal;
     private double precio;
     private double total;
+    private List<String> ingredientesSeleccionados; // Nuevo campo para ingredientes seleccionados
 
     public ItemPedido() {
         this.pagado = false;
+        this.ingredientesSeleccionados = new ArrayList<>();
     }
 
     public ItemPedido(String productoId, int cantidad, double precioUnitario) {
@@ -102,6 +107,14 @@ public class ItemPedido {
 
     public double getSubtotal() {
         return subtotal;
+    }
+
+    public List<String> getIngredientesSeleccionados() {
+        return ingredientesSeleccionados;
+    }
+
+    public void setIngredientesSeleccionados(List<String> ingredientesSeleccionados) {
+        this.ingredientesSeleccionados = ingredientesSeleccionados != null ? ingredientesSeleccionados : new ArrayList<>();
     }
 
     private void calcularSubtotal() {

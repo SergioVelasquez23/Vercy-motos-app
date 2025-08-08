@@ -2,6 +2,7 @@ package com.prog3.security.DTOs;
 
 import java.util.List;
 import java.util.ArrayList;
+import com.prog3.security.Models.IngredienteProducto;
 
 public class CrearProductoRequest {
 
@@ -19,12 +20,22 @@ public class CrearProductoRequest {
     private String nota;
     private List<String> ingredientesDisponibles; // IDs de ingredientes que pueden ser opciones
 
+    // Campos nuevos para combo/individual
+    private boolean tieneIngredientes;
+    private String tipoProducto;
+    private List<IngredienteProducto> ingredientesRequeridos;
+    private List<IngredienteProducto> ingredientesOpcionales;
+
     public CrearProductoRequest() {
         this.ingredientesDisponibles = new ArrayList<>();
         this.estado = "Activo";
         this.tieneVariantes = false;
         this.cantidad = 1;
         this.impuestos = 0.0;
+        this.tieneIngredientes = false;
+        this.tipoProducto = "individual";
+        this.ingredientesRequeridos = new ArrayList<>();
+        this.ingredientesOpcionales = new ArrayList<>();
     }
 
     // Getters y Setters
@@ -130,5 +141,38 @@ public class CrearProductoRequest {
 
     public void setIngredientesDisponibles(List<String> ingredientesDisponibles) {
         this.ingredientesDisponibles = ingredientesDisponibles;
+    }
+
+    // Getters y setters para campos nuevos
+    public boolean isTieneIngredientes() {
+        return tieneIngredientes;
+    }
+
+    public void setTieneIngredientes(boolean tieneIngredientes) {
+        this.tieneIngredientes = tieneIngredientes;
+    }
+
+    public String getTipoProducto() {
+        return tipoProducto;
+    }
+
+    public void setTipoProducto(String tipoProducto) {
+        this.tipoProducto = tipoProducto;
+    }
+
+    public List<IngredienteProducto> getIngredientesRequeridos() {
+        return ingredientesRequeridos;
+    }
+
+    public void setIngredientesRequeridos(List<IngredienteProducto> ingredientesRequeridos) {
+        this.ingredientesRequeridos = ingredientesRequeridos;
+    }
+
+    public List<IngredienteProducto> getIngredientesOpcionales() {
+        return ingredientesOpcionales;
+    }
+
+    public void setIngredientesOpcionales(List<IngredienteProducto> ingredientesOpcionales) {
+        this.ingredientesOpcionales = ingredientesOpcionales;
     }
 }

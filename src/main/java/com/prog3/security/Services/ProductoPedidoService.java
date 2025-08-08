@@ -71,7 +71,7 @@ public class ProductoPedidoService {
                     .map(ing -> new IngredienteSeleccionado(
                     ing.get_id(),
                     ing.getNombre(),
-                    ing.getCategoria(),
+                    ing.getCategoriaId(),
                     1.0, // Cantidad por defecto, puedes ajustar según necesites
                     ing.getUnidad()
             ))

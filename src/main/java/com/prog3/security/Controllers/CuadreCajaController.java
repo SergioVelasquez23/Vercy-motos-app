@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -21,6 +22,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.prog3.security.DTOs.CuadreCajaRequest;
 import com.prog3.security.Models.CuadreCaja;
+import com.prog3.security.Models.Pedido;
+import com.prog3.security.Repositories.PedidoRepository;
 import com.prog3.security.Services.CuadreCajaService;
 import com.prog3.security.Services.ResponseService;
 import com.prog3.security.Utils.ApiResponse;
@@ -35,6 +38,9 @@ public class CuadreCajaController {
 
     @Autowired
     private ResponseService responseService;
+
+    @Autowired
+    private PedidoRepository pedidoRepository;
 
     @GetMapping("")
     public ResponseEntity<ApiResponse<List<CuadreCaja>>> getAllCuadres() {
@@ -158,6 +164,109 @@ public class CuadreCajaController {
         }
     }
 
+    @GetMapping("/debug-pedidos")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> debugPedidos() {
+        try {
+            LocalDateTime inicioDia = LocalDateTime.now().withHour(0).withMinute(0).withSecond(0);
+
+            // Obtener todos los pedidos del día
+            List<Pedido> todosPedidos = pedidoRepository.findByFechaGreaterThanEqual(inicioDia);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("totalPedidosHoy", todosPedidos.size());
+            response.put("inicioDia", inicioDia);
+
+            // Agrupar por estado
+            Map<String, Long> pedidosPorEstado = todosPedidos.stream()
+                    .collect(Collectors.groupingBy(Pedido::getEstado, Collectors.counting()));
+            response.put("pedidosPorEstado", pedidosPorEstado);
+
+            // Agrupar por forma de pago (solo los pagados)
+            Map<String, Long> pedidosPorFormaPago = todosPedidos.stream()
+                    .filter(p -> "pagado".equals(p.getEstado()))
+                    .collect(Collectors.groupingBy(
+                            p -> p.getFormaPago() != null ? p.getFormaPago() : "sin_forma_pago",
+                            Collectors.counting()
+                    ));
+            response.put("pedidosPorFormaPago", pedidosPorFormaPago);
+
+            // Calcular totales por forma de pago
+            Map<String, Double> totalesPorFormaPago = todosPedidos.stream()
+                    .filter(p -> "pagado".equals(p.getEstado()))
+                    .collect(Collectors.groupingBy(
+                            p -> p.getFormaPago() != null ? p.getFormaPago() : "sin_forma_pago",
+                            Collectors.summingDouble(Pedido::getTotalPagado)
+                    ));
+            response.put("totalesPorFormaPago", totalesPorFormaPago);
+
+            // Mostrar algunos pedidos de ejemplo
+            List<Map<String, Object>> ejemplosPedidos = todosPedidos.stream()
+                    .limit(5)
+                    .map(p -> {
+                        Map<String, Object> pedidoInfo = new HashMap<>();
+                        pedidoInfo.put("id", p.get_id());
+                        pedidoInfo.put("estado", p.getEstado());
+                        pedidoInfo.put("formaPago", p.getFormaPago());
+                        pedidoInfo.put("totalPagado", p.getTotalPagado());
+                        pedidoInfo.put("fecha", p.getFecha());
+                        return pedidoInfo;
+                    })
+                    .collect(Collectors.toList());
+            response.put("ejemplosPedidos", ejemplosPedidos);
+
+            return responseService.success(response, "Debug de pedidos obtenido exitosamente");
+        } catch (Exception e) {
+            return responseService.internalError("Error al obtener debug de pedidos: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/detalles-ventas")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getDetallesVentas() {
+        try {
+            Map<String, Object> detalles = cuadreCajaService.calcularDetallesVentas();
+            return responseService.success(detalles, "Detalles de ventas obtenidos exitosamente");
+        } catch (Exception e) {
+            return responseService.internalError("Error al obtener detalles de ventas: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/todos-pedidos-hoy")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getTodosPedidosHoy() {
+        try {
+            LocalDateTime inicioDia = LocalDateTime.now().withHour(0).withMinute(0).withSecond(0);
+            // Usar ambos métodos para comparar
+            List<Pedido> todosPedidos = pedidoRepository.findByFechaGreaterThanEqual(inicioDia);
+            List<Pedido> pedidosPagadosPorFechaPago = pedidoRepository.findByFechaPagoGreaterThanEqualAndEstado(inicioDia, "pagado");
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("totalPedidosCreados", todosPedidos.size());
+            response.put("totalPedidosPagadosPorFechaPago", pedidosPagadosPorFechaPago.size());
+            response.put("inicioDia", inicioDia);
+
+            // Crear lista detallada de todos los pedidos pagados (por fecha de pago)
+            List<Map<String, Object>> pedidosDetalle = pedidosPagadosPorFechaPago.stream()
+                    .map(p -> {
+                        Map<String, Object> pedidoInfo = new HashMap<>();
+                        pedidoInfo.put("id", p.get_id());
+                        pedidoInfo.put("estado", p.getEstado());
+                        pedidoInfo.put("formaPago", p.getFormaPago());
+                        pedidoInfo.put("formaPagoLength", p.getFormaPago() != null ? p.getFormaPago().length() : null);
+                        pedidoInfo.put("totalPagado", p.getTotalPagado());
+                        pedidoInfo.put("fechaCreacion", p.getFecha());
+                        pedidoInfo.put("fechaPago", p.getFechaPago());
+                        pedidoInfo.put("mesa", p.getMesa() != null ? p.getMesa() : "Sin mesa");
+                        return pedidoInfo;
+                    })
+                    .collect(Collectors.toList());
+
+            response.put("pedidosPagados", pedidosDetalle);
+
+            return responseService.success(response, "Todos los pedidos pagados de hoy obtenidos exitosamente");
+        } catch (Exception e) {
+            return responseService.internalError("Error al obtener todos los pedidos: " + e.getMessage());
+        }
+    }
+
     @GetMapping("/info-apertura")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getInfoAperturaCaja() {
         try {
@@ -218,6 +327,20 @@ public class CuadreCajaController {
             // Validación específica para el fondo inicial
             if (request.getFondoInicial() < 0) {
                 return responseService.badRequest("El fondo inicial debe ser un valor positivo");
+            }
+
+            // NUEVA VALIDACIÓN: Verificar que no haya cajas abiertas antes de crear una nueva
+            List<CuadreCaja> cajasAbiertas = cuadreCajaService.obtenerTodosCuadres().stream()
+                    .filter(c -> !c.isCerrada())
+                    .toList();
+
+            if (!cajasAbiertas.isEmpty()) {
+                CuadreCaja cajaAbierta = cajasAbiertas.get(0);
+                return responseService.conflict(
+                        "Ya existe una caja abierta. ID: " + cajaAbierta.get_id()
+                        + ", Responsable: " + cajaAbierta.getResponsable()
+                        + ". Debe cerrar la caja actual antes de abrir una nueva."
+                );
             }
 
             // Verificación debug para el fondo inicial
@@ -312,6 +435,14 @@ public class CuadreCajaController {
             CuadreCaja cuadreExistente = cuadreCajaService.obtenerCuadrePorId(id);
             if (cuadreExistente == null) {
                 return responseService.notFound("Cuadre de caja no encontrado con ID: " + id);
+            }
+
+            // NUEVA VALIDACIÓN: No permitir cerrar una caja que ya está cerrada
+            if (request.isCerrarCaja() && cuadreExistente.isCerrada()) {
+                return responseService.badRequest(
+                        "La caja ya está cerrada. No se puede cerrar una caja que ya ha sido cerrada."
+                        + " Fecha de cierre anterior: " + cuadreExistente.getFechaCierre()
+                );
             }
 
             // Verificar el fondo inicial - si viene vacío o cero pero ya existe un valor, mantener el existente

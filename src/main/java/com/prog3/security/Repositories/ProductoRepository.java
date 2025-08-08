@@ -25,4 +25,7 @@ public interface ProductoRepository extends MongoRepository<Producto, String> {
 
     // Verificar si existe un producto con ese nombre
     boolean existsByNombre(String nombre);
+
+    // Buscar producto por nombre exacto
+    Producto findByNombre(String nombre);
 }

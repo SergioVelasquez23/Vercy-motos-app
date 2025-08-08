@@ -1,27 +1,23 @@
-package com.prog3.security.Models;
+package com.prog3.security.DTOs;
 
-import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.mapping.Document;
+public class IngredienteConCategoriaDTO {
 
-@Document(collection = "ingredientes")
-public class Ingrediente {
-
-    @Id
     private String _id;
     private String categoriaId;
+    private String categoriaNombre;
     private String nombre;
     private String unidad;
     private Double stockActual;
     private Double stockMinimo;
 
-    public Ingrediente() {
-        // Constructor vacío - MongoDB generará automáticamente el _id
+    public IngredienteConCategoriaDTO() {
     }
 
-    public Ingrediente(String categoriaId, String nombre, String unidad,
-            Double stockActual, Double stockMinimo) {
-        // No establecemos _id aquí, MongoDB lo generará automáticamente
+    public IngredienteConCategoriaDTO(String _id, String categoriaId, String categoriaNombre, String nombre,
+            String unidad, Double stockActual, Double stockMinimo) {
+        this._id = _id;
         this.categoriaId = categoriaId;
+        this.categoriaNombre = categoriaNombre;
         this.nombre = nombre;
         this.unidad = unidad;
         this.stockActual = stockActual;
@@ -43,6 +39,14 @@ public class Ingrediente {
 
     public void setCategoriaId(String categoriaId) {
         this.categoriaId = categoriaId;
+    }
+
+    public String getCategoriaNombre() {
+        return categoriaNombre;
+    }
+
+    public void setCategoriaNombre(String categoriaNombre) {
+        this.categoriaNombre = categoriaNombre;
     }
 
     public String getNombre() {
@@ -75,17 +79,5 @@ public class Ingrediente {
 
     public void setStockMinimo(Double stockMinimo) {
         this.stockMinimo = stockMinimo;
-    }
-
-    @Override
-    public String toString() {
-        return "Ingrediente{"
-                + "_id='" + _id + '\''
-                + ", categoriaId='" + categoriaId + '\''
-                + ", nombre='" + nombre + '\''
-                + ", unidad='" + unidad + '\''
-                + ", stockActual=" + stockActual
-                + ", stockMinimo=" + stockMinimo
-                + '}';
     }
 }

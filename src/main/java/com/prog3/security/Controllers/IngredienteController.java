@@ -7,7 +7,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import com.prog3.security.Models.Ingrediente;
+import com.prog3.security.Models.MovimientoInventario;
 import com.prog3.security.Repositories.IngredienteRepository;
+import com.prog3.security.Repositories.CategoriaRepository;
+import com.prog3.security.Repositories.MovimientoInventarioRepository;
 import com.prog3.security.Services.ResponseService;
 import com.prog3.security.Utils.ApiResponse;
 
@@ -18,6 +21,12 @@ public class IngredienteController {
 
     @Autowired
     private IngredienteRepository ingredienteRepository;
+
+    @Autowired
+    private CategoriaRepository categoriaRepository;
+
+    @Autowired
+    private MovimientoInventarioRepository movimientoInventarioRepository;
 
     @Autowired
     private ResponseService responseService;
@@ -45,10 +54,10 @@ public class IngredienteController {
         }
     }
 
-    @GetMapping("/categoria/{categoria}")
-    public ResponseEntity<ApiResponse<List<Ingrediente>>> findByCategoria(@PathVariable String categoria) {
+    @GetMapping("/categoria/{categoriaId}")
+    public ResponseEntity<ApiResponse<List<Ingrediente>>> findByCategoriaId(@PathVariable String categoriaId) {
         try {
-            List<Ingrediente> ingredientes = this.ingredienteRepository.findByCategoria(categoria);
+            List<Ingrediente> ingredientes = this.ingredienteRepository.findByCategoriaId(categoriaId);
             return responseService.success(ingredientes, "Ingredientes encontrados por categoría");
         } catch (Exception e) {
             return responseService.internalError("Error al buscar ingredientes por categoría: " + e.getMessage());
@@ -78,12 +87,18 @@ public class IngredienteController {
     @PostMapping("")
     public ResponseEntity<ApiResponse<Ingrediente>> create(@RequestBody Ingrediente ingrediente) {
         try {
-            // Validar que no exista un ingrediente con el mismo nombre o código
+            // Validar que no exista un ingrediente con el mismo nombre
             if (this.ingredienteRepository.existsByNombre(ingrediente.getNombre())) {
                 return responseService.conflict("Ya existe un ingrediente con el nombre: " + ingrediente.getNombre());
             }
-            if (this.ingredienteRepository.existsByCodigo(ingrediente.getCodigo())) {
-                return responseService.conflict("Ya existe un ingrediente con el código: " + ingrediente.getCodigo());
+
+            // Validar que la categoría exista
+            if (ingrediente.getCategoriaId() == null || ingrediente.getCategoriaId().trim().isEmpty()) {
+                return responseService.badRequest("El ID de categoría es obligatorio");
+            }
+
+            if (!this.categoriaRepository.existsById(ingrediente.getCategoriaId())) {
+                return responseService.badRequest("La categoría con ID '" + ingrediente.getCategoriaId() + "' no existe");
             }
 
             // Asegurar que el ID sea null antes de guardar (MongoDB lo generará automáticamente)
@@ -102,6 +117,65 @@ public class IngredienteController {
         }
     }
 
+    @PostMapping("/batch")
+    public ResponseEntity<ApiResponse<List<Ingrediente>>> createBatch(@RequestBody List<Ingrediente> ingredientes) {
+        try {
+            if (ingredientes == null || ingredientes.isEmpty()) {
+                return responseService.badRequest("La lista de ingredientes no puede estar vacía");
+            }
+
+            List<Ingrediente> ingredientesCreados = new java.util.ArrayList<>();
+            List<String> errores = new java.util.ArrayList<>();
+
+            for (int i = 0; i < ingredientes.size(); i++) {
+                Ingrediente ingrediente = ingredientes.get(i);
+
+                try {
+                    // Validar que no exista un ingrediente con el mismo nombre
+                    if (this.ingredienteRepository.existsByNombre(ingrediente.getNombre())) {
+                        errores.add("Ingrediente " + (i + 1) + ": Ya existe un ingrediente con el nombre '" + ingrediente.getNombre() + "'");
+                        continue;
+                    }
+
+                    // Validar que la categoría exista
+                    if (ingrediente.getCategoriaId() == null || ingrediente.getCategoriaId().trim().isEmpty()) {
+                        errores.add("Ingrediente " + (i + 1) + ": El ID de categoría es obligatorio");
+                        continue;
+                    }
+
+                    if (!this.categoriaRepository.existsById(ingrediente.getCategoriaId())) {
+                        errores.add("Ingrediente " + (i + 1) + ": La categoría con ID '" + ingrediente.getCategoriaId() + "' no existe");
+                        continue;
+                    }
+
+                    // Asegurar que el ID sea null antes de guardar
+                    ingrediente.set_id(null);
+
+                    Ingrediente nuevoIngrediente = this.ingredienteRepository.save(ingrediente);
+                    if (nuevoIngrediente.get_id() != null) {
+                        ingredientesCreados.add(nuevoIngrediente);
+                    } else {
+                        errores.add("Ingrediente " + (i + 1) + ": Error al generar ID para '" + ingrediente.getNombre() + "'");
+                    }
+                } catch (Exception e) {
+                    errores.add("Ingrediente " + (i + 1) + ": Error al crear '" + ingrediente.getNombre() + "' - " + e.getMessage());
+                }
+            }
+
+            if (ingredientesCreados.isEmpty()) {
+                return responseService.badRequest("No se pudo crear ningún ingrediente. Errores: " + String.join(", ", errores));
+            } else if (!errores.isEmpty()) {
+                return responseService.success(ingredientesCreados,
+                        "Se crearon " + ingredientesCreados.size() + " de " + ingredientes.size() + " ingredientes. Errores: " + String.join(", ", errores));
+            } else {
+                return responseService.created(ingredientesCreados,
+                        "Se crearon exitosamente " + ingredientesCreados.size() + " ingredientes");
+            }
+        } catch (Exception e) {
+            return responseService.internalError("Error al crear ingredientes en lote: " + e.getMessage());
+        }
+    }
+
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<Ingrediente>> update(@PathVariable String id, @RequestBody Ingrediente ingrediente) {
         try {
@@ -110,26 +184,27 @@ public class IngredienteController {
                 return responseService.notFound("Ingrediente no encontrado con ID: " + id);
             }
 
-            // Validar nombre y código únicos
+            // Validar nombre único
             Ingrediente existingByNombre = this.ingredienteRepository.findByNombre(ingrediente.getNombre());
             if (existingByNombre != null && !existingByNombre.get_id().equals(id)) {
                 return responseService.conflict("Ya existe un ingrediente con el nombre: " + ingrediente.getNombre());
             }
 
-            Ingrediente existingByCodigo = this.ingredienteRepository.findByCodigo(ingrediente.getCodigo());
-            if (existingByCodigo != null && !existingByCodigo.get_id().equals(id)) {
-                return responseService.conflict("Ya existe un ingrediente con el código: " + ingrediente.getCodigo());
+            // Validar que la categoría exista
+            if (ingrediente.getCategoriaId() == null || ingrediente.getCategoriaId().trim().isEmpty()) {
+                return responseService.badRequest("El ID de categoría es obligatorio");
+            }
+
+            if (!this.categoriaRepository.existsById(ingrediente.getCategoriaId())) {
+                return responseService.badRequest("La categoría con ID '" + ingrediente.getCategoriaId() + "' no existe");
             }
 
             // Actualizar campos
-            actualIngrediente.setCategoria(ingrediente.getCategoria());
-            actualIngrediente.setCodigo(ingrediente.getCodigo());
+            actualIngrediente.setCategoriaId(ingrediente.getCategoriaId());
             actualIngrediente.setNombre(ingrediente.getNombre());
             actualIngrediente.setUnidad(ingrediente.getUnidad());
-            actualIngrediente.setPrecioCompra(ingrediente.getPrecioCompra());
             actualIngrediente.setStockActual(ingrediente.getStockActual());
             actualIngrediente.setStockMinimo(ingrediente.getStockMinimo());
-            actualIngrediente.setEstado(ingrediente.getEstado());
 
             Ingrediente ingredienteActualizado = this.ingredienteRepository.save(actualIngrediente);
             return responseService.success(ingredienteActualizado, "Ingrediente actualizado exitosamente");
@@ -168,6 +243,27 @@ public class IngredienteController {
             return responseService.success(ingredienteActualizado, "Stock actualizado exitosamente");
         } catch (Exception e) {
             return responseService.internalError("Error al actualizar stock: " + e.getMessage());
+        }
+    }
+
+    @DeleteMapping("/deleteAll")
+    public ResponseEntity<ApiResponse<Void>> deleteAll() {
+        try {
+            long count = this.ingredienteRepository.count();
+            this.ingredienteRepository.deleteAll();
+            return responseService.success(null, "Se eliminaron " + count + " ingredientes exitosamente");
+        } catch (Exception e) {
+            return responseService.internalError("Error al eliminar todos los ingredientes: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/movimientos")
+    public ResponseEntity<ApiResponse<List<MovimientoInventario>>> getMovimientos() {
+        try {
+            List<MovimientoInventario> movimientos = movimientoInventarioRepository.findAll();
+            return responseService.success(movimientos, "Movimientos de ingredientes obtenidos exitosamente");
+        } catch (Exception e) {
+            return responseService.internalError("Error al obtener movimientos de ingredientes: " + e.getMessage());
         }
     }
 }

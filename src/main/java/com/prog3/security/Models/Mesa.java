@@ -68,4 +68,17 @@ public class Mesa {
     public void setProductosIds(List<String> productosIds) {
         this.productosIds = productosIds;
     }
+
+    /**
+     * Determina si esta mesa puede tener múltiples pedidos simultáneos
+     */
+    public boolean esEspecial() {
+        if (this.nombre == null) {
+            return false;
+        }
+        String nombreUpper = this.nombre.toUpperCase();
+        return nombreUpper.contains("DOMICILIO")
+                || nombreUpper.contains("CAJA")
+                || nombreUpper.contains("MESA AUXILIAR");
+    }
 }
