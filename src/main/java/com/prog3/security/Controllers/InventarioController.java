@@ -2,8 +2,11 @@ package com.prog3.security.Controllers;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -18,15 +21,21 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.prog3.security.Models.Ingrediente;
+import com.prog3.security.Models.IngredienteProducto;
 import com.prog3.security.Models.Inventario;
 import com.prog3.security.Models.MovimientoInventario;
+import com.prog3.security.Models.Pedido;
+import com.prog3.security.Models.ItemPedido;
+import com.prog3.security.Models.Producto;
+import com.prog3.security.Repositories.IngredienteRepository;
 import com.prog3.security.Repositories.InventarioRepository;
 import com.prog3.security.Repositories.MovimientoInventarioRepository;
 import com.prog3.security.Repositories.PedidoRepository;
-import com.prog3.security.Models.Pedido;
-import com.prog3.security.Models.ItemPedido;
+import com.prog3.security.Repositories.ProductoRepository;
 import com.prog3.security.Services.InventarioService;
 import com.prog3.security.Services.ResponseService;
+import com.prog3.security.Services.InventarioIngredientesService;
 
 import com.prog3.security.Utils.ApiResponse;
 
@@ -45,9 +54,62 @@ public class InventarioController {
     private PedidoRepository pedidoRepository;
 
     @Autowired
+    private IngredienteRepository ingredienteRepository;
+
+    @Autowired
     private InventarioService inventarioService;
+
     @Autowired
     private ResponseService responseService;
+
+    @Autowired
+    private InventarioIngredientesService inventarioIngredientesService;
+
+    @Autowired
+    private com.prog3.security.Repositories.ProductoRepository productoRepository;
+
+    // Endpoint de diagnóstico - ELIMINAR EN PRODUCCIÓN
+    @PostMapping("/diagnostico-descuento")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> diagnosticoDescuentoIngredientes(
+            @RequestParam String productoId,
+            @RequestParam int cantidad,
+            @RequestBody List<String> ingredientesSeleccionados) {
+        Map<String, Object> resultado = new HashMap<>();
+        resultado.put("productoId", productoId);
+        resultado.put("cantidad", cantidad);
+        resultado.put("ingredientesSeleccionados", ingredientesSeleccionados);
+        try {
+            Optional<com.prog3.security.Models.Producto> productoOpt = productoRepository.findById(productoId);
+            if (productoOpt.isPresent()) {
+                com.prog3.security.Models.Producto producto = productoOpt.get();
+                resultado.put("nombreProducto", producto.getNombre());
+                resultado.put("tipoProducto", producto.getTipoProducto());
+                resultado.put("tieneIngredientes", producto.isTieneIngredientes());
+                // Verificar si el ingrediente está en la lista de opcionales
+                if (producto.getIngredientesOpcionales() != null) {
+                    List<Map<String, Object>> coincidencias = new java.util.ArrayList<>();
+                    for (com.prog3.security.Models.IngredienteProducto ingOpc : producto.getIngredientesOpcionales()) {
+                        Map<String, Object> match = new HashMap<>();
+                        match.put("ingredienteId", ingOpc.getIngredienteId());
+                        match.put("nombre", ingOpc.getNombre());
+                        match.put("coincide", ingredientesSeleccionados.contains(ingOpc.getIngredienteId()));
+                        coincidencias.add(match);
+                    }
+                    resultado.put("coincidencias", coincidencias);
+                }
+                // Llamar al método real
+                inventarioIngredientesService.descontarIngredientesDelInventario(
+                        productoId, cantidad, ingredientesSeleccionados, "Diagnóstico");
+                resultado.put("procesado", true);
+            } else {
+                resultado.put("error", "Producto no encontrado");
+            }
+        } catch (Exception e) {
+            resultado.put("error", e.getMessage());
+            e.printStackTrace();
+        }
+        return responseService.success(resultado, "Diagnóstico completado");
+    }
 
     @GetMapping("")
     public ResponseEntity<ApiResponse<List<Inventario>>> findAll() {
@@ -408,6 +470,36 @@ public class InventarioController {
     }
 
     // Nuevo endpoint para procesar pedido y descontar inventario
+    // Método auxiliar para asegurar que los ingredientes tengan registro en inventario
+    private Inventario asegurarInventarioIngrediente(String ingredienteId) {
+        Inventario inv = inventarioRepository.findByProductoId(ingredienteId);
+
+        // Si no existe, creamos un registro básico
+        if (inv == null) {
+            Optional<Ingrediente> ingOpt = ingredienteRepository.findById(ingredienteId);
+            if (ingOpt.isPresent()) {
+                Ingrediente ing = ingOpt.get();
+                inv = new Inventario();
+                inv.setProductoId(ingredienteId);
+                inv.setProductoNombre(ing.getNombre());
+                inv.setCategoria("Ingrediente");
+                inv.setCantidadActual(ing.getStockActual());
+                inv.setCantidadMinima(ing.getStockMinimo());
+                inv.setUnidadMedida(ing.getUnidad());
+                inv.setCostoUnitario(0.0); // Valor por defecto
+                inv.setFechaUltimaActualizacion(LocalDateTime.now());
+
+                // Guardar el nuevo registro de inventario
+                inv = inventarioRepository.save(inv);
+                System.out.println("✅ Creado nuevo registro de inventario para ingrediente: " + ing.getNombre());
+            } else {
+                System.err.println("❌ No se pudo crear inventario para ingrediente no encontrado: " + ingredienteId);
+            }
+        }
+
+        return inv;
+    }
+
     @PostMapping("/procesar-pedido/{pedidoId}")
     public ResponseEntity<ApiResponse<List<Inventario>>> procesarPedido(
             @PathVariable String pedidoId,
@@ -417,31 +509,123 @@ public class InventarioController {
             if (pedido == null) {
                 return responseService.notFound("Pedido no encontrado con ID: " + pedidoId);
             }
+
+            System.out.println("🔄 Procesando pedido: " + pedidoId);
+            System.out.println("📋 Ingredientes recibidos: " + ingredientesPorItem);
+
             // Asignar ingredientes seleccionados a cada item según el body
             if (pedido.getItems() != null) {
-                for (int i = 0; i < pedido.getItems().size(); i++) {
-                    ItemPedido item = pedido.getItems().get(i);
+                for (ItemPedido item : pedido.getItems()) {
                     String key = item.getProductoId();
                     if (ingredientesPorItem.containsKey(key)) {
-                        item.setIngredientesSeleccionados(ingredientesPorItem.get(key));
+                        List<String> ingredientesSeleccionados = ingredientesPorItem.get(key);
+                        System.out.println("🍽️ Asignando ingredientes a producto: " + item.getProductoNombre()
+                                + " (ID: " + key + "): " + ingredientesSeleccionados);
+                        item.setIngredientesSeleccionados(ingredientesSeleccionados);
+                    } else {
+                        System.out.println("⚠️ No se recibieron ingredientes para: " + item.getProductoNombre()
+                                + " (ID: " + key + ")");
                     }
                 }
             }
+
+            // Procesar el pedido para actualizar el inventario
             inventarioService.procesarPedidoParaInventario(pedido);
             // Devolver los ingredientes actualizados
             List<Inventario> inventariosIngredientes = new java.util.ArrayList<>();
+            Set<String> ingredientesProcessados = new java.util.HashSet<>();
+
             if (pedido.getItems() != null) {
                 for (ItemPedido item : pedido.getItems()) {
-                    if (item.getIngredientesSeleccionados() != null) {
-                        for (String ingredienteId : item.getIngredientesSeleccionados()) {
-                            Inventario inv = inventarioRepository.findByProductoId(ingredienteId);
-                            if (inv != null) {
-                                inventariosIngredientes.add(inv);
+                    // Buscar el producto para obtener sus ingredientes
+                    Optional<Producto> productoOpt = productoRepository.findById(item.getProductoId());
+                    if (productoOpt.isPresent()) {
+                        Producto producto = productoOpt.get();
+
+                        // Añadir ingredientes requeridos
+                        if (producto.getIngredientesRequeridos() != null) {
+                            for (IngredienteProducto ip : producto.getIngredientesRequeridos()) {
+                                ingredientesProcessados.add(ip.getIngredienteId());
+                            }
+                        }
+
+                        // Añadir ingredientes seleccionados
+                        if (item.getIngredientesSeleccionados() != null) {
+                            for (String ingredienteId : item.getIngredientesSeleccionados()) {
+                                ingredientesProcessados.add(ingredienteId);
+                            }
+                        }
+
+                        // Si es producto individual, añadir todos los opcionales
+                        if (producto.esIndividual() && producto.getIngredientesOpcionales() != null) {
+                            for (IngredienteProducto ip : producto.getIngredientesOpcionales()) {
+                                ingredientesProcessados.add(ip.getIngredienteId());
                             }
                         }
                     }
                 }
             }
+
+            // Logging para depuración
+            System.out.println("🔍 Ingredientes procesados encontrados: " + ingredientesProcessados.size());
+
+            // Si no hay ingredientes procesados, intentar obtener directamente de la solicitud
+            if (ingredientesProcessados.isEmpty()) {
+                System.out.println("⚠️ No se encontraron ingredientes procesados. Intentando usar directamente los ingredientes enviados.");
+                for (Map.Entry<String, List<String>> entry : ingredientesPorItem.entrySet()) {
+                    String productoId = entry.getKey();
+                    List<String> ingredientes = entry.getValue();
+
+                    System.out.println("📋 Producto ID: " + productoId + ", Ingredientes: " + ingredientes);
+
+                    // Añadir ingredientes directamente de la solicitud
+                    if (ingredientes != null) {
+                        ingredientesProcessados.addAll(ingredientes);
+                    }
+                }
+                System.out.println("🔄 Total ingredientes después de procesar directamente: " + ingredientesProcessados.size());
+            }
+
+            // Obtener todos los inventarios de ingredientes procesados
+            for (String ingredienteId : ingredientesProcessados) {
+                System.out.println("🔍 Buscando inventario para ingrediente ID: " + ingredienteId);
+
+                // Asegurarnos que exista registro en inventario
+                Inventario inv = asegurarInventarioIngrediente(ingredienteId);
+                if (inv != null) {
+                    inventariosIngredientes.add(inv);
+                    System.out.println("✅ Inventario encontrado para ingrediente: " + inv.getProductoNombre()
+                            + ", cantidad: " + inv.getCantidadActual());
+                } else {
+                    System.out.println("❌ No se pudo crear/encontrar inventario para ingrediente ID: " + ingredienteId);
+                }
+
+                // También añadir info del ingrediente mismo
+                Optional<Ingrediente> ingrediente = ingredienteRepository.findById(ingredienteId);
+                if (ingrediente.isPresent()) {
+                    System.out.println("✅ Ingrediente encontrado: " + ingrediente.get().getNombre()
+                            + " - Stock actual: " + ingrediente.get().getStockActual());
+                } else {
+                    System.out.println("❌ No se encontró información del ingrediente con ID: " + ingredienteId);
+                }
+            }
+
+            // Si después de todo no tenemos ingredientes, usar directamente los de la solicitud
+            if (inventariosIngredientes.isEmpty() && ingredientesPorItem != null && !ingredientesPorItem.isEmpty()) {
+                System.out.println("⚠️ No se pudieron procesar ingredientes. Obteniendo directamente los ingredientes enviados.");
+                for (Map.Entry<String, List<String>> entry : ingredientesPorItem.entrySet()) {
+                    List<String> ingredientesIds = entry.getValue();
+                    for (String ingredienteId : ingredientesIds) {
+                        Inventario inv = asegurarInventarioIngrediente(ingredienteId);
+                        if (inv != null) {
+                            inventariosIngredientes.add(inv);
+                        }
+                    }
+                }
+            }
+
+            System.out.println("📊 Total de inventarios a devolver: " + inventariosIngredientes.size());
+
             return responseService.success(inventariosIngredientes, "Ingredientes actualizados tras procesar el pedido");
         } catch (Exception e) {
             return responseService.internalError("Error al procesar el pedido para inventario: " + e.getMessage());

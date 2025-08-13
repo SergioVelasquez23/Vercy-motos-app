@@ -20,6 +20,9 @@ public class InventarioIngredientesService {
     @Autowired
     private ProductoRepository productoRepository;
 
+    @Autowired
+    private IngredienteRepository ingredienteRepository;
+
     /**
      * Descuenta los ingredientes del inventario cuando se crea un pedido
      *
@@ -32,6 +35,10 @@ public class InventarioIngredientesService {
     public void descontarIngredientesDelInventario(String productoId, int cantidadProducto,
             List<String> ingredientesSeleccionados, String procesadoPor) {
         try {
+            System.out.println("🔍 INICIO descontarIngredientesDelInventario para producto: " + productoId);
+            System.out.println("📋 Ingredientes seleccionados: " + (ingredientesSeleccionados != null ? ingredientesSeleccionados : "ninguno"));
+            System.out.println("📊 Cantidad del producto: " + cantidadProducto);
+
             Optional<Producto> productoOpt = productoRepository.findById(productoId);
             if (!productoOpt.isPresent()) {
                 System.err.println("❌ Producto no encontrado: " + productoId);
@@ -94,27 +101,64 @@ public class InventarioIngredientesService {
      */
     private void descontarIngrediente(String ingredienteId, double cantidad, String motivo, String procesadoPor) {
         try {
-            // Buscar el ingrediente en el inventario por su ID como productoId
-            Inventario inventario = inventarioRepository.findByProductoId(ingredienteId);
+            System.out.println("🔍 INICIO descontarIngrediente: " + ingredienteId + ", cantidad: " + cantidad);
 
-            if (inventario == null) {
-                System.err.println("⚠️ Ingrediente no encontrado en inventario: " + ingredienteId);
+            // Obtener primero el ingrediente para asegurar que existe
+            Optional<Ingrediente> ingredienteOpt = ingredienteRepository.findById(ingredienteId);
+            if (!ingredienteOpt.isPresent()) {
+                System.err.println("❌ Ingrediente no existe en base de datos: " + ingredienteId);
                 return;
             }
 
-            // Verificar que hay suficiente stock
-            if (inventario.getCantidadActual() < cantidad) {
+            Ingrediente ingrediente = ingredienteOpt.get();
+            System.out.println("✅ Ingrediente encontrado: " + ingrediente.getNombre() + ", stock actual: " + ingrediente.getStockActual());
+
+            // Buscar o crear el registro de inventario para este ingrediente
+            Inventario inventario = inventarioRepository.findByProductoId(ingredienteId);
+
+            if (inventario == null) {
+                System.out.println("⚠️ Ingrediente no encontrado en inventario: " + ingredienteId + " - Creando registro...");
+                // Crear un nuevo registro de inventario para este ingrediente
+                inventario = new Inventario();
+                inventario.setProductoId(ingredienteId);
+                inventario.setProductoNombre(ingrediente.getNombre());
+                inventario.setCategoria("Ingrediente");
+                inventario.setCantidadActual(ingrediente.getStockActual());
+                inventario.setCantidadMinima(ingrediente.getStockMinimo());
+                inventario.setUnidadMedida(ingrediente.getUnidad());
+                inventario.setCostoUnitario(0.0); // Valor por defecto
+                inventario.setFechaUltimaActualizacion(LocalDateTime.now());
+                inventario.setEstado("activo");
+
+                inventario = inventarioRepository.save(inventario);
+                System.out.println("✅ Registro de inventario creado para: " + ingrediente.getNombre());
+            }            // Verificar que hay suficiente stock
+            double stockActual = inventario.getCantidadActual();
+            double stockAnterior = stockActual; // Guardamos el stock anterior para el registro
+
+            if (stockActual < cantidad) {
                 System.err.println("⚠️ Stock insuficiente para ingrediente " + inventario.getProductoNombre()
-                        + ". Stock actual: " + inventario.getCantidadActual()
+                        + ". Stock actual: " + stockActual
                         + ", Cantidad requerida: " + cantidad);
                 // Continuar con el descuento hasta donde sea posible
-                cantidad = inventario.getCantidadActual();
+                cantidad = stockActual;
             }
 
-            // Actualizar el stock
-            double stockAnterior = inventario.getCantidadActual();
-            inventario.setCantidadActual(stockAnterior - cantidad);
-            inventarioRepository.save(inventario);
+            // Actualizar el ingrediente - USAR EL QUE YA TENEMOS EN MEMORIA (evitar consultar de nuevo)
+            double stockIngredienteActual = ingrediente.getStockActual();
+            double stockIngredienteNuevo = Math.max(0, stockIngredienteActual - cantidad); // Evitar stock negativo
+            ingrediente.setStockActual(stockIngredienteNuevo);
+            ingredienteRepository.save(ingrediente);
+            System.out.println("⬇️ Stock actualizado para " + ingrediente.getNombre()
+                    + ": " + stockIngredienteActual + " -> " + stockIngredienteNuevo + " ("
+                    + (stockIngredienteActual - stockIngredienteNuevo) + " unidades descontadas)");
+
+            // Actualizar el stock en inventario
+            double nuevoStock = Math.max(0, stockActual - cantidad); // Evitar stock negativo
+            inventario.setCantidadActual(nuevoStock);
+            inventario = inventarioRepository.save(inventario); // Asegurar que tenemos la versión actualizada
+            System.out.println("⬇️ Inventario actualizado para " + inventario.getProductoNombre()
+                    + ": " + stockActual + " -> " + nuevoStock);
 
             // Crear movimiento de inventario
             MovimientoInventario movimiento = new MovimientoInventario();
@@ -143,9 +187,23 @@ public class InventarioIngredientesService {
                         + ", Stock mínimo: " + inventario.getCantidadMinima());
             }
 
+            // Verificar sincronización entre Ingrediente e Inventario
+            if (Math.abs(ingrediente.getStockActual() - inventario.getCantidadActual()) > 0.0001) {
+                System.out.println("⚠️ ALERTA: Desincronización entre Ingrediente e Inventario para " + ingrediente.getNombre());
+                System.out.println("   Stock en Ingrediente: " + ingrediente.getStockActual());
+                System.out.println("   Stock en Inventario: " + inventario.getCantidadActual());
+                System.out.println("   Sincronizando valores...");
+
+                // Sincronizar el stock del ingrediente con el inventario
+                inventario.setCantidadActual(ingrediente.getStockActual());
+                inventarioRepository.save(inventario);
+                System.out.println("✅ Sincronización completada: " + ingrediente.getStockActual());
+            }
+
         } catch (Exception e) {
             System.err.println("❌ Error al descontar ingrediente " + ingredienteId + ": " + e.getMessage());
-            e.printStackTrace();
+            // Log error details instead of printing stack trace
+            System.err.println("Error detallado: " + e.toString());
         }
     }
 

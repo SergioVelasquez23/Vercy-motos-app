@@ -94,6 +94,19 @@ public class InventarioService {
 
                     try {
                         System.out.println("🔄 Llamando a inventarioIngredientesService.descontarIngredientesDelInventario...");
+                        System.out.println("📋 Producto: " + producto.getNombre() + " (ID: " + producto.get_id() + ")");
+                        System.out.println("📊 Cantidad: " + item.getCantidad());
+                        System.out.println("🍽️ Ingredientes seleccionados: "
+                                + (item.getIngredientesSeleccionados() != null ? item.getIngredientesSeleccionados() : "ninguno"));
+
+                        if (item.getIngredientesSeleccionados() == null || item.getIngredientesSeleccionados().isEmpty()) {
+                            System.out.println("⚠️ ADVERTENCIA: No hay ingredientes seleccionados para este item");
+                            // Si el producto es un combo y no tiene ingredientes seleccionados, podría ser un error
+                            if (producto.esCombo()) {
+                                System.out.println("❌ ERROR: El producto es un combo pero no tiene ingredientes seleccionados");
+                            }
+                        }
+
                         // Usar el nuevo servicio de ingredientes
                         inventarioIngredientesService.descontarIngredientesDelInventario(
                                 producto.get_id(),
@@ -104,7 +117,7 @@ public class InventarioService {
                         System.out.println("✅ Ingredientes descontados correctamente");
                     } catch (Exception e) {
                         System.err.println("❌ Error al descontar ingredientes: " + e.getMessage());
-                        e.printStackTrace();
+                        System.err.println("Error detallado: " + e.toString());
                         // Fallback al sistema legacy en caso de error
                         System.out.println("🔄 Intentando fallback al sistema legacy...");
                         descontarInventarioDirecto(item.getProductoId(), item.getCantidad(), pedido);
@@ -112,7 +125,7 @@ public class InventarioService {
                 } // SISTEMA LEGACY: Productos sin ingredientes configurados
                 else if (producto.getIngredientesDisponibles() != null && !producto.getIngredientesDisponibles().isEmpty()) {
                     System.out.println("📋 Producto con ingredientes legacy - procesando ingredientes");
-                    procesarIngredientesProducto(producto, item.getCantidad());
+                    procesarIngredientesProducto(producto, item.getCantidad(), item.getIngredientesSeleccionados());
                 } else {
                     System.out.println("🔄 Producto sin ingredientes configurados - procesamiento legacy");
                     // Mantener lógica legacy para productos sin ingredientes
@@ -129,10 +142,16 @@ public class InventarioService {
     /**
      * Procesa ingredientes de un producto (nuevo sistema)
      */
-    private void procesarIngredientesProducto(Producto producto, int cantidad) {
-        System.out.println("Procesando ingredientes para producto: " + producto.getNombre());
+    // Adaptado: ahora acepta lista de IDs seleccionados
+    private void procesarIngredientesProducto(Producto producto, int cantidad, List<String> ingredientesSeleccionados) {
+        System.out.println("Procesando ingredientes seleccionados para producto: " + producto.getNombre());
 
-        for (String ingredienteId : producto.getIngredientesDisponibles()) {
+        if (ingredientesSeleccionados == null || ingredientesSeleccionados.isEmpty()) {
+            System.out.println("⚠️ No se recibieron ingredientes seleccionados, no se descuenta nada.");
+            return;
+        }
+
+        for (String ingredienteId : ingredientesSeleccionados) {
             try {
                 Optional<Ingrediente> ingredienteOpt = theIngredienteRepository.findById(ingredienteId);
                 if (ingredienteOpt.isPresent()) {
@@ -369,4 +388,6 @@ public class InventarioService {
 
         return ingredientesDescontados;
     }
+
+    // El método descontarIngrediente ha sido eliminado para evitar dependencia circular con InventarioIngredientesService
 }
