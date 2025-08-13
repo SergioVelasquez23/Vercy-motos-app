@@ -22,12 +22,14 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.prog3.security.Services.RoleValidatorService;
+import com.prog3.security.Services.CierreCajaService;
 
 import jakarta.servlet.http.HttpServletRequest;
 
 import com.prog3.security.DTOs.CuadreCajaRequest;
 import com.prog3.security.Models.Factura;
 import com.prog3.security.Models.Inventario;
+import com.prog3.security.Models.CierreCaja;
 import com.prog3.security.Models.MovimientoInventario;
 import com.prog3.security.Models.Pedido;
 import com.prog3.security.Repositories.FacturaRepository;
@@ -72,6 +74,9 @@ public class ReportesController {
 
     @Autowired
     private JwtService jwtService;
+
+    @Autowired
+    private CierreCajaService cierreCajaService;
 
     @GetMapping("/dashboard")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getDashboard(HttpServletRequest request) {
@@ -253,134 +258,88 @@ public class ReportesController {
 
     // Endpoints de Cuadre de Caja
     @GetMapping("/cuadre-caja")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getCuadreCaja() {
+    public ResponseEntity<ApiResponse<CierreCaja>> getCuadreCaja() {
         try {
-            Map<String, Object> cuadre = new HashMap<>();
             LocalDateTime inicioDia = LocalDateTime.now().withHour(0).withMinute(0).withSecond(0);
-            LocalDateTime finDia = inicioDia.plusDays(1);
+            LocalDateTime finDia = LocalDateTime.now();
 
-            // Obtener todas las ventas del día
-            List<Factura> ventasHoy = facturaRepository.findVentasDelDia(inicioDia, finDia);
+            // Generar cierre temporal (sin guardar)
+            Map<String, Double> montosIniciales = new HashMap<>();
+            montosIniciales.put("efectivo", 0.0); // Por defecto, se puede parametrizar
+            montosIniciales.put("transferencias", 0.0);
 
-            // Calcular totales por método de pago
-            double totalEfectivo = ventasHoy.stream()
-                    .filter(f -> "Efectivo".equals(f.getMedioPago()))
-                    .mapToDouble(Factura::getTotal)
-                    .sum();
+            CierreCaja cierre = cierreCajaService.generarCierreCaja(inicioDia, finDia, "Sistema", montosIniciales);
 
-            double totalTransferencias = ventasHoy.stream()
-                    .filter(f -> "Transferencia".equals(f.getMedioPago()))
-                    .mapToDouble(Factura::getTotal)
-                    .sum();
-
-            double totalTarjetas = ventasHoy.stream()
-                    .filter(f -> ("Tarjeta".equals(f.getMedioPago())))
-                    .mapToDouble(Factura::getTotal)
-                    .sum();
-
-            double totalVentas = totalEfectivo + totalTransferencias + totalTarjetas;
-
-            // Obtener pedidos cancelados/cortesías
-            List<Pedido> cortesias = pedidoRepository.findByTipo("cortesia");
-            double totalCortesias = cortesias.stream()
-                    .filter(p -> p.getFecha().isAfter(inicioDia) && p.getFecha().isBefore(finDia))
-                    .mapToDouble(p -> calcularTotalPedido(p)) // Método auxiliar
-                    .sum();
-
-            cuadre.put("fecha", inicioDia.format(DateTimeFormatter.ISO_LOCAL_DATE));
-            cuadre.put("horaGeneracion", LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_TIME));
-            cuadre.put("totales", Map.of(
-                    "efectivo", totalEfectivo,
-                    "transferencias", totalTransferencias,
-                    "tarjetas", totalTarjetas,
-                    "total", totalVentas
-            ));
-            cuadre.put("cortesias", Map.of(
-                    "cantidad", cortesias.size(),
-                    "total", totalCortesias
-            ));
-            cuadre.put("estadisticas", Map.of(
-                    "numeroFacturas", ventasHoy.size(),
-                    "promedioVenta", ventasHoy.isEmpty() ? 0 : totalVentas / ventasHoy.size(),
-                    "facturasPendientes", facturaRepository.findFacturasPendientesPago().size()
-            ));
-
-            return responseService.success(cuadre, "Cuadre de caja obtenido exitosamente");
+            return responseService.success(cierre, "Cuadre de caja generado exitosamente");
         } catch (Exception e) {
-            return responseService.internalError("Error al obtener cuadre de caja: " + e.getMessage());
+            return responseService.internalError("Error al generar cuadre de caja: " + e.getMessage());
         }
     }
 
     @PostMapping("/cuadre-caja/cerrar")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> cerrarCaja(
-            @RequestBody CuadreCajaRequest request) {
+    public ResponseEntity<ApiResponse<CierreCaja>> cerrarCaja(@RequestBody Map<String, Object> request) {
         try {
-            Map<String, Object> resultado = new HashMap<>();
-            LocalDateTime ahora = LocalDateTime.now();
-            LocalDateTime inicioDia = ahora.withHour(0).withMinute(0).withSecond(0);
-            LocalDateTime finDia = inicioDia.plusDays(1);
+            LocalDateTime inicioDia = LocalDateTime.now().withHour(0).withMinute(0).withSecond(0);
+            LocalDateTime finDia = LocalDateTime.now();
 
-            // Calcular efectivo del día directamente desde facturas
-            List<Factura> ventasHoy = facturaRepository.findVentasDelDia(inicioDia, finDia);
-            double efectivoSistema = ventasHoy.stream()
-                    .filter(f -> "Efectivo".equals(f.getMedioPago()))
-                    .mapToDouble(Factura::getTotal)
-                    .sum();
+            String responsable = (String) request.get("responsable");
+            Double efectivoDeclarado = ((Number) request.get("efectivoDeclarado")).doubleValue();
+            String observaciones = (String) request.getOrDefault("observaciones", "");
 
-            double diferencia = Math.abs(efectivoSistema - request.getEfectivoDeclarado());
-            boolean cuadreOk = diferencia <= request.getTolerancia();
+            // Obtener montos iniciales del request
+            Map<String, Object> montosInicialesObj = (Map<String, Object>) request.getOrDefault("montosIniciales", new HashMap<>());
+            Map<String, Double> montosIniciales = new HashMap<>();
+            montosInicialesObj.forEach((key, value) -> {
+                if (value instanceof Number) {
+                    montosIniciales.put(key, ((Number) value).doubleValue());
+                }
+            });
 
-            // Crear registro de cierre
-            Map<String, Object> cierreCaja = new HashMap<>();
-            cierreCaja.put("fecha", ahora.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
-            cierreCaja.put("responsable", request.getResponsable());
-            cierreCaja.put("efectivoSistema", efectivoSistema);
-            cierreCaja.put("efectivoDeclarado", request.getEfectivoDeclarado());
-            cierreCaja.put("diferencia", diferencia);
-            cierreCaja.put("cuadreOk", cuadreOk);
-            cierreCaja.put("observaciones", request.getObservaciones());
+            // Si no hay montos iniciales, usar valores por defecto
+            if (montosIniciales.isEmpty()) {
+                montosIniciales.put("efectivo", 0.0);
+                montosIniciales.put("transferencias", 0.0);
+            }
 
-            // TODO: Guardar en base de datos - crear modelo CierreCaja
-            // cierreCajaRepository.save(nuevoCierre);
-            resultado.put("cierre", cierreCaja);
-            resultado.put("mensaje", cuadreOk ? "Cuadre de caja correcto" : "Hay diferencias en el cuadre");
+            // Generar y cerrar caja
+            CierreCaja cierre = cierreCajaService.generarCierreCaja(inicioDia, finDia, responsable, montosIniciales);
+            CierreCaja cierreCerrado = cierreCajaService.cerrarCaja(cierre, efectivoDeclarado, observaciones);
 
-            return responseService.success(resultado, "Caja cerrada exitosamente");
+            return responseService.success(cierreCerrado, "Caja cerrada exitosamente");
         } catch (Exception e) {
             return responseService.internalError("Error al cerrar caja: " + e.getMessage());
         }
     }
 
     @GetMapping("/cuadre-caja/historial")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getHistorialCuadres(
-            @RequestParam(defaultValue = "30") int dias) {
+    public ResponseEntity<ApiResponse<List<CierreCaja>>> getHistorialCuadres(
+            @RequestParam(defaultValue = "30") int limite) {
         try {
-            List<Map<String, Object>> historial = new java.util.ArrayList<>();
-
-            // TODO: Implementar cuando se cree el modelo CierreCaja
-            // List<CierreCaja> cierres = cierreCajaRepository.findUltimosCierres(dias);
-            // Por ahora devolvemos datos simulados
-            LocalDateTime ahora = LocalDateTime.now();
-            for (int i = 1; i <= Math.min(dias, 7); i++) {
-                Map<String, Object> cierre = new HashMap<>();
-                cierre.put("fecha", ahora.minusDays(i).format(DateTimeFormatter.ISO_LOCAL_DATE));
-                cierre.put("responsable", "Sistema");
-                cierre.put("totalVentas", 450000 + (i * 50000));
-                cierre.put("efectivo", 200000 + (i * 25000));
-                cierre.put("diferencia", i % 3 == 0 ? 5000 : 0);
-                cierre.put("cuadreOk", i % 3 != 0);
-                historial.add(cierre);
-            }
-
+            List<CierreCaja> historial = cierreCajaService.getHistorialCierres(limite);
             return responseService.success(historial, "Historial de cuadres obtenido");
         } catch (Exception e) {
             return responseService.internalError("Error al obtener historial: " + e.getMessage());
         }
     }
 
+    @GetMapping("/cuadre-caja/ultimo")
+    public ResponseEntity<ApiResponse<CierreCaja>> getUltimoCierre() {
+        try {
+            CierreCaja ultimoCierre = cierreCajaService.getUltimoCierre();
+            if (ultimoCierre != null) {
+                return responseService.success(ultimoCierre, "Último cierre obtenido");
+            } else {
+                return responseService.notFound("No se encontró ningún cierre de caja");
+            }
+        } catch (Exception e) {
+            return responseService.internalError("Error al obtener último cierre: " + e.getMessage());
+        }
+    }
+
     @GetMapping("/ventas-por-hora")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getVentasPorHora(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fecha) {
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fecha) {
         try {
             fecha = fecha != null ? fecha : LocalDateTime.now();
             List<Map<String, Object>> ventas = reporteService.getVentasPorHora(fecha);
@@ -392,7 +351,8 @@ public class ReportesController {
 
     @GetMapping("/pedidos-por-hora")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getPedidosPorHora(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fecha) {
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fecha) {
         try {
             LocalDateTime fechaConsulta = fecha != null ? fecha : LocalDateTime.now();
             List<Map<String, Object>> pedidosPorHora = reporteService.getPedidosPorHora(fechaConsulta);
@@ -444,8 +404,10 @@ public class ReportesController {
 
     @DeleteMapping("/eliminar")
     public ResponseEntity<ApiResponse<Map<String, Object>>> eliminarReportes(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaInicio,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaFin) {
+            @RequestParam
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaInicio,
+            @RequestParam
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaFin) {
         try {
             Map<String, Object> resultado = new HashMap<>();
 

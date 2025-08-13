@@ -4,11 +4,13 @@ import com.prog3.security.Entities.ObjetivoVenta;
 import com.prog3.security.Models.Pedido;
 import com.prog3.security.Models.Factura;
 import com.prog3.security.Models.Inventario;
+import com.prog3.security.Models.Gasto;
 import com.prog3.security.Repositories.PedidoRepository;
 import com.prog3.security.Repositories.FacturaRepository;
 import com.prog3.security.Repositories.InventarioRepository;
 import com.prog3.security.Repositories.ObjetivoVentaRepository;
 import com.prog3.security.Repositories.ProductoRepository;
+import com.prog3.security.Repositories.GastoRepository;
 
 import jakarta.annotation.PostConstruct;
 
@@ -16,10 +18,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
 import java.util.stream.Collectors;
 
 @Service
@@ -39,6 +43,9 @@ public class ReporteService {
 
     @Autowired
     private ObjetivoVentaRepository objetivoVentaRepository;
+
+    @Autowired
+    private GastoRepository gastoRepository;
 
     // Valores por defecto para los objetivos
     private static final Map<String, Double> OBJETIVOS_DEFAULT = Map.of(
@@ -366,37 +373,49 @@ public class ReporteService {
     }
 
     public List<Map<String, Object>> getPedidosPorHora(LocalDateTime fechaDesde) {
-        LocalDateTime fechaHasta = LocalDateTime.now();
+        // Si no se proporciona fecha, usar hoy
+        LocalDateTime fechaConsulta = fechaDesde != null ? fechaDesde : LocalDateTime.now();
+
+        // Establecer el inicio y fin del día para la fecha especificada
+        LocalDateTime inicioDelDia = fechaConsulta.withHour(0).withMinute(0).withSecond(0).withNano(0);
+        LocalDateTime finDelDia = fechaConsulta.withHour(23).withMinute(59).withSecond(59).withNano(999999999);
 
         System.out.println("=== DEBUG getPedidosPorHora ===");
-        System.out.println("Fecha desde: " + fechaDesde);
-        System.out.println("Fecha hasta: " + fechaHasta);
+        System.out.println("Fecha consulta: " + fechaConsulta);
+        System.out.println("Inicio del día: " + inicioDelDia);
+        System.out.println("Fin del día: " + finDelDia);
 
-        List<Pedido> pedidos = pedidoRepository.findByFechaBetween(fechaDesde, fechaHasta);
+        List<Pedido> pedidos = pedidoRepository.findByFechaBetween(inicioDelDia, finDelDia);
         System.out.println("Pedidos encontrados: " + pedidos.size());
 
-        // Crear mapa de horas desde fechaDesde hasta ahora
-        Map<String, Long> pedidosPorHora = new LinkedHashMap<>();
+        // Debug: mostrar algunos pedidos
+        if (pedidos.size() > 0) {
+            System.out.println("Primer pedido: " + pedidos.get(0).getFecha());
+            if (pedidos.size() > 1) {
+                System.out.println("Último pedido: " + pedidos.get(pedidos.size() - 1).getFecha());
+            }
+        }
 
-        // Inicializar todas las horas en el rango
-        LocalDateTime current = fechaDesde.withMinute(0).withSecond(0);
-        while (current.isBefore(fechaHasta) || current.equals(fechaHasta.withMinute(0).withSecond(0))) {
-            String horaKey = current.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
-            pedidosPorHora.put(horaKey, 0L);
-            current = current.plusHours(1);
+        // Crear mapa de horas para las 24 horas del día
+        Map<Integer, Long> pedidosPorHora = new LinkedHashMap<>();
+
+        // Inicializar todas las horas (0-23)
+        for (int hora = 0; hora < 24; hora++) {
+            pedidosPorHora.put(hora, 0L);
         }
 
         // Contar pedidos por hora
         pedidos.forEach(p -> {
-            String horaKey = p.getFecha().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
-            pedidosPorHora.merge(horaKey, 1L, Long::sum);
+            int hora = p.getFecha().getHour();
+            pedidosPorHora.merge(hora, 1L, Long::sum);
+            System.out.println("Pedido en hora " + hora + ": " + p.getFecha() + " - Mesa: " + p.getMesa());
         });
 
         // Convertir a lista
         List<Map<String, Object>> resultado = pedidosPorHora.entrySet().stream()
                 .map(entry -> {
                     Map<String, Object> horaPedido = new HashMap<>();
-                    horaPedido.put("hora", entry.getKey());
+                    horaPedido.put("hora", String.format("%02d:00", entry.getKey()));
                     horaPedido.put("cantidad", entry.getValue());
                     return horaPedido;
                 })
@@ -453,12 +472,25 @@ public class ReporteService {
         LocalDateTime fechaInicio = LocalDateTime.now().minusMonths(ultimosMeses);
         LocalDateTime fechaFin = LocalDateTime.now();
 
+        System.out.println("=== DEBUG getIngresosVsEgresos ===");
+        System.out.println("Consultando desde: " + fechaInicio + " hasta: " + fechaFin);
+
         // Obtener facturas y pedidos pagados (ingresos)
         List<Factura> facturas = facturaRepository.findByFechaBetween(fechaInicio, fechaFin);
         List<Pedido> pedidosPagados = pedidoRepository.findByFechaBetween(fechaInicio, fechaFin)
                 .stream()
                 .filter(p -> "pagado".equals(p.getEstado()))
                 .collect(Collectors.toList());
+
+        // Obtener gastos reales (egresos)
+        List<Gasto> gastos = gastoRepository.findByFechaGastoBetween(fechaInicio, fechaFin)
+                .stream()
+                .filter(g -> "aprobado".equals(g.getEstado()) || "pendiente".equals(g.getEstado())) // Solo gastos válidos
+                .collect(Collectors.toList());
+
+        System.out.println("Facturas encontradas: " + facturas.size());
+        System.out.println("Pedidos pagados encontrados: " + pedidosPagados.size());
+        System.out.println("Gastos encontrados: " + gastos.size());
 
         // Agrupar ingresos por mes
         Map<String, Double> ingresosPorMes = new HashMap<>();
@@ -475,9 +507,37 @@ public class ReporteService {
             ingresosPorMes.merge(mesKey, p.getTotalPagado(), Double::sum);
         });
 
-        // Para egresos, por ahora usamos un estimado (70% de los ingresos)
-        // TODO: Implementar tabla de egresos reales
-        return ingresosPorMes.entrySet().stream()
+        // Agrupar egresos (gastos) por mes
+        Map<String, Double> egresosPorMes = new HashMap<>();
+
+        // Procesar gastos reales
+        gastos.forEach(g -> {
+            String mesKey = g.getFechaGasto().getYear() + "-" + String.format("%02d", g.getFechaGasto().getMonthValue());
+            egresosPorMes.merge(mesKey, g.getMonto(), Double::sum);
+        });
+
+        System.out.println("Ingresos por mes: " + ingresosPorMes);
+        System.out.println("Egresos por mes: " + egresosPorMes);
+
+        // Combinar datos de ingresos y egresos
+        Map<String, Map<String, Object>> datosCombinados = new LinkedHashMap<>();
+
+        // Agregar todos los meses que tienen ingresos
+        ingresosPorMes.forEach((mes, ingresos) -> {
+            Map<String, Object> mesData = datosCombinados.getOrDefault(mes, new HashMap<>());
+            mesData.put("ingresos", ingresos);
+            datosCombinados.put(mes, mesData);
+        });
+
+        // Agregar todos los meses que tienen egresos
+        egresosPorMes.forEach((mes, egresos) -> {
+            Map<String, Object> mesData = datosCombinados.getOrDefault(mes, new HashMap<>());
+            mesData.put("egresos", egresos);
+            datosCombinados.put(mes, mesData);
+        });
+
+        // Convertir a lista y completar datos faltantes
+        return datosCombinados.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
                 .map(entry -> {
                     String[] yearMonth = entry.getKey().split("-");
@@ -485,8 +545,15 @@ public class ReporteService {
 
                     Map<String, Object> mesData = new HashMap<>();
                     mesData.put("mes", nombreMes);
-                    mesData.put("ingresos", entry.getValue());
-                    mesData.put("egresos", entry.getValue() * 0.7); // Estimado
+                    mesData.put("año", Integer.parseInt(yearMonth[0]));
+                    mesData.put("ingresos", entry.getValue().getOrDefault("ingresos", 0.0));
+                    mesData.put("egresos", entry.getValue().getOrDefault("egresos", 0.0));
+
+                    // Calcular utilidad
+                    double ingresos = (Double) entry.getValue().getOrDefault("ingresos", 0.0);
+                    double egresos = (Double) entry.getValue().getOrDefault("egresos", 0.0);
+                    mesData.put("utilidad", ingresos - egresos);
+
                     return mesData;
                 })
                 .collect(Collectors.toList());
@@ -519,9 +586,14 @@ public class ReporteService {
         for (Factura factura : facturas) {
             if (factura.getItems() != null) {
                 for (var item : factura.getItems()) {
-                    String nombreProducto = item.getProductoNombre();
-                    conteoProductos.merge(nombreProducto, item.getCantidad(), Integer::sum);
-                    ventasProductos.merge(nombreProducto, item.getTotalItem(), Double::sum);
+                    String nombreProducto = item.getProductoNombre() != null
+                            ? item.getProductoNombre()
+                            : obtenerNombreProducto(item.getProductoId());
+
+                    if (nombreProducto != null) {
+                        conteoProductos.merge(nombreProducto, item.getCantidad(), Integer::sum);
+                        ventasProductos.merge(nombreProducto, item.getSubtotalItem(), Double::sum);
+                    }
                 }
             }
         }
@@ -530,11 +602,13 @@ public class ReporteService {
         for (Pedido pedido : pedidosPagados) {
             if (pedido.getItems() != null) {
                 for (var item : pedido.getItems()) {
-                    // Buscar el nombre del producto desde el repositorio
-                    String nombreProducto = obtenerNombreProducto(item.getProductoId());
+                    String nombreProducto = item.getProductoNombre() != null
+                            ? item.getProductoNombre()
+                            : obtenerNombreProducto(item.getProductoId());
+
                     if (nombreProducto != null) {
                         conteoProductos.merge(nombreProducto, item.getCantidad(), Integer::sum);
-                        // Usar subtotal en lugar de getTotal()
+                        // Usar subtotal
                         ventasProductos.merge(nombreProducto, item.getSubtotal(), Double::sum);
                     }
                 }
@@ -628,5 +702,174 @@ public class ReporteService {
         }
         // Si no existe, retornar el valor por defecto
         return OBJETIVOS_DEFAULT.getOrDefault(periodo, 0.0);
+    }
+
+    public List<Map<String, Object>> getUltimosPedidosConDetalles(int limite) {
+        System.out.println("=== DEBUG getUltimosPedidosConDetalles ===");
+        System.out.println("Límite solicitado: " + limite);
+
+        try {
+            // Obtener los últimos pedidos ordenados por fecha
+            List<Pedido> pedidos = pedidoRepository.findAll()
+                    .stream()
+                    .sorted((p1, p2) -> p2.getFecha().compareTo(p1.getFecha()))
+                    .limit(limite)
+                    .collect(Collectors.toList());
+
+            System.out.println("Pedidos encontrados: " + pedidos.size());
+
+            // Convertir a formato detallado para el frontend (UN PEDIDO POR FILA)
+            List<Map<String, Object>> pedidosDetallados = new ArrayList<>();
+
+            for (Pedido pedido : pedidos) {
+                Map<String, Object> pedidoDetalle = new HashMap<>();
+
+                // Información básica del pedido
+                pedidoDetalle.put("pedidoId", pedido.get_id());
+                pedidoDetalle.put("mesa", pedido.getMesa() != null ? pedido.getMesa() : "N/A");
+                pedidoDetalle.put("fecha", pedido.getFecha().format(DateTimeFormatter.ofPattern("HH:mm")));
+                pedidoDetalle.put("fechaCompleta", pedido.getFecha().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+                pedidoDetalle.put("estado", traducirEstado(pedido.getEstado()));
+                pedidoDetalle.put("vendedor", pedido.getMesero() != null ? pedido.getMesero() : "N/A");
+                pedidoDetalle.put("tipo", pedido.getTipo() != null ? pedido.getTipo() : "Normal");
+
+                // Agrupar productos del pedido
+                if (pedido.getItems() != null && !pedido.getItems().isEmpty()) {
+                    List<String> productos = new ArrayList<>();
+                    double totalPedido = 0.0;
+                    int cantidadTotal = 0;
+
+                    for (var item : pedido.getItems()) {
+                        String nombreProducto = item.getProductoNombre() != null
+                                ? item.getProductoNombre()
+                                : obtenerNombreProducto(item.getProductoId());
+
+                        // Agregar cantidad si es mayor a 1
+                        if (item.getCantidad() > 1) {
+                            productos.add(item.getCantidad() + "x " + nombreProducto);
+                        } else {
+                            productos.add(nombreProducto);
+                        }
+
+                        totalPedido += item.getPrecio() * item.getCantidad();
+                        cantidadTotal += item.getCantidad();
+                    }
+
+                    // Unir productos con comas
+                    pedidoDetalle.put("producto", String.join(", ", productos));
+                    pedidoDetalle.put("productos", productos); // Lista separada por si la necesita el frontend
+                    pedidoDetalle.put("cantidad", cantidadTotal);
+                    pedidoDetalle.put("total", totalPedido);
+                } else {
+                    pedidoDetalle.put("producto", "Sin productos");
+                    pedidoDetalle.put("productos", new ArrayList<>());
+                    pedidoDetalle.put("cantidad", 0);
+                    pedidoDetalle.put("total", 0.0);
+                }
+
+                // Agregar notas generales del pedido si existen
+                if (pedido.getNotas() != null && !pedido.getNotas().trim().isEmpty()) {
+                    pedidoDetalle.put("notas", pedido.getNotas());
+                }
+
+                pedidosDetallados.add(pedidoDetalle);
+            }
+
+            System.out.println("Pedidos procesados: " + pedidosDetallados.size());
+            return pedidosDetallados;
+
+        } catch (Exception e) {
+            System.err.println("Error en getUltimosPedidosConDetalles: " + e.getMessage());
+            e.printStackTrace();
+            return new ArrayList<>();
+        }
+    }
+
+    public List<Map<String, Object>> getVendedoresDelMes(int dias) {
+        System.out.println("=== DEBUG getVendedoresDelMes ===");
+        System.out.println("Días a consultar: " + dias);
+
+        try {
+            LocalDateTime fechaInicio = LocalDateTime.now().minusDays(dias);
+            LocalDateTime fechaFin = LocalDateTime.now();
+
+            System.out.println("Rango de fechas: " + fechaInicio + " a " + fechaFin);
+
+            // Obtener pedidos pagados del período
+            List<Pedido> pedidosPagados = pedidoRepository.findByFechaBetween(fechaInicio, fechaFin)
+                    .stream()
+                    .filter(p -> "pagado".equals(p.getEstado()) && p.getMesero() != null)
+                    .collect(Collectors.toList());
+
+            // Obtener facturas del período
+            List<Factura> facturas = facturaRepository.findByFechaBetween(fechaInicio, fechaFin)
+                    .stream()
+                    .filter(f -> f.getAtendidoPor() != null)
+                    .collect(Collectors.toList());
+
+            System.out.println("Pedidos pagados encontrados: " + pedidosPagados.size());
+            System.out.println("Facturas encontradas: " + facturas.size());
+
+            // Agrupar por vendedor/mesero
+            Map<String, Double> ventasPorVendedor = new HashMap<>();
+            Map<String, Integer> pedidosPorVendedor = new HashMap<>();
+
+            // Contar pedidos pagados por mesero
+            pedidosPagados.forEach(p -> {
+                ventasPorVendedor.merge(p.getMesero(), p.getTotalPagado(), Double::sum);
+                pedidosPorVendedor.merge(p.getMesero(), 1, Integer::sum);
+            });
+
+            // Contar facturas por quien atendió
+            facturas.forEach(f -> {
+                ventasPorVendedor.merge(f.getAtendidoPor(), f.getTotal(), Double::sum);
+                pedidosPorVendedor.merge(f.getAtendidoPor(), 1, Integer::sum);
+            });
+
+            System.out.println("Vendedores encontrados: " + ventasPorVendedor.size());
+
+            // Convertir a lista ordenada con ranking
+            List<Map<String, Object>> vendedores = new ArrayList<>();
+
+            ventasPorVendedor.entrySet().stream()
+                    .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
+                    .forEach((entry) -> {
+                        Map<String, Object> vendedor = new HashMap<>();
+                        vendedor.put("nombre", entry.getKey());
+                        vendedor.put("totalVentas", entry.getValue());
+                        vendedor.put("cantidadPedidos", pedidosPorVendedor.getOrDefault(entry.getKey(), 0));
+                        vendedor.put("promedioVenta", pedidosPorVendedor.getOrDefault(entry.getKey(), 0) > 0
+                                ? entry.getValue() / pedidosPorVendedor.get(entry.getKey()) : 0);
+                        vendedor.put("puesto", vendedores.size() + 1); // Posición en el ranking
+                        vendedores.add(vendedor);
+                    });
+
+            System.out.println("Vendedores procesados: " + vendedores.size());
+            return vendedores;
+
+        } catch (Exception e) {
+            System.err.println("Error en getVendedoresDelMes: " + e.getMessage());
+            e.printStackTrace();
+            return new ArrayList<>();
+        }
+    }
+
+    private String traducirEstado(String estado) {
+        if (estado == null) {
+            return "Desconocido";
+        }
+
+        switch (estado.toLowerCase()) {
+            case "pendiente":
+                return "Pendiente";
+            case "pagado":
+                return "Pagada";
+            case "interno":
+                return "Interno";
+            case "cancelado":
+                return "Cancelado";
+            default:
+                return estado;
+        }
     }
 }

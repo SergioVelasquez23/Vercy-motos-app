@@ -20,18 +20,47 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.prog3.security.Services.CierreCajaService;
+import com.prog3.security.Models.CierreCaja;
+
 import com.prog3.security.DTOs.CuadreCajaRequest;
 import com.prog3.security.Models.CuadreCaja;
 import com.prog3.security.Models.Pedido;
 import com.prog3.security.Repositories.PedidoRepository;
 import com.prog3.security.Services.CuadreCajaService;
 import com.prog3.security.Services.ResponseService;
+
 import com.prog3.security.Utils.ApiResponse;
 
 @CrossOrigin
 @RestController
 @RequestMapping("api/cuadres-caja")
 public class CuadreCajaController {
+
+    @Autowired
+    private CierreCajaService cierreCajaService;
+
+    /**
+     * Endpoint para obtener el cuadre/cierre de caja del día (igual que
+     * /api/reportes/cuadre-caja)
+     */
+    @GetMapping("/cuadre-completo")
+    public ResponseEntity<ApiResponse<CierreCaja>> getCuadreCompleto() {
+        try {
+            LocalDateTime inicioDia = LocalDateTime.now().withHour(0).withMinute(0).withSecond(0);
+            LocalDateTime finDia = LocalDateTime.now();
+
+            // Montos iniciales por defecto (puedes parametrizar si lo necesitas)
+            Map<String, Double> montosIniciales = new HashMap<>();
+            montosIniciales.put("efectivo", 0.0);
+            montosIniciales.put("transferencias", 0.0);
+
+            CierreCaja cierre = cierreCajaService.generarCierreCaja(inicioDia, finDia, "Sistema", montosIniciales);
+            return responseService.success(cierre, "Cuadre de caja generado exitosamente");
+        } catch (Exception e) {
+            return responseService.internalError("Error al generar cuadre de caja: " + e.getMessage());
+        }
+    }
 
     @Autowired
     private CuadreCajaService cuadreCajaService;

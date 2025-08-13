@@ -48,6 +48,14 @@ public class ProductosController {
     public ResponseEntity<ApiResponse<List<Producto>>> find() {
         try {
             List<Producto> productos = this.theProductoRepository.findAll();
+
+            // Log para depuración de todos los productos
+            for (Producto p : productos) {
+                if (p.get_id().equals("689143f005eec6328c0d26ee")) {
+                    System.out.println("GET Todos - Producto ID: " + p.get_id() + ", categoriaId: '" + p.getCategoriaId() + "'");
+                }
+            }
+
             return responseService.success(productos, "Productos obtenidos exitosamente");
         } catch (Exception e) {
             return responseService.internalError("Error al obtener productos: " + e.getMessage());
@@ -61,6 +69,8 @@ public class ProductosController {
             if (producto == null) {
                 return responseService.notFound("Producto no encontrado con ID: " + id);
             }
+            // Log para depuración del GET
+            System.out.println("GET Producto - ID: " + id + ", categoriaId: '" + producto.getCategoriaId() + "'");
             return responseService.success(producto, "Producto encontrado");
         } catch (Exception e) {
             return responseService.internalError("Error al buscar producto: " + e.getMessage());
@@ -229,7 +239,12 @@ public class ProductosController {
             actualProducto.setTieneVariantes(newProducto.isTieneVariantes());
             actualProducto.setEstado(newProducto.getEstado());
             actualProducto.setImagenUrl(newProducto.getImagenUrl());
+
+            // Log para depuración de la categoría
+            System.out.println("CategoriaId recibida en PUT: '" + newProducto.getCategoriaId() + "'");
             actualProducto.setCategoriaId(newProducto.getCategoriaId());
+            System.out.println("CategoriaId asignada al producto: '" + actualProducto.getCategoriaId() + "'");
+
             actualProducto.setDescripcion(newProducto.getDescripcion());
             actualProducto.setCantidad(newProducto.getCantidad());
             actualProducto.setNota(newProducto.getNota());
@@ -275,7 +290,9 @@ public class ProductosController {
                 actualProducto.setUtilidad(newProducto.getUtilidad());
             }
 
+            System.out.println("Guardando producto con categoriaId: '" + actualProducto.getCategoriaId() + "'");
             Producto updatedProducto = this.theProductoRepository.save(actualProducto);
+            System.out.println("Producto guardado. CategoriaId después del save: '" + updatedProducto.getCategoriaId() + "'");
             return responseService.success(updatedProducto, "Producto actualizado exitosamente");
         } catch (Exception e) {
             return responseService.internalError("Error al actualizar producto: " + e.getMessage());

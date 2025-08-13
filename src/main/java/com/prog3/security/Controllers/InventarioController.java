@@ -22,12 +22,17 @@ import com.prog3.security.Models.Inventario;
 import com.prog3.security.Models.MovimientoInventario;
 import com.prog3.security.Repositories.InventarioRepository;
 import com.prog3.security.Repositories.MovimientoInventarioRepository;
+import com.prog3.security.Repositories.PedidoRepository;
+import com.prog3.security.Models.Pedido;
+import com.prog3.security.Models.ItemPedido;
+import com.prog3.security.Services.InventarioService;
 import com.prog3.security.Services.ResponseService;
+
 import com.prog3.security.Utils.ApiResponse;
 
 @CrossOrigin
 @RestController
-@RequestMapping("api/inventario")
+@RequestMapping("/api/inventario")
 public class InventarioController {
 
     @Autowired
@@ -36,6 +41,11 @@ public class InventarioController {
     @Autowired
     private MovimientoInventarioRepository movimientoRepository;
 
+    @Autowired
+    private PedidoRepository pedidoRepository;
+
+    @Autowired
+    private InventarioService inventarioService;
     @Autowired
     private ResponseService responseService;
 
@@ -384,6 +394,57 @@ public class InventarioController {
             Map<String, Object> error = new HashMap<>();
             error.put("error", e.getMessage());
             return ResponseEntity.internalServerError().body(error);
+        }
+    }
+
+    @GetMapping("/movimientos")
+    public ResponseEntity<ApiResponse<List<MovimientoInventario>>> getAllMovimientos() {
+        try {
+            List<MovimientoInventario> movimientos = movimientoRepository.findAll();
+            return responseService.success(movimientos, "Movimientos de inventario obtenidos correctamente");
+        } catch (Exception e) {
+            return responseService.internalError("Error al obtener movimientos de inventario: " + e.getMessage());
+        }
+    }
+
+    // Nuevo endpoint para procesar pedido y descontar inventario
+    @PostMapping("/procesar-pedido/{pedidoId}")
+    public ResponseEntity<ApiResponse<List<Inventario>>> procesarPedido(
+            @PathVariable String pedidoId,
+            @RequestBody Map<String, List<String>> ingredientesPorItem) {
+        try {
+            Pedido pedido = pedidoRepository.findById(pedidoId).orElse(null);
+            if (pedido == null) {
+                return responseService.notFound("Pedido no encontrado con ID: " + pedidoId);
+            }
+            // Asignar ingredientes seleccionados a cada item según el body
+            if (pedido.getItems() != null) {
+                for (int i = 0; i < pedido.getItems().size(); i++) {
+                    ItemPedido item = pedido.getItems().get(i);
+                    String key = item.getProductoId();
+                    if (ingredientesPorItem.containsKey(key)) {
+                        item.setIngredientesSeleccionados(ingredientesPorItem.get(key));
+                    }
+                }
+            }
+            inventarioService.procesarPedidoParaInventario(pedido);
+            // Devolver los ingredientes actualizados
+            List<Inventario> inventariosIngredientes = new java.util.ArrayList<>();
+            if (pedido.getItems() != null) {
+                for (ItemPedido item : pedido.getItems()) {
+                    if (item.getIngredientesSeleccionados() != null) {
+                        for (String ingredienteId : item.getIngredientesSeleccionados()) {
+                            Inventario inv = inventarioRepository.findByProductoId(ingredienteId);
+                            if (inv != null) {
+                                inventariosIngredientes.add(inv);
+                            }
+                        }
+                    }
+                }
+            }
+            return responseService.success(inventariosIngredientes, "Ingredientes actualizados tras procesar el pedido");
+        } catch (Exception e) {
+            return responseService.internalError("Error al procesar el pedido para inventario: " + e.getMessage());
         }
     }
 }

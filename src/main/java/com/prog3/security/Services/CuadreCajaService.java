@@ -12,6 +12,8 @@ import com.prog3.security.Models.CuadreCaja;
 import com.prog3.security.Models.Pedido;
 import com.prog3.security.Repositories.CuadreCajaRepository;
 import com.prog3.security.Repositories.PedidoRepository;
+import com.prog3.security.Repositories.FacturaRepository;
+import com.prog3.security.Models.Factura;
 import com.prog3.security.DTOs.CuadreCajaRequest;
 
 @Service
@@ -22,6 +24,9 @@ public class CuadreCajaService {
 
     @Autowired
     private PedidoRepository pedidoRepository;
+
+    @Autowired
+    private FacturaRepository facturaRepository;
 
     /**
      * Calcula el efectivo esperado en base al fondo inicial más los pedidos
@@ -62,57 +67,59 @@ public class CuadreCajaService {
 
         // Buscar todos los pedidos pagados desde la fecha de referencia (USAR FECHA DE PAGO)
         List<Pedido> todosPedidosPagados = pedidoRepository.findByFechaPagoGreaterThanEqualAndEstado(fechaReferencia, "pagado");
+        List<Factura> facturas = facturaRepository.findByFechaBetween(fechaReferencia, LocalDateTime.now());
+
         System.out.println("CAMBIO: Usando fechaPago en lugar de fecha para filtrar pedidos");
         System.out.println("Fecha de referencia para filtro: " + fechaReferencia);
         System.out.println("Total de pedidos pagados desde la fecha de referencia: " + todosPedidosPagados.size());
+        System.out.println("Total de facturas desde la fecha de referencia: " + facturas.size());
 
-        // DEBUG: Mostrar TODOS los pedidos encontrados con sus fechas
-        System.out.println("=== DEPURACIÓN: TODOS LOS PEDIDOS ENCONTRADOS ===");
-        for (int i = 0; i < todosPedidosPagados.size(); i++) {
-            Pedido p = todosPedidosPagados.get(i);
-            System.out.println("Pedido #" + (i + 1) + " - ID: " + p.get_id()
-                    + ", Total: " + p.getTotalPagado()
-                    + ", Forma pago: '" + p.getFormaPago() + "'"
-                    + ", Fecha creación: " + p.getFecha()
-                    + ", Fecha pago: " + p.getFechaPago()
-                    + ", Estado: " + p.getEstado());
-        }
-
-        // Calcular totales por forma de pago
+        // Calcular totales por forma de pago (unificando criterios con cierre de caja)
         double totalEfectivo = 0.0;
         double totalTransferencias = 0.0;
+        double totalTarjetas = 0.0;
         double totalOtros = 0.0;
 
+        // Procesar pedidos
         for (Pedido pedido : todosPedidosPagados) {
             String formaPago = pedido.getFormaPago();
             double monto = pedido.getTotalPagado();
-
-            System.out.println("DEBUG DETALLADO - Pedido ID: " + pedido.get_id()
-                    + ", Forma de pago EXACTA: '" + formaPago + "'"
-                    + " (longitud: " + (formaPago != null ? formaPago.length() : "null") + ")"
-                    + ", Total: " + monto
-                    + ", Fecha: " + pedido.getFecha());
-
             if (formaPago == null) {
                 totalOtros += monto;
-                System.out.println("→ Forma de pago NULL, sumado a OTROS");
             } else if ("efectivo".equalsIgnoreCase(formaPago.trim())) {
                 totalEfectivo += monto;
-                System.out.println("→ Sumado a EFECTIVO: " + monto);
             } else if ("transferencia".equalsIgnoreCase(formaPago.trim())) {
                 totalTransferencias += monto;
-                System.out.println("→ Sumado a TRANSFERENCIAS: " + monto);
+            } else if ("tarjeta".equalsIgnoreCase(formaPago.trim())) {
+                totalTarjetas += monto;
             } else {
                 totalOtros += monto;
-                System.out.println("→ Forma de pago NO RECONOCIDA: '" + formaPago + "', sumado a OTROS");
             }
         }
 
-        double totalVentas = totalEfectivo + totalTransferencias + totalOtros;
+        // Procesar facturas
+        for (Factura factura : facturas) {
+            String medioPago = factura.getMedioPago();
+            double monto = factura.getTotal();
+            if (medioPago == null) {
+                totalOtros += monto;
+            } else if ("efectivo".equalsIgnoreCase(medioPago.trim())) {
+                totalEfectivo += monto;
+            } else if ("transferencia".equalsIgnoreCase(medioPago.trim())) {
+                totalTransferencias += monto;
+            } else if ("tarjeta".equalsIgnoreCase(medioPago.trim())) {
+                totalTarjetas += monto;
+            } else {
+                totalOtros += monto;
+            }
+        }
 
-        System.out.println("=== RESUMEN DE VENTAS ===");
+        double totalVentas = totalEfectivo + totalTransferencias + totalTarjetas + totalOtros;
+
+        System.out.println("=== RESUMEN DE VENTAS UNIFICADO ===");
         System.out.println("Efectivo: " + totalEfectivo);
         System.out.println("Transferencias: " + totalTransferencias);
+        System.out.println("Tarjetas: " + totalTarjetas);
         System.out.println("Otros: " + totalOtros);
         System.out.println("Total ventas: " + totalVentas);
 
@@ -146,6 +153,7 @@ public class CuadreCajaService {
         resultado.put("totalVentas", totalVentas);
         resultado.put("ventasEfectivo", totalEfectivo);
         resultado.put("ventasTransferencias", totalTransferencias);
+        resultado.put("ventasTarjetas", totalTarjetas);
         resultado.put("ventasOtros", totalOtros);
         resultado.put("totalGastos", totalGastos);
         resultado.put("totalPagosFacturas", totalPagosFacturas);

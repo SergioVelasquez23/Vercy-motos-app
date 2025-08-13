@@ -7,6 +7,11 @@ import java.time.LocalDateTime;
 @Document
 public class Inventario {
 
+    // Para compatibilidad con frontend: exponer stockActual en el JSON
+    public double getStockActual() {
+        return this.cantidadActual;
+    }
+
     @Id
     private String _id;
     private String productoId; // Referencia al producto
