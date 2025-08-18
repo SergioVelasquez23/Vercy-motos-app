@@ -17,7 +17,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.prog3.security.Models.Mesa;
 import com.prog3.security.Repositories.MesaRepository;
+import com.prog3.security.Services.AuditService;
 import com.prog3.security.Services.ResponseService;
+import com.prog3.security.Services.WebSocketNotificationService;
 import com.prog3.security.Utils.ApiResponse;
 import com.prog3.security.DTOs.ProductoMesaRequest;
 
@@ -31,6 +33,12 @@ public class MesasController {
 
     @Autowired
     private ResponseService responseService;
+
+    @Autowired
+    private WebSocketNotificationService webSocketService;
+
+    @Autowired
+    private AuditService auditService;
 
     @GetMapping("")
     public ResponseEntity<ApiResponse<List<Mesa>>> find() {
@@ -116,6 +124,13 @@ public class MesasController {
                 return responseService.conflict("Ya existe una mesa con el nombre: " + newMesa.getNombre());
             }
             Mesa mesaCreada = this.theMesaRepository.save(newMesa);
+
+            // Registrar en auditoría
+            auditService.logMesaOperation("CREAR", mesaCreada.get_id(), mesaCreada.getNombre());
+
+            // Notificar por WebSocket
+            webSocketService.notifyTableUpdate(mesaCreada);
+
             return responseService.created(mesaCreada, "Mesa creada exitosamente");
         } catch (Exception e) {
             return responseService.internalError("Error al crear mesa: " + e.getMessage());
@@ -136,12 +151,20 @@ public class MesasController {
                 return responseService.conflict("Ya existe una mesa con el nombre: " + newMesa.getNombre());
             }
 
+            String nombreAnterior = actualMesa.getNombre();
             actualMesa.setNombre(newMesa.getNombre());
             actualMesa.setOcupada(newMesa.isOcupada());
             actualMesa.setTotal(newMesa.getTotal());
             actualMesa.setProductosIds(newMesa.getProductosIds());
 
             Mesa mesaActualizada = this.theMesaRepository.save(actualMesa);
+
+            // Registrar en auditoría
+            auditService.logMesaOperation("ACTUALIZAR", mesaActualizada.get_id(), mesaActualizada.getNombre());
+
+            // Notificar por WebSocket
+            webSocketService.notifyTableUpdate(mesaActualizada);
+
             return responseService.success(mesaActualizada, "Mesa actualizada exitosamente");
         } catch (Exception e) {
             return responseService.internalError("Error al actualizar mesa: " + e.getMessage());
@@ -164,6 +187,13 @@ public class MesasController {
             mesa.setTotal(0.0); // Reiniciar total al ocupar
             mesa.getProductosIds().clear(); // Limpiar productos
             Mesa mesaActualizada = this.theMesaRepository.save(mesa);
+
+            // Registrar en auditoría
+            auditService.logMesaOperation("OCUPAR", mesaActualizada.get_id(), mesaActualizada.getNombre());
+
+            // Notificar por WebSocket
+            webSocketService.notifyTableUpdate(mesaActualizada);
+
             return responseService.success(mesaActualizada, "Mesa ocupada exitosamente");
         } catch (Exception e) {
             return responseService.internalError("Error al ocupar mesa: " + e.getMessage());
@@ -186,6 +216,13 @@ public class MesasController {
             mesa.setTotal(0.0); // Reiniciar total al liberar
             mesa.getProductosIds().clear(); // Limpiar productos
             Mesa mesaActualizada = this.theMesaRepository.save(mesa);
+
+            // Registrar en auditoría
+            auditService.logMesaOperation("LIBERAR", mesaActualizada.get_id(), mesaActualizada.getNombre());
+
+            // Notificar por WebSocket
+            webSocketService.notifyTableUpdate(mesaActualizada);
+
             return responseService.success(mesaActualizada, "Mesa liberada exitosamente");
         } catch (Exception e) {
             return responseService.internalError("Error al liberar mesa: " + e.getMessage());

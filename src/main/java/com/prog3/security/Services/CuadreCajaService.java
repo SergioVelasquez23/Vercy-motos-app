@@ -436,4 +436,79 @@ public class CuadreCajaService {
             return false;
         }
     }
+
+    /**
+     * Obtiene el cuadre de caja activo (abierto) del día actual
+     *
+     * @return CuadreCaja activo o null si no hay ninguno abierto
+     */
+    public CuadreCaja obtenerCuadreActivo() {
+        LocalDateTime inicioDia = LocalDateTime.now().withHour(0).withMinute(0).withSecond(0).withNano(0);
+
+        List<CuadreCaja> cuadresActivos = cuadreCajaRepository.findByFechaAperturaHoy(inicioDia)
+                .stream()
+                .filter(c -> !c.isCerrada() && "abierto".equals(c.getEstado()))
+                .toList();
+
+        if (!cuadresActivos.isEmpty()) {
+            return cuadresActivos.get(0); // Retornar el primer cuadre activo
+        }
+
+        return null; // No hay cuadre activo
+    }
+
+    /**
+     * Asigna un pedido al cuadre de caja activo
+     *
+     * @param pedidoId ID del pedido a asignar
+     * @return true si se asignó correctamente, false si no hay cuadre activo
+     */
+    public boolean asignarPedidoACuadreActivo(String pedidoId) {
+        CuadreCaja cuadreActivo = obtenerCuadreActivo();
+
+        if (cuadreActivo == null) {
+            System.out.println("⚠️ No hay cuadre de caja activo para asignar el pedido: " + pedidoId);
+            return false;
+        }
+
+        Pedido pedido = pedidoRepository.findById(pedidoId).orElse(null);
+        if (pedido != null && "pagado".equals(pedido.getEstado())) {
+            pedido.setCuadreCajaId(cuadreActivo.get_id());
+            pedidoRepository.save(pedido);
+            System.out.println("✅ Pedido " + pedidoId + " asignado al cuadre " + cuadreActivo.get_id());
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Migra automáticamente pedidos pagados sin cuadre a un cuadre específico
+     * basándose en las fechas de apertura y cierre del cuadre
+     */
+    public int migrarPedidosAutomaticamente(String cuadreCajaId) {
+        CuadreCaja cuadre = cuadreCajaRepository.findById(cuadreCajaId).orElse(null);
+        if (cuadre == null) {
+            return 0;
+        }
+
+        LocalDateTime fechaInicio = cuadre.getFechaApertura();
+        LocalDateTime fechaFin = cuadre.getFechaCierre() != null ? cuadre.getFechaCierre() : LocalDateTime.now();
+
+        // Obtener pedidos pagados sin cuadre en el rango de fechas del cuadre
+        List<Pedido> pedidosSinCuadre = pedidoRepository.findPedidosPagadosSinCuadreEnRango(fechaInicio, fechaFin);
+
+        int migrados = 0;
+        for (Pedido pedido : pedidosSinCuadre) {
+            pedido.setCuadreCajaId(cuadreCajaId);
+            pedidoRepository.save(pedido);
+            migrados++;
+        }
+
+        if (migrados > 0) {
+            System.out.println("📋 Migración automática: " + migrados + " pedidos asignados al cuadre " + cuadreCajaId);
+        }
+
+        return migrados;
+    }
 }

@@ -43,6 +43,9 @@ public class Pedido {
     private String canceladoPor; // Quien canceló el pedido
     private LocalDateTime fechaCancelacion; // Cuándo se canceló
 
+    // Campo para relacionar con el cuadre de caja
+    private String cuadreCajaId; // ID del cuadre de caja al que pertenece este pedido
+
     public Pedido() {
         this.fecha = LocalDateTime.now();
         this.estado = "activo";
@@ -311,6 +314,14 @@ public class Pedido {
         this.fechaCancelacion = fechaCancelacion;
     }
 
+    public String getCuadreCajaId() {
+        return cuadreCajaId;
+    }
+
+    public void setCuadreCajaId(String cuadreCajaId) {
+        this.cuadreCajaId = cuadreCajaId;
+    }
+
     // Métodos de utilidad
     public void pagar(String formaPago, double propina, String pagadoPor) {
         this.estado = "pagado";
@@ -319,6 +330,17 @@ public class Pedido {
         this.totalPagado = this.total + propina;
         this.fechaPago = LocalDateTime.now();
         this.pagadoPor = pagadoPor;
+        // Nota: cuadreCajaId debe ser asignado en el servicio que maneja el pago
+    }
+
+    public void pagar(String formaPago, double propina, String pagadoPor, String cuadreCajaId) {
+        this.estado = "pagado";
+        this.formaPago = formaPago;
+        this.propina = propina;
+        this.totalPagado = this.total + propina;
+        this.fechaPago = LocalDateTime.now();
+        this.pagadoPor = pagadoPor;
+        this.cuadreCajaId = cuadreCajaId;
     }
 
     public void cancelar(String motivo, String canceladoPor) {

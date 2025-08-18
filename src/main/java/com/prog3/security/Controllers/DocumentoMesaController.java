@@ -23,7 +23,20 @@ public class DocumentoMesaController {
     private ResponseService responseService;
 
     /**
-     * Crear un nuevo documento para mesa especial
+     * Obtener todos los documentos
+     */
+    @GetMapping
+    public ResponseEntity<ApiResponse<List<DocumentoMesa>>> getAllDocumentos() {
+        try {
+            List<DocumentoMesa> documentos = documentoMesaService.getAllDocumentos();
+            return responseService.success(documentos, "Todos los documentos obtenidos exitosamente");
+        } catch (Exception e) {
+            return responseService.internalError("Error al obtener documentos: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Crear un nuevo documento para cualquier mesa
      */
     @PostMapping
     public ResponseEntity<ApiResponse<DocumentoMesa>> crearDocumento(@RequestBody Map<String, Object> request) {
@@ -37,9 +50,24 @@ public class DocumentoMesaController {
                 return responseService.badRequest("Faltan campos requeridos: mesaNombre, vendedor, pedidosIds");
             }
 
-            DocumentoMesa documento = documentoMesaService.crearDocumento(mesaNombre, vendedor, pedidosIds);
-            return responseService.created(documento, "Documento creado exitosamente");
+            // Validaciones adicionales
+            if (mesaNombre.trim().isEmpty()) {
+                return responseService.badRequest("El nombre de la mesa no puede estar vacío");
+            }
 
+            if (vendedor.trim().isEmpty()) {
+                return responseService.badRequest("El vendedor no puede estar vacío");
+            }
+
+            if (pedidosIds.isEmpty()) {
+                return responseService.badRequest("Se requiere al menos un pedido");
+            }
+
+            DocumentoMesa documento = documentoMesaService.crearDocumento(mesaNombre, vendedor, pedidosIds);
+            return responseService.created(documento, "Documento creado exitosamente para mesa: " + mesaNombre);
+
+        } catch (RuntimeException e) {
+            return responseService.badRequest(e.getMessage());
         } catch (Exception e) {
             return responseService.internalError("Error al crear documento: " + e.getMessage());
         }
@@ -108,7 +136,8 @@ public class DocumentoMesaController {
             String formaPago = (String) request.get("formaPago");
             String pagadoPor = (String) request.get("pagadoPor");
             Double propina = request.get("propina") != null
-                    ? Double.valueOf(request.get("propina").toString()) : 0.0;
+                    ? Double.valueOf(request.get("propina").toString())
+                    : 0.0;
 
             if (formaPago == null || pagadoPor == null) {
                 return responseService.badRequest("Campos requeridos: formaPago, pagadoPor");
@@ -199,12 +228,39 @@ public class DocumentoMesaController {
      * Obtener documentos con pedidos completos
      */
     @GetMapping("/mesa/{mesaNombre}/completos")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getDocumentosConPedidos(@PathVariable String mesaNombre) {
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getDocumentosConPedidos(
+            @PathVariable String mesaNombre) {
         try {
             List<Map<String, Object>> documentosCompletos = documentoMesaService.getDocumentosConPedidos(mesaNombre);
             return responseService.success(documentosCompletos, "Documentos con pedidos obtenidos exitosamente");
         } catch (Exception e) {
             return responseService.internalError("Error al obtener documentos completos: " + e.getMessage());
+        }
+    }
+
+    /**
+     * UTILIDAD - Crear DocumentoMesa desde IDs específicos
+     */
+    @PostMapping("/crear-desde-ids")
+    public ResponseEntity<ApiResponse<DocumentoMesa>> crearDocumentoDesdeIds(@RequestBody Map<String, Object> request) {
+        try {
+            String mesaNombre = (String) request.get("mesaNombre");
+            String vendedor = (String) request.get("vendedor");
+            @SuppressWarnings("unchecked")
+            List<String> idsExistentes = (List<String>) request.get("idsExistentes");
+
+            if (mesaNombre == null || vendedor == null || idsExistentes == null) {
+                return responseService.badRequest("Faltan campos: mesaNombre, vendedor, idsExistentes");
+            }
+
+            System.out.println("🔧 Creando DocumentoMesa para mesa: " + mesaNombre);
+            System.out.println("🔧 Con IDs de facturas/pedidos: " + idsExistentes);
+
+            DocumentoMesa documento = documentoMesaService.crearDocumento(mesaNombre, vendedor, idsExistentes);
+            return responseService.created(documento, "DocumentoMesa creado desde IDs existentes");
+
+        } catch (Exception e) {
+            return responseService.internalError("Error al crear documento: " + e.getMessage());
         }
     }
 }

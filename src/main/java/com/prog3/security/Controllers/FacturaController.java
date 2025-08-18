@@ -29,6 +29,7 @@ import com.prog3.security.Models.Producto;
 import com.prog3.security.Repositories.FacturaRepository;
 import com.prog3.security.Repositories.PedidoRepository;
 import com.prog3.security.Repositories.ProductoRepository;
+import com.prog3.security.Services.FacturaComprasService;
 
 @CrossOrigin
 @RestController
@@ -43,6 +44,9 @@ public class FacturaController {
 
     @Autowired
     private ProductoRepository productoRepository;
+
+    @Autowired
+    private FacturaComprasService facturaComprasService;
 
     @GetMapping("")
     public ResponseEntity<List<Factura>> findAll() {

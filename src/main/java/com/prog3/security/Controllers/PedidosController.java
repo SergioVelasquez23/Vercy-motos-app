@@ -25,6 +25,7 @@ import com.prog3.security.Repositories.PedidoRepository;
 import com.prog3.security.Repositories.CuadreCajaRepository;
 import com.prog3.security.Services.InventarioService;
 import com.prog3.security.Services.ResponseService;
+import com.prog3.security.Services.CuadreCajaService;
 import com.prog3.security.Utils.ApiResponse;
 import com.prog3.security.DTOs.PagarPedidoRequest;
 import com.prog3.security.DTOs.CancelarProductoRequest;
@@ -45,6 +46,9 @@ public class PedidosController {
 
     @Autowired
     private InventarioService inventarioService;
+
+    @Autowired
+    private CuadreCajaService cuadreCajaService;
 
     @GetMapping("")
     public ResponseEntity<ApiResponse<List<Pedido>>> find() {
@@ -421,6 +425,14 @@ public class PedidosController {
 
             Pedido pedidoProcesado = this.thePedidoRepository.save(pedido);
 
+            // NUEVO: Asignar al cuadre de caja activo si es un pago real
+            if (pagarRequest.esPagado() && pedidoProcesado != null) {
+                boolean asignado = cuadreCajaService.asignarPedidoACuadreActivo(pedidoProcesado.get_id());
+                if (!asignado) {
+                    System.out.println("⚠️ Advertencia: Pedido pagado pero no se pudo asignar a ningún cuadre activo");
+                }
+            }
+
             String mensaje = switch (pagarRequest.getTipoPago()) {
                 case "pagado" ->
                     "Pedido pagado exitosamente";
@@ -683,6 +695,117 @@ public class PedidosController {
             return responseService.success("OK", "Procesamiento de inventario ejecutado. Ver logs del servidor.");
         } catch (Exception e) {
             return responseService.internalError("Error al procesar inventario: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Eliminar TODOS los pedidos - USAR CON PRECAUCIÓN Endpoint para limpiar
+     * completamente la base de datos de pedidos
+     */
+    @DeleteMapping("/admin/eliminar-todos")
+    public ResponseEntity<ApiResponse<String>> eliminarTodosLosPedidos() {
+        try {
+            List<Pedido> todosLosPedidos = thePedidoRepository.findAll();
+            int cantidadEliminada = todosLosPedidos.size();
+
+            System.out.println("⚠️ ELIMINANDO TODOS LOS PEDIDOS: " + cantidadEliminada + " pedidos");
+
+            thePedidoRepository.deleteAll();
+
+            System.out.println("✅ Se eliminaron " + cantidadEliminada + " pedidos exitosamente");
+
+            return responseService.success(
+                    "TODOS_ELIMINADOS",
+                    "Se eliminaron " + cantidadEliminada + " pedidos exitosamente"
+            );
+        } catch (Exception e) {
+            System.err.println("❌ Error al eliminar todos los pedidos: " + e.getMessage());
+            return responseService.internalError("Error al eliminar todos los pedidos: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Eliminar pedidos por estado específico
+     */
+    @DeleteMapping("/admin/eliminar-por-estado/{estado}")
+    public ResponseEntity<ApiResponse<String>> eliminarPedidosPorEstado(@PathVariable String estado) {
+        try {
+            List<Pedido> pedidosPorEstado = thePedidoRepository.findByEstado(estado);
+            int cantidadEliminada = pedidosPorEstado.size();
+
+            System.out.println("⚠️ ELIMINANDO PEDIDOS CON ESTADO '" + estado + "': " + cantidadEliminada + " pedidos");
+
+            thePedidoRepository.deleteAll(pedidosPorEstado);
+
+            System.out.println("✅ Se eliminaron " + cantidadEliminada + " pedidos con estado '" + estado + "'");
+
+            return responseService.success(
+                    "PEDIDOS_ELIMINADOS",
+                    "Se eliminaron " + cantidadEliminada + " pedidos con estado '" + estado + "'"
+            );
+        } catch (Exception e) {
+            System.err.println("❌ Error al eliminar pedidos por estado: " + e.getMessage());
+            return responseService.internalError("Error al eliminar pedidos por estado: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Eliminar pedidos en un rango de fechas
+     */
+    @DeleteMapping("/admin/eliminar-por-fechas")
+    public ResponseEntity<ApiResponse<String>> eliminarPedidosPorFechas(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaInicio,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaFin) {
+        try {
+            List<Pedido> pedidosEnRango = thePedidoRepository.findByFechaBetween(fechaInicio, fechaFin);
+            int cantidadEliminada = pedidosEnRango.size();
+
+            System.out.println("⚠️ ELIMINANDO PEDIDOS ENTRE " + fechaInicio + " Y " + fechaFin + ": " + cantidadEliminada + " pedidos");
+
+            thePedidoRepository.deleteAll(pedidosEnRango);
+
+            System.out.println("✅ Se eliminaron " + cantidadEliminada + " pedidos en el rango de fechas");
+
+            return responseService.success(
+                    "PEDIDOS_ELIMINADOS",
+                    "Se eliminaron " + cantidadEliminada + " pedidos entre " + fechaInicio + " y " + fechaFin
+            );
+        } catch (Exception e) {
+            System.err.println("❌ Error al eliminar pedidos por fechas: " + e.getMessage());
+            return responseService.internalError("Error al eliminar pedidos por fechas: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Contar todos los pedidos antes de eliminar (para confirmación)
+     */
+    @GetMapping("/admin/contar-todos")
+    public ResponseEntity<ApiResponse<Integer>> contarTodosLosPedidos() {
+        try {
+            int totalPedidos = (int) thePedidoRepository.count();
+
+            System.out.println("📊 Total de pedidos en la base de datos: " + totalPedidos);
+
+            return responseService.success(totalPedidos, "Total de pedidos: " + totalPedidos);
+        } catch (Exception e) {
+            return responseService.internalError("Error al contar pedidos: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Contar pedidos por estado
+     */
+    @GetMapping("/admin/contar-por-estado/{estado}")
+    public ResponseEntity<ApiResponse<Integer>> contarPedidosPorEstado(@PathVariable String estado) {
+        try {
+            List<Pedido> pedidosPorEstado = thePedidoRepository.findByEstado(estado);
+            int cantidad = pedidosPorEstado.size();
+
+            System.out.println("📊 Pedidos con estado '" + estado + "': " + cantidad);
+
+            return responseService.success(cantidad, "Pedidos con estado '" + estado + "': " + cantidad);
+        } catch (Exception e) {
+            return responseService.internalError("Error al contar pedidos por estado: " + e.getMessage());
         }
     }
 }

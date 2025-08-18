@@ -81,4 +81,19 @@ public interface PedidoRepository extends MongoRepository<Pedido, String> {
     // Verificar si existe un pedido activo con el nombre especificado en una mesa
     @Query("{ 'mesa': ?0, 'nombrePedido': ?1, 'estado': { $in: ['activo', 'pendiente'] } }")
     List<Pedido> findPedidoActivoByMesaAndNombre(String mesa, String nombrePedido);
+
+    // ===== MÉTODOS PARA CUADRES DE CAJA =====
+    // Buscar pedidos pagados por cuadre de caja específico
+    List<Pedido> findByCuadreCajaIdAndEstado(String cuadreCajaId, String estado);
+
+    // Buscar todos los pedidos de un cuadre de caja
+    List<Pedido> findByCuadreCajaId(String cuadreCajaId);
+
+    // Buscar pedidos pagados sin asignar a ningún cuadre
+    @Query("{ 'cuadreCajaId': { $exists: false }, 'estado': 'pagado' }")
+    List<Pedido> findPedidosPagadosSinCuadre();
+
+    // Buscar pedidos pagados sin cuadre en un rango de fechas
+    @Query("{ 'cuadreCajaId': { $exists: false }, 'estado': 'pagado', 'fechaPago': { $gte: ?0, $lte: ?1 } }")
+    List<Pedido> findPedidosPagadosSinCuadreEnRango(LocalDateTime fechaInicio, LocalDateTime fechaFin);
 }

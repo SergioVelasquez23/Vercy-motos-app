@@ -464,4 +464,137 @@ public class ProductosController {
             return responseService.internalError("Error al obtener productos con nombres: " + e.getMessage());
         }
     }
+
+    /**
+     * Crear múltiples productos al mismo tiempo
+     */
+    @PostMapping("/batch")
+    public ResponseEntity<ApiResponse<List<Producto>>> createBatch(@RequestBody List<Producto> productos) {
+        try {
+            if (productos == null || productos.isEmpty()) {
+                return responseService.badRequest("La lista de productos no puede estar vacía");
+            }
+
+            List<Producto> productosCreados = new java.util.ArrayList<>();
+            List<String> errores = new java.util.ArrayList<>();
+
+            for (int i = 0; i < productos.size(); i++) {
+                Producto producto = productos.get(i);
+
+                try {
+                    // Validar que no exista un producto con el mismo nombre
+                    if (this.theProductoRepository.existsByNombre(producto.getNombre())) {
+                        errores.add("Producto " + (i + 1) + ": Ya existe un producto con el nombre '" + producto.getNombre() + "'");
+                        continue;
+                    }
+
+                    // Validar que la categoría exista
+                    if (producto.getCategoriaId() == null || producto.getCategoriaId().trim().isEmpty()) {
+                        errores.add("Producto " + (i + 1) + ": El ID de categoría es obligatorio");
+                        continue;
+                    }
+
+                    if (!this.theCategoriaRepository.existsById(producto.getCategoriaId())) {
+                        errores.add("Producto " + (i + 1) + ": La categoría con ID '" + producto.getCategoriaId() + "' no existe");
+                        continue;
+                    }
+
+                    // Validar ingredientes requeridos si existen
+                    if (producto.getIngredientesRequeridos() != null && !producto.getIngredientesRequeridos().isEmpty()) {
+                        boolean ingredientesValidos = true;
+                        for (IngredienteProducto ip : producto.getIngredientesRequeridos()) {
+                            if (ip.getIngredienteId() == null || ip.getIngredienteId().trim().isEmpty()) {
+                                errores.add("Producto " + (i + 1) + ": ID de ingrediente requerido");
+                                ingredientesValidos = false;
+                                break;
+                            }
+
+                            if (!this.theIngredienteRepository.existsById(ip.getIngredienteId())) {
+                                errores.add("Producto " + (i + 1) + ": El ingrediente con ID '" + ip.getIngredienteId() + "' no existe");
+                                ingredientesValidos = false;
+                                break;
+                            }
+
+                            // Asignar nombre del ingrediente si no está presente
+                            if (ip.getNombre() == null || ip.getNombre().isEmpty()) {
+                                Ingrediente ingrediente = this.theIngredienteRepository.findById(ip.getIngredienteId()).orElse(null);
+                                if (ingrediente != null) {
+                                    ip.setNombre(ingrediente.getNombre());
+                                }
+                            }
+                        }
+
+                        if (!ingredientesValidos) {
+                            continue;
+                        }
+                    }
+
+                    // Validar ingredientes opcionales si existen
+                    if (producto.getIngredientesOpcionales() != null && !producto.getIngredientesOpcionales().isEmpty()) {
+                        boolean ingredientesValidos = true;
+                        for (IngredienteProducto ip : producto.getIngredientesOpcionales()) {
+                            if (ip.getIngredienteId() == null || ip.getIngredienteId().trim().isEmpty()) {
+                                errores.add("Producto " + (i + 1) + ": ID de ingrediente opcional requerido");
+                                ingredientesValidos = false;
+                                break;
+                            }
+
+                            if (!this.theIngredienteRepository.existsById(ip.getIngredienteId())) {
+                                errores.add("Producto " + (i + 1) + ": El ingrediente opcional con ID '" + ip.getIngredienteId() + "' no existe");
+                                ingredientesValidos = false;
+                                break;
+                            }
+
+                            // Asignar nombre del ingrediente si no está presente
+                            if (ip.getNombre() == null || ip.getNombre().isEmpty()) {
+                                Ingrediente ingrediente = this.theIngredienteRepository.findById(ip.getIngredienteId()).orElse(null);
+                                if (ingrediente != null) {
+                                    ip.setNombre(ingrediente.getNombre());
+                                }
+                            }
+                        }
+
+                        if (!ingredientesValidos) {
+                            continue;
+                        }
+                    }
+
+                    // Asegurar que el ID sea null antes de guardar
+                    producto.set_id(null);
+
+                    // Validar campos obligatorios
+                    if (producto.getNombre() == null || producto.getNombre().trim().isEmpty()) {
+                        errores.add("Producto " + (i + 1) + ": El nombre es obligatorio");
+                        continue;
+                    }
+
+                    if (producto.getPrecio() <= 0) {
+                        errores.add("Producto " + (i + 1) + ": El precio debe ser mayor a 0");
+                        continue;
+                    }
+
+                    Producto nuevoProducto = this.theProductoRepository.save(producto);
+                    if (nuevoProducto.get_id() != null) {
+                        productosCreados.add(nuevoProducto);
+                    } else {
+                        errores.add("Producto " + (i + 1) + ": Error al generar ID para '" + producto.getNombre() + "'");
+                    }
+                } catch (Exception e) {
+                    errores.add("Producto " + (i + 1) + ": Error al crear '" + producto.getNombre() + "' - " + e.getMessage());
+                }
+            }
+
+            if (productosCreados.isEmpty()) {
+                return responseService.badRequest("No se pudo crear ningún producto. Errores: " + String.join(", ", errores));
+            } else if (!errores.isEmpty()) {
+                return responseService.success(productosCreados,
+                        "Se crearon " + productosCreados.size() + " de " + productos.size() + " productos. Errores: " + String.join(", ", errores));
+            } else {
+                return responseService.created(productosCreados,
+                        "Se crearon exitosamente " + productosCreados.size() + " productos");
+            }
+        } catch (Exception e) {
+            return responseService.internalError("Error al crear productos en lote: " + e.getMessage());
+        }
+    }
 }

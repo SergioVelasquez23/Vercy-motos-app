@@ -211,25 +211,38 @@ public class ReporteService {
         System.out.println("Desde: " + inicio + " Hasta: " + fin);
 
         try {
-            // Obtener facturas del período
-            List<Factura> facturas = facturaRepository.findByFechaBetween(inicio, fin);
-            double totalFacturas = facturas.stream().mapToDouble(Factura::getTotal).sum();
+            // CORREGIDO: Obtener solo facturas de VENTA del período (no de compra)
+            List<Factura> todasFacturas = facturaRepository.findByFechaBetween(inicio, fin);
+
+            // Filtrar solo facturas de venta (excluir facturas de compra que son gastos)
+            List<Factura> facturasVenta = todasFacturas.stream()
+                    .filter(f -> f.getTipoFactura() == null || !"compra".equals(f.getTipoFactura()))
+                    .collect(Collectors.toList());
+
+            double totalFacturas = facturasVenta.stream().mapToDouble(Factura::getTotal).sum();
 
             // Debug facturas
-            System.out.println("Facturas encontradas: " + facturas.size());
-            for (Factura f : facturas) {
-                System.out.println("  - Factura - Fecha: " + f.getFecha() + " - Total: " + f.getTotal());
+            System.out.println("Total facturas encontradas: " + todasFacturas.size());
+            System.out.println("Facturas de VENTA (excluye compras): " + facturasVenta.size());
+            System.out.println("Facturas de COMPRA (excluidas del cálculo): " + (todasFacturas.size() - facturasVenta.size()));
+
+            // Log de facturas de compra excluidas para debug
+            long facturasCompra = todasFacturas.stream()
+                    .filter(f -> "compra".equals(f.getTipoFactura()))
+                    .count();
+            if (facturasCompra > 0) {
+                System.out.println("⚠️ Se excluyeron " + facturasCompra + " facturas de compra del cálculo de ventas");
             }
 
             // Obtener TODOS los pedidos del período primero
             List<Pedido> todosPedidos = pedidoRepository.findByFechaBetween(inicio, fin);
             System.out.println("Todos los pedidos en el período: " + todosPedidos.size());
 
-            for (Pedido p : todosPedidos) {
+            // Comentado para reducir logs excesivos
+            /*for (Pedido p : todosPedidos) {
                 double totalReal = p.calcularTotalReal();
                 System.out.println("  - Pedido ID: " + p.get_id() + " - Estado: " + p.getEstado() + " - Fecha: " + p.getFecha() + " - Total: " + p.getTotal() + " - TotalPagado: " + p.getTotalPagado() + " - TotalReal: " + totalReal + " - FormaPago: " + p.getFormaPago());
-            }
-
+            }*/
             // Filtrar pedidos pagados del período (incluir tanto "pagado" como "completado")
             List<Pedido> pedidosPagados = todosPedidos.stream()
                     .filter(p -> "pagado".equals(p.getEstado()) || "completado".equals(p.getEstado()))
@@ -242,27 +255,27 @@ public class ReporteService {
                         double totalPagado = p.getTotalPagado();
                         double total = p.getTotal();
 
-                        System.out.println("    -> Pedido " + p.get_id() + " - TotalReal: " + totalReal + " - TotalPagado: " + totalPagado + " - Total: " + total);
-
+                        // Comentado para reducir logs excesivos
+                        // System.out.println("    -> Pedido " + p.get_id() + " - TotalReal: " + totalReal + " - TotalPagado: " + totalPagado + " - Total: " + total);
                         // Usar el total real calculado desde items como primera opción
                         if (totalReal > 0.0) {
-                            System.out.println("    -> Usando 'totalReal' para pedido " + p.get_id() + ": " + totalReal);
+                            // System.out.println("    -> Usando 'totalReal' para pedido " + p.get_id() + ": " + totalReal);
                             return totalReal;
                         }
 
                         // Si totalPagado es 0 pero total tiene valor, usar total
                         if (totalPagado == 0.0 && total > 0.0) {
-                            System.out.println("    -> Usando 'total' como fallback para pedido " + p.get_id() + ": " + total);
+                            // System.out.println("    -> Usando 'total' como fallback para pedido " + p.get_id() + ": " + total);
                             return total;
                         }
 
-                        System.out.println("    -> Usando 'totalPagado' para pedido " + p.get_id() + ": " + totalPagado);
+                        // System.out.println("    -> Usando 'totalPagado' para pedido " + p.get_id() + ": " + totalPagado);
                         return totalPagado;
                     })
                     .sum();
             double totalVentas = totalFacturas + totalPedidos;
 
-            System.out.println(periodo + " - Facturas: " + facturas.size() + " (Total: " + totalFacturas + ")");
+            System.out.println(periodo + " - Facturas de VENTA: " + facturasVenta.size() + " (Total: " + totalFacturas + ")");
             System.out.println(periodo + " - Pedidos pagados/completados: " + pedidosPagados.size() + " (Total: " + totalPedidos + ")");
             System.out.println(periodo + " - Total ventas: " + totalVentas);
 
@@ -270,9 +283,9 @@ public class ReporteService {
             resultado.put("total", totalVentas);
             resultado.put("totalFacturas", totalFacturas);
             resultado.put("totalPedidos", totalPedidos);
-            resultado.put("cantidadFacturas", facturas.size());
+            resultado.put("cantidadFacturas", facturasVenta.size());
             resultado.put("cantidadPedidos", pedidosPagados.size());
-            resultado.put("cantidadTotal", facturas.size() + pedidosPagados.size());
+            resultado.put("cantidadTotal", facturasVenta.size() + pedidosPagados.size());
 
             return resultado;
         } catch (Exception e) {

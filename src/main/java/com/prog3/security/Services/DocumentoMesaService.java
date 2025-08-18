@@ -31,9 +31,20 @@ public class DocumentoMesaService {
     }
 
     /**
-     * Crea un nuevo documento para una mesa especial
+     * Crea un nuevo documento para cualquier mesa
      */
     public DocumentoMesa crearDocumento(String mesaNombre, String vendedor, List<String> pedidosIds) {
+        // Validar que los parámetros no estén vacíos
+        if (mesaNombre == null || mesaNombre.trim().isEmpty()) {
+            throw new RuntimeException("El nombre de la mesa es requerido");
+        }
+        if (vendedor == null || vendedor.trim().isEmpty()) {
+            throw new RuntimeException("El vendedor es requerido");
+        }
+        if (pedidosIds == null || pedidosIds.isEmpty()) {
+            throw new RuntimeException("Se requiere al menos un pedido");
+        }
+
         // Calcular el total sumando los pedidos
         double total = 0.0;
         for (String pedidoId : pedidosIds) {
@@ -48,14 +59,15 @@ public class DocumentoMesaService {
                 LocalDateTime.now(),
                 total,
                 vendedor,
-                mesaNombre,
+                mesaNombre.trim(), // Limpiar espacios
                 pedidosIds
         );
 
-        System.out.println("Creando documento para mesa: " + mesaNombre);
-        System.out.println("Número de documento: " + documento.getNumeroDocumento());
-        System.out.println("Total: " + total);
-        System.out.println("Pedidos incluidos: " + pedidosIds.size());
+        System.out.println("✅ Creando documento para mesa: " + mesaNombre);
+        System.out.println("📋 Número de documento: " + documento.getNumeroDocumento());
+        System.out.println("💰 Total: " + total);
+        System.out.println("🍽️ Pedidos incluidos: " + pedidosIds.size());
+        System.out.println("👤 Vendedor: " + vendedor);
 
         return documentoMesaRepository.save(documento);
     }
@@ -65,6 +77,13 @@ public class DocumentoMesaService {
      */
     public List<DocumentoMesa> getDocumentosPorMesa(String mesaNombre) {
         return documentoMesaRepository.findByMesaNombre(mesaNombre);
+    }
+
+    /**
+     * Obtiene todos los documentos para debugging
+     */
+    public List<DocumentoMesa> getAllDocumentos() {
+        return documentoMesaRepository.findAll();
     }
 
     /**
@@ -171,11 +190,21 @@ public class DocumentoMesaService {
     }
 
     /**
-     * Verifica si una mesa es especial
+     * Verifica si una mesa es especial (para referencia, pero no limita la
+     * funcionalidad) Ahora todas las mesas pueden usar DocumentoMesa
      */
     public boolean esMesaEspecial(String mesaNombre) {
-        List<String> mesasEspeciales = List.of("DOMICILIO", "CAJA", "MESA AUXILIAR");
+        List<String> mesasEspeciales = List.of("DOMICILIO", "CAJA", "MESA AUXILIAR", "GENERAL");
         return mesasEspeciales.contains(mesaNombre.toUpperCase());
+    }
+
+    /**
+     * Verifica si una mesa puede usar DocumentoMesa (ahora siempre retorna
+     * true)
+     */
+    public boolean puedeUsarDocumentoMesa(String mesaNombre) {
+        // Ahora cualquier mesa puede usar DocumentoMesa
+        return mesaNombre != null && !mesaNombre.trim().isEmpty();
     }
 
     /**

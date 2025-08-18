@@ -29,6 +29,7 @@ import com.prog3.security.Models.Pedido;
 import com.prog3.security.Repositories.PedidoRepository;
 import com.prog3.security.Services.CuadreCajaService;
 import com.prog3.security.Services.ResponseService;
+import com.prog3.security.Services.ResumenCierreService;
 
 import com.prog3.security.Utils.ApiResponse;
 
@@ -39,6 +40,9 @@ public class CuadreCajaController {
 
     @Autowired
     private CierreCajaService cierreCajaService;
+
+    @Autowired
+    private ResumenCierreService resumenCierreService;
 
     /**
      * Endpoint para obtener el cuadre/cierre de caja del día (igual que
@@ -133,6 +137,33 @@ public class CuadreCajaController {
             return responseService.success(detalles, "Detalles del cuadre de caja obtenidos");
         } catch (Exception e) {
             return responseService.internalError("Error al obtener detalles del cuadre: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Endpoint para obtener el resumen completo de cierre de caja Incluye
+     * ventas, gastos, compras, movimientos de efectivo y resumen final
+     */
+    @GetMapping("/{id}/resumen-cierre")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getResumenCierre(@PathVariable String id) {
+        try {
+            System.out.println("🧾 Solicitando resumen de cierre para cuadre: " + id);
+
+            // Verificar que el cuadre existe
+            CuadreCaja cuadre = cuadreCajaService.obtenerCuadrePorId(id);
+            if (cuadre == null) {
+                return responseService.notFound("Cuadre de caja no encontrado con ID: " + id);
+            }
+
+            // Generar el resumen completo
+            Map<String, Object> resumen = resumenCierreService.generarResumenCuadre(id);
+
+            return responseService.success(resumen, "Resumen de cierre generado exitosamente");
+
+        } catch (Exception e) {
+            System.err.println("❌ Error al generar resumen de cierre: " + e.getMessage());
+            e.printStackTrace();
+            return responseService.internalError("Error al generar resumen de cierre: " + e.getMessage());
         }
     }
 
@@ -391,6 +422,12 @@ public class CuadreCajaController {
             System.out.println("Fondo inicial guardado: " + nuevoCuadre.getFondoInicial());
             System.out.println("Efectivo esperado guardado: " + nuevoCuadre.getEfectivoEsperado());
 
+            // NUEVO: Migrar automáticamente pedidos pagados sin cuadre asignado
+            int pedidosMigrados = cuadreCajaService.migrarPedidosAutomaticamente(nuevoCuadre.get_id());
+            if (pedidosMigrados > 0) {
+                System.out.println("✅ Se migraron automáticamente " + pedidosMigrados + " pedidos al nuevo cuadre");
+            }
+
             return responseService.created(nuevoCuadre, "Cuadre de caja creado exitosamente");
         } catch (Exception e) {
             System.out.println("Error al crear cuadre de caja: " + e.getMessage());
@@ -595,6 +632,102 @@ public class CuadreCajaController {
             return responseService.success(null, "Cuadre de caja eliminado exitosamente");
         } catch (Exception e) {
             return responseService.internalError("Error al eliminar cuadre de caja: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Endpoint para migrar pedidos pagados sin cuadre asignado Asigna pedidos
+     * pagados en un rango de fechas al cuadre especificado
+     */
+    @PostMapping("/{id}/migrar-pedidos")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> migrarPedidosACuadre(
+            @PathVariable String id,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaInicio,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaFin) {
+        try {
+            // Verificar que el cuadre existe
+            CuadreCaja cuadre = cuadreCajaService.obtenerCuadrePorId(id);
+            if (cuadre == null) {
+                return responseService.notFound("Cuadre de caja no encontrado con ID: " + id);
+            }
+
+            // Obtener pedidos pagados sin cuadre en el rango de fechas
+            List<Pedido> pedidosSinCuadre = pedidoRepository.findPedidosPagadosSinCuadreEnRango(fechaInicio, fechaFin);
+
+            int pedidosMigrados = 0;
+            double totalMigrado = 0.0;
+
+            for (Pedido pedido : pedidosSinCuadre) {
+                pedido.setCuadreCajaId(id);
+                pedidoRepository.save(pedido);
+                pedidosMigrados++;
+                totalMigrado += pedido.getTotalPagado();
+            }
+
+            Map<String, Object> resultado = new HashMap<>();
+            resultado.put("pedidosMigrados", pedidosMigrados);
+            resultado.put("totalMigrado", totalMigrado);
+            resultado.put("cuadreId", id);
+            resultado.put("fechaInicio", fechaInicio);
+            resultado.put("fechaFin", fechaFin);
+
+            return responseService.success(resultado,
+                    "Se migraron " + pedidosMigrados + " pedidos al cuadre de caja");
+
+        } catch (Exception e) {
+            return responseService.internalError("Error al migrar pedidos: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Endpoint para obtener pedidos pagados sin cuadre asignado
+     */
+    @GetMapping("/pedidos-sin-cuadre")
+    public ResponseEntity<ApiResponse<List<Pedido>>> getPedidosSinCuadre() {
+        try {
+            List<Pedido> pedidosSinCuadre = pedidoRepository.findPedidosPagadosSinCuadre();
+            return responseService.success(pedidosSinCuadre,
+                    "Pedidos sin cuadre asignado obtenidos: " + pedidosSinCuadre.size());
+        } catch (Exception e) {
+            return responseService.internalError("Error al obtener pedidos sin cuadre: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Endpoint para migrar manualmente todos los pedidos sin cuadre al cuadre
+     * activo
+     */
+    @PostMapping("/migrar-pedidos-sin-cuadre")
+    public ResponseEntity<ApiResponse<String>> migrarPedidosSinCuadre() {
+        try {
+            // Obtener cuadre activo
+            CuadreCaja cuadreActivo = cuadreCajaService.obtenerCuadreActivo();
+            if (cuadreActivo == null) {
+                return responseService.badRequest("No hay ningún cuadre de caja activo");
+            }
+
+            // Obtener pedidos sin cuadre
+            List<Pedido> pedidosSinCuadre = pedidoRepository.findPedidosPagadosSinCuadre();
+
+            System.out.println("🔄 Migrando " + pedidosSinCuadre.size() + " pedidos al cuadre " + cuadreActivo.get_id());
+
+            // Asignar todos los pedidos al cuadre activo
+            int migrados = 0;
+            for (Pedido pedido : pedidosSinCuadre) {
+                pedido.setCuadreCajaId(cuadreActivo.get_id());
+                pedidoRepository.save(pedido);
+                migrados++;
+            }
+
+            System.out.println("✅ Se migraron " + migrados + " pedidos al cuadre " + cuadreActivo.get_id());
+
+            return responseService.success(
+                    "PEDIDOS_MIGRADOS",
+                    "Se migraron " + migrados + " pedidos al cuadre activo '" + cuadreActivo.getNombre() + "'"
+            );
+        } catch (Exception e) {
+            System.err.println("❌ Error al migrar pedidos: " + e.getMessage());
+            return responseService.internalError("Error al migrar pedidos: " + e.getMessage());
         }
     }
 }
