@@ -50,11 +50,21 @@ public class CierreCajaService {
         cierre.setTotalInicial(cierre.getEfectivoInicial() + cierre.getTransferenciasIniciales());
 
         // === CALCULAR VENTAS ===
-        List<Factura> facturas = facturaRepository.findByFechaBetween(fechaInicio, fechaFin);
-        List<Pedido> pedidosPagados = pedidoRepository.findByFechaBetween(fechaInicio, fechaFin)
-                .stream()
-                .filter(p -> "pagado".equals(p.getEstado()) || "completado".equals(p.getEstado()))
-                .collect(Collectors.toList());
+                List<Factura> facturas = facturaRepository.findByFechaBetween(fechaInicio, fechaFin);
+                // Suponiendo que el cuadreCajaId se puede obtener aquí, si no, pásalo como parámetro
+                String cuadreCajaId = null;
+                if (montosIniciales.containsKey("cuadreCajaId")) {
+                        cuadreCajaId = String.valueOf(montosIniciales.get("cuadreCajaId"));
+                }
+                List<Pedido> pedidosPagados;
+                if (cuadreCajaId != null) {
+                        pedidosPagados = pedidoRepository.findByCuadreCajaIdAndEstado(cuadreCajaId, "pagado");
+                } else {
+                        pedidosPagados = pedidoRepository.findByFechaBetween(fechaInicio, fechaFin)
+                                .stream()
+                                .filter(p -> "pagado".equals(p.getEstado()) || "completado".equals(p.getEstado()))
+                                .collect(Collectors.toList());
+                }
 
         System.out.println("Facturas encontradas: " + facturas.size());
         System.out.println("Pedidos pagados encontrados: " + pedidosPagados.size());
@@ -135,16 +145,14 @@ public class CierreCajaService {
         return cierre;
     }
 
-    public CierreCaja cerrarCaja(CierreCaja cierre, double efectivoDeclarado, String observaciones) {
-        cierre.setEfectivoDeclarado(efectivoDeclarado);
-        cierre.setObservaciones(observaciones);
-        cierre.setDiferencia(Math.abs(cierre.getDebeTener() - efectivoDeclarado));
-        cierre.setCuadreOk(cierre.getDiferencia() <= 5000.0); // Tolerancia de $5,000
-        cierre.setEstado("cerrado");
-        cierre.setFechaCierre(LocalDateTime.now());
-
-        return cierreCajaRepository.save(cierre);
-    }
+        // Nueva versión: cerrar caja sin efectivo declarado ni domicilios
+        public CierreCaja cerrarCaja(CierreCaja cierre, String observaciones) {
+                cierre.setObservaciones(observaciones);
+                // No se calcula diferencia ni cuadreOk, solo se marca como cerrada
+                cierre.setEstado("cerrado");
+                cierre.setFechaCierre(LocalDateTime.now());
+                return cierreCajaRepository.save(cierre);
+        }
 
     public List<CierreCaja> getHistorialCierres(int limite) {
         return cierreCajaRepository.findUltimosCierres(PageRequest.of(0, limite));

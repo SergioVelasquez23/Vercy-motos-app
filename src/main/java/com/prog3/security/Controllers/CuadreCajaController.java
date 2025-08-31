@@ -1,4 +1,5 @@
 package com.prog3.security.Controllers;
+import com.prog3.security.Repositories.CuadreCajaRepository;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -43,6 +44,9 @@ public class CuadreCajaController {
 
     @Autowired
     private ResumenCierreService resumenCierreService;
+
+    @Autowired
+    private CuadreCajaRepository cuadreCajaRepository;
 
     /**
      * Endpoint para obtener el cuadre/cierre de caja del día (igual que
@@ -130,8 +134,7 @@ public class CuadreCajaController {
             detalles.put("fondoInicialDesglosado", cuadre.getFondoInicialDesglosado());
             detalles.put("efectivoEsperadoOriginal", cuadre.getEfectivoEsperado());
             detalles.put("efectivoEsperadoActual", efectivoEsperadoActual);
-            detalles.put("efectivoDeclarado", cuadre.getEfectivoDeclarado());
-            detalles.put("diferencia", cuadre.getDiferencia());
+            // detalles.put("diferencia", cuadre.getDiferencia()); // Eliminado: diferencia
             detalles.put("cerrada", cuadre.isCerrada());
 
             return responseService.success(detalles, "Detalles del cuadre de caja obtenidos");
@@ -229,8 +232,17 @@ public class CuadreCajaController {
         try {
             LocalDateTime inicioDia = LocalDateTime.now().withHour(0).withMinute(0).withSecond(0);
 
-            // Obtener todos los pedidos del día
-            List<Pedido> todosPedidos = pedidoRepository.findByFechaGreaterThanEqual(inicioDia);
+
+            // Buscar caja activa para filtrar pedidos
+            List<CuadreCaja> cuadresActivos = cuadreCajaRepository.findByFechaAperturaHoy(inicioDia)
+                .stream().filter(c -> !c.isCerrada()).toList();
+            List<Pedido> todosPedidos;
+            if (!cuadresActivos.isEmpty()) {
+                String cuadreCajaId = cuadresActivos.get(0).get_id();
+                todosPedidos = pedidoRepository.findByCuadreCajaIdAndEstado(cuadreCajaId, "activo");
+            } else {
+                todosPedidos = pedidoRepository.findByFechaGreaterThanEqual(inicioDia);
+            }
 
             Map<String, Object> response = new HashMap<>();
             response.put("totalPedidosHoy", todosPedidos.size());
@@ -295,8 +307,20 @@ public class CuadreCajaController {
         try {
             LocalDateTime inicioDia = LocalDateTime.now().withHour(0).withMinute(0).withSecond(0);
             // Usar ambos métodos para comparar
-            List<Pedido> todosPedidos = pedidoRepository.findByFechaGreaterThanEqual(inicioDia);
-            List<Pedido> pedidosPagadosPorFechaPago = pedidoRepository.findByFechaPagoGreaterThanEqualAndEstado(inicioDia, "pagado");
+
+            // Buscar caja activa para filtrar pedidos
+            List<CuadreCaja> cuadresActivos = cuadreCajaRepository.findByFechaAperturaHoy(inicioDia)
+                .stream().filter(c -> !c.isCerrada()).toList();
+            List<Pedido> todosPedidos;
+            List<Pedido> pedidosPagadosPorFechaPago;
+            if (!cuadresActivos.isEmpty()) {
+                String cuadreCajaId = cuadresActivos.get(0).get_id();
+                todosPedidos = pedidoRepository.findByCuadreCajaIdAndEstado(cuadreCajaId, "activo");
+                pedidosPagadosPorFechaPago = pedidoRepository.findByCuadreCajaIdAndEstado(cuadreCajaId, "pagado");
+            } else {
+                todosPedidos = pedidoRepository.findByFechaGreaterThanEqual(inicioDia);
+                pedidosPagadosPorFechaPago = pedidoRepository.findByFechaPagoGreaterThanEqualAndEstado(inicioDia, "pagado");
+            }
 
             Map<String, Object> response = new HashMap<>();
             response.put("totalPedidosCreados", todosPedidos.size());
@@ -577,7 +601,6 @@ public class CuadreCajaController {
 
             System.out.println("Datos antes del cierre - Fondo inicial: " + cuadre.getFondoInicial());
             System.out.println("Efectivo esperado actual: " + cuadre.getEfectivoEsperado());
-            System.out.println("Efectivo declarado: " + cuadre.getEfectivoDeclarado());
 
             // Crear un request con los datos actuales y el flag de cierre
             CuadreCajaRequest cajaRequest = new CuadreCajaRequest();
@@ -585,15 +608,13 @@ public class CuadreCajaController {
             cajaRequest.setResponsable(cuadre.getResponsable());
             cajaRequest.setFondoInicial(cuadre.getFondoInicial());
             cajaRequest.setFondoInicialDesglosado(cuadre.getFondoInicialDesglosado());
-            cajaRequest.setEfectivoDeclarado(cuadre.getEfectivoDeclarado());
-            cajaRequest.setTolerancia(cuadre.getTolerancia());
             cajaRequest.setObservaciones(cuadre.getObservaciones());
 
             // Mantener los datos de ventas
             cajaRequest.setTotalVentas(cuadre.getTotalVentas());
             cajaRequest.setVentasDesglosadas(cuadre.getVentasDesglosadas());
             cajaRequest.setTotalPropinas(cuadre.getTotalPropinas());
-            cajaRequest.setTotalDomicilios(cuadre.getTotalDomicilios());
+            // cajaRequest.setTotalDomicilios(cuadre.getTotalDomicilios()); // Eliminado: totalDomicilios
 
             // Mantener los datos de gastos
             cajaRequest.setTotalGastos(cuadre.getTotalGastos());

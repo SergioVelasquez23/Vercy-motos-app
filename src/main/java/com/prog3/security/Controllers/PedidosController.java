@@ -360,62 +360,44 @@ public class PedidosController {
     @PutMapping("/{id}/pagar")
     public ResponseEntity<ApiResponse<Pedido>> pagarPedido(@PathVariable String id, @RequestBody PagarPedidoRequest pagarRequest) {
         try {
+            System.out.println("[PAGAR_PEDIDO] Iniciando pago para pedido ID: " + id);
             Pedido pedido = this.thePedidoRepository.findById(id).orElse(null);
             if (pedido == null) {
+                System.out.println("[PAGAR_PEDIDO] Pedido no encontrado");
                 return responseService.notFound("Pedido no encontrado con ID: " + id);
             }
 
             // Validar que el tipo de pago esté especificado
             if (pagarRequest.getTipoPago() == null || pagarRequest.getTipoPago().isEmpty()) {
+                System.out.println("[PAGAR_PEDIDO] Tipo de pago no especificado");
                 return responseService.badRequest("El tipo de pago es requerido");
             }
 
-            // Actualizar información según el tipo de pago
-            String nuevoEstado = pagarRequest.getTipoPago(); // "pagado", "cortesia", "consumo_interno", "cancelado"
-            pedido.setEstado(nuevoEstado);
-
-            // Actualizar el campo pagadoPor (que ya existe en el modelo)
-            pedido.setPagadoPor(pagarRequest.getProcesadoPor());
-
-            // Agregar información adicional en las notas
             String notasAdicionales = pagarRequest.getNotas() != null ? pagarRequest.getNotas() : "";
 
-            // Solo para pagos normales
             if (pagarRequest.esPagado()) {
-                pedido.setFormaPago(pagarRequest.getFormaPago());
-                pedido.setPropina(pagarRequest.getPropina());
-
-                // Calcular total pagado incluyendo propina
-                double totalConPropina = pedido.getTotal() + pagarRequest.getPropina();
-                pedido.setTotalPagado(totalConPropina);
+                System.out.println("[PAGAR_PEDIDO] Procesando pago real. FormaPago: " + pagarRequest.getFormaPago() + ", Propina: " + pagarRequest.getPropina() + ", ProcesadoPor: " + pagarRequest.getProcesadoPor());
+                pedido.pagar(pagarRequest.getFormaPago(), pagarRequest.getPropina(), pagarRequest.getProcesadoPor());
                 pedido.setIncluyePropina(pagarRequest.getPropina() > 0);
-
-                // Establecer fecha de pago solo para pagos reales
-                pedido.setFechaPago(LocalDateTime.now());
-
                 pedido.setNotas(notasAdicionales);
-
             } else if (pagarRequest.esCortesia()) {
-                // Para cortesías
+                System.out.println("[PAGAR_PEDIDO] Procesando cortesía");
+                pedido.setEstado("cortesia");
                 pedido.setFechaCortesia(LocalDateTime.now());
                 pedido.setPropina(0);
                 pedido.setTotalPagado(0);
-
-                // Agregar motivo de cortesía a las notas
                 String motivoCortesia = pagarRequest.getMotivoCortesia() != null ? pagarRequest.getMotivoCortesia() : "";
                 pedido.setNotas("CORTESÍA - " + motivoCortesia + " - " + notasAdicionales);
-
             } else if (pagarRequest.esConsumoInterno()) {
-                // Para consumo interno
+                System.out.println("[PAGAR_PEDIDO] Procesando consumo interno");
+                pedido.setEstado("consumo_interno");
                 pedido.setPropina(0);
                 pedido.setTotalPagado(0);
-
-                // Agregar tipo de consumo interno a las notas
                 String tipoConsumo = pagarRequest.getTipoConsumoInterno() != null ? pagarRequest.getTipoConsumoInterno() : "";
                 pedido.setNotas("CONSUMO INTERNO - " + tipoConsumo + " - " + notasAdicionales);
-
             } else if (pagarRequest.esCancelado()) {
-                // Para cancelados
+                System.out.println("[PAGAR_PEDIDO] Procesando cancelación");
+                pedido.setEstado("cancelado");
                 pedido.setPropina(0);
                 pedido.setTotalPagado(0);
                 pedido.setFechaCancelacion(LocalDateTime.now());
@@ -423,31 +405,33 @@ public class PedidosController {
                 pedido.setMotivoCancelacion(notasAdicionales);
             }
 
+            System.out.println("[PAGAR_PEDIDO] Estado final del pedido: " + pedido.getEstado());
+            System.out.println("[PAGAR_PEDIDO] Pedido antes de guardar: " + pedido);
             Pedido pedidoProcesado = this.thePedidoRepository.save(pedido);
+            System.out.println("[PAGAR_PEDIDO] Pedido guardado correctamente. ID: " + pedidoProcesado.get_id());
 
-            // NUEVO: Asignar al cuadre de caja activo si es un pago real
+            // Asignar al cuadre de caja activo si es un pago real
             if (pagarRequest.esPagado() && pedidoProcesado != null) {
                 boolean asignado = cuadreCajaService.asignarPedidoACuadreActivo(pedidoProcesado.get_id());
                 if (!asignado) {
                     System.out.println("⚠️ Advertencia: Pedido pagado pero no se pudo asignar a ningún cuadre activo");
+                } else {
+                    System.out.println("[PAGAR_PEDIDO] Pedido asignado a cuadre activo correctamente");
                 }
             }
 
             String mensaje = switch (pagarRequest.getTipoPago()) {
-                case "pagado" ->
-                    "Pedido pagado exitosamente";
-                case "cortesia" ->
-                    "Pedido marcado como cortesía exitosamente";
-                case "consumo_interno" ->
-                    "Pedido marcado como consumo interno exitosamente";
-                case "cancelado" ->
-                    "Pedido cancelado exitosamente";
-                default ->
-                    "Pedido procesado exitosamente";
+                case "pagado" -> "Pedido pagado exitosamente";
+                case "cortesia" -> "Pedido marcado como cortesía exitosamente";
+                case "consumo_interno" -> "Pedido marcado como consumo interno exitosamente";
+                case "cancelado" -> "Pedido cancelado exitosamente";
+                default -> "Pedido procesado exitosamente";
             };
 
             return responseService.success(pedidoProcesado, mensaje);
         } catch (Exception e) {
+            System.err.println("[PAGAR_PEDIDO] Error al procesar pedido: " + e.getMessage());
+            e.printStackTrace();
             return responseService.internalError("Error al procesar pedido: " + e.getMessage());
         }
     }

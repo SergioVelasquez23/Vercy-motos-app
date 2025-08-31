@@ -13,8 +13,6 @@ public class CuadreCajaRequest {
     private List<String> cajeros = new ArrayList<>(); // Lista de cajeros que trabajaron durante el turno
     private double fondoInicial;    // Dinero inicial en caja (fondo)
     private Map<String, Double> fondoInicialDesglosado = new HashMap<>(); // Efectivo, transferencia
-    private double efectivoDeclarado;
-    private double tolerancia = 1000.0; // Tolerancia por defecto de $1000
     private String observaciones;
     private boolean cerrarCaja;     // Indica si se debe cerrar la caja
 
@@ -28,22 +26,8 @@ public class CuadreCajaRequest {
     private Map<String, Double> gastosDesglosados = new HashMap<>();
     private double totalPagosFacturas;
 
-    // Domicilios
-    private double totalDomicilios;
 
     public CuadreCajaRequest() {
-    }
-
-    public CuadreCajaRequest(String nombre, String responsable, double fondoInicial,
-            double efectivoDeclarado, double tolerancia,
-            String observaciones, boolean cerrarCaja) {
-        this.nombre = nombre;
-        this.responsable = responsable;
-        this.fondoInicial = fondoInicial;
-        this.efectivoDeclarado = efectivoDeclarado;
-        this.tolerancia = tolerancia;
-        this.observaciones = observaciones;
-        this.cerrarCaja = cerrarCaja;
     }
 
     // Getters y Setters
@@ -77,22 +61,6 @@ public class CuadreCajaRequest {
 
     public void setCerrarCaja(boolean cerrarCaja) {
         this.cerrarCaja = cerrarCaja;
-    }
-
-    public double getEfectivoDeclarado() {
-        return efectivoDeclarado;
-    }
-
-    public void setEfectivoDeclarado(double efectivoDeclarado) {
-        this.efectivoDeclarado = efectivoDeclarado;
-    }
-
-    public double getTolerancia() {
-        return tolerancia;
-    }
-
-    public void setTolerancia(double tolerancia) {
-        this.tolerancia = tolerancia;
     }
 
     public String getObservaciones() {
@@ -175,11 +143,5 @@ public class CuadreCajaRequest {
         this.totalPagosFacturas = totalPagosFacturas;
     }
 
-    public double getTotalDomicilios() {
-        return totalDomicilios;
-    }
-
-    public void setTotalDomicilios(double totalDomicilios) {
-        this.totalDomicilios = totalDomicilios;
-    }
+    // Eliminado: totalDomicilios y sus métodos
 }

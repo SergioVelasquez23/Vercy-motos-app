@@ -1,12 +1,16 @@
 package com.prog3.security.Controllers;
 
+import java.util.Set;
+import java.util.HashSet;
+import com.prog3.security.Models.ItemPedido;
+
+import java.util.Map;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -21,21 +25,25 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.prog3.security.DTOs.DevolverIngredientesDTO;
+import com.prog3.security.DTOs.DevolverIngredientesDTO.IngredienteDevueltoDTO;
 import com.prog3.security.Models.Ingrediente;
 import com.prog3.security.Models.IngredienteProducto;
 import com.prog3.security.Models.Inventario;
+import com.prog3.security.Services.InventarioIngredientesService;
 import com.prog3.security.Models.MovimientoInventario;
 import com.prog3.security.Models.Pedido;
-import com.prog3.security.Models.ItemPedido;
 import com.prog3.security.Models.Producto;
+import com.prog3.security.Models.User;
 import com.prog3.security.Repositories.IngredienteRepository;
 import com.prog3.security.Repositories.InventarioRepository;
 import com.prog3.security.Repositories.MovimientoInventarioRepository;
 import com.prog3.security.Repositories.PedidoRepository;
 import com.prog3.security.Repositories.ProductoRepository;
+import com.prog3.security.Repositories.UserRepository;
 import com.prog3.security.Services.InventarioService;
 import com.prog3.security.Services.ResponseService;
-import com.prog3.security.Services.InventarioIngredientesService;
+import com.prog3.security.Utils.ApiResponse;
 
 import com.prog3.security.Utils.ApiResponse;
 
@@ -466,6 +474,124 @@ public class InventarioController {
             return responseService.success(movimientos, "Movimientos de inventario obtenidos correctamente");
         } catch (Exception e) {
             return responseService.internalError("Error al obtener movimientos de inventario: " + e.getMessage());
+        }
+    }
+    
+    // **ENDPOINTS FALTANTES QUE EL FRONTEND NECESITA**
+    
+    @PostMapping("/devolver-ingredientes")
+    public ResponseEntity<ApiResponse<DevolverIngredientesDTO>> devolverIngredientesAlInventario(
+            @RequestBody Map<String, Object> request) {
+        try {
+            String pedidoId = (String) request.get("pedidoId");
+            String productoId = (String) request.get("productoId");
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> ingredientes = (List<Map<String, Object>>) request.get("ingredientes");
+            String motivo = (String) request.get("motivo");
+            String responsable = (String) request.get("responsable");
+            Integer cantidadDevuelta = (Integer) request.getOrDefault("cantidadDevuelta", 1);
+            
+            // Obtener nombre del producto para el DTO
+            String productoNombre = "Producto desconocido";
+            Optional<Producto> productoOpt = productoRepository.findById(productoId);
+            if (productoOpt.isPresent()) {
+                productoNombre = productoOpt.get().getNombre();
+            }
+            
+            List<IngredienteDevueltoDTO> ingredientesDevueltos = new java.util.ArrayList<>();
+            
+            // Procesar cada ingrediente para devolverlo al inventario
+            for (Map<String, Object> ingredienteData : ingredientes) {
+                String ingredienteId = (String) ingredienteData.get("ingredienteId");
+                Double cantidadADevolver = ((Number) ingredienteData.get("cantidadADevolver")).doubleValue();
+                
+                // Buscar el ingrediente y actualizar su stock
+                Optional<Ingrediente> ingredienteOpt = ingredienteRepository.findById(ingredienteId);
+                if (ingredienteOpt.isPresent()) {
+                    Ingrediente ingrediente = ingredienteOpt.get();
+                    double stockAnterior = ingrediente.getStockActual();
+                    double nuevoStock = stockAnterior + cantidadADevolver;
+                    
+                    ingrediente.setStockActual(nuevoStock);
+                    ingredienteRepository.save(ingrediente);
+                    
+                    // Crear DTO para este ingrediente devuelto
+                    IngredienteDevueltoDTO ingredienteDevueltoDTO = new IngredienteDevueltoDTO(
+                        ingredienteId,
+                        ingrediente.getNombre(),
+                        cantidadADevolver,
+                        ingrediente.getUnidad(),
+                        stockAnterior,
+                        nuevoStock
+                    );
+                    ingredientesDevueltos.add(ingredienteDevueltoDTO);
+                    
+                    // Registrar movimiento de devolución
+                    MovimientoInventario movimiento = new MovimientoInventario();
+                    movimiento.setProductoId(ingredienteId);
+                    movimiento.setProductoNombre(ingrediente.getNombre());
+                    movimiento.setTipoMovimiento("entrada");
+                    movimiento.setMotivo(motivo);
+                    movimiento.setCantidadAnterior(stockAnterior);
+                    movimiento.setCantidadMovimiento(cantidadADevolver);
+                    movimiento.setCantidadNueva(nuevoStock);
+                    movimiento.setResponsable(responsable);
+                    movimiento.setReferencia(pedidoId);
+                    movimiento.setObservaciones("Devolución por cancelación de producto");
+                    movimiento.setFecha(LocalDateTime.now());
+                    
+                    movimientoRepository.save(movimiento);
+                }
+            }
+            
+            // Crear DTO de respuesta
+            DevolverIngredientesDTO respuesta = new DevolverIngredientesDTO(
+                productoId,
+                productoNombre,
+                cantidadDevuelta,
+                ingredientesDevueltos,
+                "Ingredientes devueltos al inventario exitosamente"
+            );
+            
+            return responseService.success(respuesta, "Devolución de ingredientes completada");
+        } catch (Exception e) {
+            return responseService.internalError("Error al devolver ingredientes al inventario: " + e.getMessage());
+        }
+    }
+    
+    @GetMapping("/ingredientes-descontados")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getIngredientesDescontados(
+            @RequestParam String pedidoId,
+            @RequestParam String productoId) {
+        try {
+            // Buscar el producto para obtener sus ingredientes
+            Optional<Producto> productoOpt = productoRepository.findById(productoId);
+            if (productoOpt.isEmpty()) {
+                return responseService.notFound("Producto no encontrado con ID: " + productoId);
+            }
+            
+            Producto producto = productoOpt.get();
+            List<Map<String, Object>> ingredientesDescontados = new java.util.ArrayList<>();
+            
+            // Procesar ingredientes requeridos
+            if (producto.getIngredientesRequeridos() != null) {
+                for (IngredienteProducto ip : producto.getIngredientesRequeridos()) {
+                    Map<String, Object> ingredienteInfo = new HashMap<>();
+                    ingredienteInfo.put("ingredienteId", ip.getIngredienteId());
+                    ingredienteInfo.put("nombre", ip.getNombre());
+                    ingredienteInfo.put("cantidadDescontada", ip.getCantidadNecesaria());
+                    ingredienteInfo.put("unidad", ip.getUnidad());
+                    ingredienteInfo.put("tipo", "requerido");
+                    ingredientesDescontados.add(ingredienteInfo);
+                }
+            }
+            
+            // TODO: Procesar ingredientes opcionales seleccionados
+            // Esto requiere que el pedido guarde qué ingredientes opcionales fueron seleccionados
+            
+            return responseService.success(ingredientesDescontados, "Ingredientes descontados obtenidos exitosamente");
+        } catch (Exception e) {
+            return responseService.internalError("Error al obtener ingredientes descontados: " + e.getMessage());
         }
     }
 

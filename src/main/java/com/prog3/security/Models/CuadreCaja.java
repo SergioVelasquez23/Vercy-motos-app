@@ -29,12 +29,10 @@ public class CuadreCaja {
     private double totalPagosFacturas; // Total pagos a facturas de compras
 
     // Resumen
-    private double efectivoDeclarado;
     private double efectivoEsperado;
     private double diferencia;
     private boolean cuadrado;
     private boolean cerrada;      // Indica si la caja está cerrada o abierta
-    private double tolerancia;
     private String observaciones;
     private String estado; // "pendiente", "aprobado", "rechazado"
     private String aprobadoPor;
@@ -48,21 +46,17 @@ public class CuadreCaja {
     }
 
     // Constructor con campos básicos
-    public CuadreCaja(String nombre, String responsable, double fondoInicial, double efectivoDeclarado, double efectivoEsperado,
-            double tolerancia, String observaciones) {
+    public CuadreCaja(String nombre, String responsable, double fondoInicial, double efectivoEsperado, String observaciones) {
         this.nombre = nombre;
         this.responsable = responsable;
         this.fechaApertura = LocalDateTime.now();
         this.fondoInicial = fondoInicial;
-        this.efectivoDeclarado = efectivoDeclarado;
         this.efectivoEsperado = efectivoEsperado;
-        this.diferencia = efectivoDeclarado - efectivoEsperado;
-        this.tolerancia = tolerancia;
-        this.cuadrado = Math.abs(this.diferencia) <= tolerancia;
+        this.diferencia = 0;
+        this.cuadrado = false;
         this.observaciones = observaciones;
         this.estado = "pendiente";
         this.cerrada = false;
-
         // Inicializar los nuevos campos
         this.fondoInicialDesglosado = new HashMap<>();
         this.ventasDesglosadas = new HashMap<>();
@@ -73,7 +67,6 @@ public class CuadreCaja {
         this.totalPagosFacturas = 0.0;
         this.totalDomicilios = 0.0;
         this.cajeros = new ArrayList<>();
-
         // Por defecto, el fondo inicial va todo en efectivo
         this.fondoInicialDesglosado.put("Efectivo", fondoInicial);
     }
@@ -127,28 +120,15 @@ public class CuadreCaja {
         this.fondoInicial = fondoInicial;
     }
 
-    public double getEfectivoDeclarado() {
-        return efectivoDeclarado;
-    }
-
-    public void setEfectivoDeclarado(double efectivoDeclarado) {
-        this.efectivoDeclarado = efectivoDeclarado;
-        // Recalcular diferencia y estado de cuadre
-        if (this.efectivoEsperado != 0) {
-            this.diferencia = efectivoDeclarado - this.efectivoEsperado;
-            this.cuadrado = Math.abs(this.diferencia) <= this.tolerancia;
-        }
-    }
-
     public double getEfectivoEsperado() {
         return efectivoEsperado;
     }
 
     public void setEfectivoEsperado(double efectivoEsperado) {
         this.efectivoEsperado = efectivoEsperado;
-        // Recalcular diferencia y estado de cuadre
-        this.diferencia = this.efectivoDeclarado - efectivoEsperado;
-        this.cuadrado = Math.abs(this.diferencia) <= this.tolerancia;
+        // Recalcular diferencia y estado de cuadre (ajustar según nueva lógica si es necesario)
+        this.diferencia = 0;
+        this.cuadrado = false;
     }
 
     public double getDiferencia() {
@@ -165,16 +145,6 @@ public class CuadreCaja {
 
     public void setCuadrado(boolean cuadrado) {
         this.cuadrado = cuadrado;
-    }
-
-    public double getTolerancia() {
-        return tolerancia;
-    }
-
-    public void setTolerancia(double tolerancia) {
-        this.tolerancia = tolerancia;
-        // Recalcular estado de cuadre con la nueva tolerancia
-        this.cuadrado = Math.abs(this.diferencia) <= tolerancia;
     }
 
     public String getObservaciones() {

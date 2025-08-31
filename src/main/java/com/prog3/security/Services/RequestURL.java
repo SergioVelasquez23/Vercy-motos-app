@@ -43,6 +43,7 @@ public class RequestURL {
 
             if (response.statusCode() == 200) {
                 // Extraer el código de la respuesta
+                @SuppressWarnings("unchecked")
                 Map<String, Object> responseBody = gson.fromJson(response.body(), Map.class);
                 return responseBody.get("code").toString();
             } else {

@@ -14,10 +14,12 @@ import com.prog3.security.Models.CuadreCaja;
 import com.prog3.security.Models.Pedido;
 import com.prog3.security.Models.Factura;
 import com.prog3.security.Models.Gasto;
+import com.prog3.security.Models.IngresoCaja;
 import com.prog3.security.Repositories.CuadreCajaRepository;
 import com.prog3.security.Repositories.PedidoRepository;
 import com.prog3.security.Repositories.FacturaRepository;
 import com.prog3.security.Repositories.GastoRepository;
+import com.prog3.security.Repositories.IngresoCajaRepository;
 
 /**
  * Servicio para generar resúmenes detallados de cuadre de caja
@@ -36,6 +38,9 @@ public class ResumenCierreService {
 
     @Autowired
     private GastoRepository gastoRepository;
+
+    @Autowired
+    private IngresoCajaRepository ingresoCajaRepository;
 
     /**
      * Genera un resumen completo de un cuadre de caja específico
@@ -297,28 +302,49 @@ public class ResumenCierreService {
         @SuppressWarnings("unchecked")
         Map<String, Double> comprasPorFormaPago = (Map<String, Double>) resumenCompras.get("comprasPorFormaPago");
 
+        // Entradas adicionales: ingresos de caja
+        LocalDateTime fechaInicio = cuadre.getFechaApertura();
+        LocalDateTime fechaFin = cuadre.getFechaCierre() != null ? cuadre.getFechaCierre() : LocalDateTime.now();
+        List<IngresoCaja> ingresos = ingresoCajaRepository.findByFechaIngresoBetween(fechaInicio, fechaFin);
+        Map<String, Double> ingresosPorFormaPago = new HashMap<>();
+        for (IngresoCaja ingreso : ingresos) {
+            String formaPago = ingreso.getFormaPago() != null ? ingreso.getFormaPago().toLowerCase() : "efectivo";
+            double monto = ingreso.getMonto();
+            ingresosPorFormaPago.merge(formaPago, monto, Double::sum);
+        }
+
         // Entradas de efectivo
         double ventasEfectivo = ventasPorFormaPago != null ? ventasPorFormaPago.getOrDefault("efectivo", 0.0) : 0.0;
+        double ingresosEfectivo = ingresosPorFormaPago.getOrDefault("efectivo", 0.0);
 
         // Salidas de efectivo
         double gastosEfectivo = gastosPorFormaPago != null ? gastosPorFormaPago.getOrDefault("efectivo", 0.0) : 0.0;
         double comprasEfectivo = comprasPorFormaPago != null ? comprasPorFormaPago.getOrDefault("efectivo", 0.0) : 0.0;
 
         // Cálculo del efectivo esperado
-        double efectivoEsperado = fondoInicial + ventasEfectivo - gastosEfectivo - comprasEfectivo;
-        double efectivoDeclarado = cuadre.getEfectivoDeclarado();
-        double diferencia = efectivoDeclarado - efectivoEsperado;
-
+        double efectivoEsperado = fondoInicial + ventasEfectivo + ingresosEfectivo - gastosEfectivo - comprasEfectivo;
         movimientos.put("fondoInicial", fondoInicial);
         movimientos.put("ventasEfectivo", ventasEfectivo);
+        movimientos.put("ingresosEfectivo", ingresosEfectivo);
         movimientos.put("gastosEfectivo", gastosEfectivo);
         movimientos.put("comprasEfectivo", comprasEfectivo);
         movimientos.put("efectivoEsperado", efectivoEsperado);
-        movimientos.put("efectivoDeclarado", efectivoDeclarado);
-        movimientos.put("diferencia", diferencia);
-        movimientos.put("tolerancia", cuadre.getTolerancia());
-        movimientos.put("cuadrado", Math.abs(diferencia) <= cuadre.getTolerancia());
 
+        // Repetir para otras formas de pago (ej: transferencia)
+        double ventasTransferencia = ventasPorFormaPago != null ? ventasPorFormaPago.getOrDefault("transferencia", 0.0) : 0.0;
+        double ingresosTransferencia = ingresosPorFormaPago.getOrDefault("transferencia", 0.0);
+        double gastosTransferencia = gastosPorFormaPago != null ? gastosPorFormaPago.getOrDefault("transferencia", 0.0) : 0.0;
+        double comprasTransferencia = comprasPorFormaPago != null ? comprasPorFormaPago.getOrDefault("transferencia", 0.0) : 0.0;
+        double transferenciaEsperada = ventasTransferencia + ingresosTransferencia - gastosTransferencia - comprasTransferencia;
+        movimientos.put("ventasTransferencia", ventasTransferencia);
+        movimientos.put("ingresosTransferencia", ingresosTransferencia);
+        movimientos.put("gastosTransferencia", gastosTransferencia);
+        movimientos.put("comprasTransferencia", comprasTransferencia);
+        movimientos.put("transferenciaEsperada", transferenciaEsperada);
+
+        movimientos.put("ingresosPorFormaPago", ingresosPorFormaPago);
+        movimientos.put("totalIngresosCaja", ingresos.stream().mapToDouble(IngresoCaja::getMonto).sum());
+        // Eliminados: efectivoDeclarado, diferencia
         return movimientos;
     }
 
@@ -342,16 +368,13 @@ public class ResumenCierreService {
         double totalGastos = gastosObj != null ? gastosObj : 0.0;
         double totalCompras = comprasObj != null ? comprasObj : 0.0;
 
-        resumenFinal.put("totalVentas", totalVentas);
-        resumenFinal.put("totalGastos", totalGastos);
-        resumenFinal.put("totalCompras", totalCompras);
-        resumenFinal.put("utilidadBruta", totalVentas - totalGastos - totalCompras);
-        resumenFinal.put("efectivoEsperado", movimientos.get("efectivoEsperado"));
-        resumenFinal.put("efectivoDeclarado", movimientos.get("efectivoDeclarado"));
-        resumenFinal.put("diferencia", movimientos.get("diferencia"));
-        resumenFinal.put("cuadrado", movimientos.get("cuadrado"));
-
-        return resumenFinal;
+    resumenFinal.put("totalVentas", totalVentas);
+    resumenFinal.put("totalGastos", totalGastos);
+    resumenFinal.put("totalCompras", totalCompras);
+    resumenFinal.put("utilidadBruta", totalVentas - totalGastos - totalCompras);
+    resumenFinal.put("efectivoEsperado", movimientos.get("efectivoEsperado"));
+    // Eliminados: efectivoDeclarado, diferencia, cuadrado
+    return resumenFinal;
     }
 
     // Métodos auxiliares para convertir entidades a detalles

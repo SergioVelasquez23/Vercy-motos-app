@@ -2,21 +2,29 @@ package com.prog3.security.Models;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
+import java.time.LocalDateTime;
 
 @Document
 public class User {
 
     @Id
     private String _id;
-    private String name;
+    private String name; // "nombre" en frontend
     private String email;
     private String password;
+    private boolean activo = true; // Campo faltante que espera el frontend
     private int numeroDeSesiones = 0;
+    private LocalDateTime fechaCreacion;
+    private LocalDateTime fechaActualizacion;
 
     public User() {
+        this.activo = true;
+        this.fechaCreacion = LocalDateTime.now();
+        this.fechaActualizacion = LocalDateTime.now();
     }
 
     public User(String name, String email, String password) {
+        this();
         this.name = name;
         this.email = email;
         this.password = password;
@@ -60,5 +68,40 @@ public class User {
 
     public void setNumeroDeSesiones(int numeroDeSesiones) {
         this.numeroDeSesiones = numeroDeSesiones;
+    }
+
+    public boolean isActivo() {
+        return activo;
+    }
+
+    public void setActivo(boolean activo) {
+        this.activo = activo;
+        this.fechaActualizacion = LocalDateTime.now();
+    }
+
+    public LocalDateTime getFechaCreacion() {
+        return fechaCreacion;
+    }
+
+    public void setFechaCreacion(LocalDateTime fechaCreacion) {
+        this.fechaCreacion = fechaCreacion;
+    }
+
+    public LocalDateTime getFechaActualizacion() {
+        return fechaActualizacion;
+    }
+
+    public void setFechaActualizacion(LocalDateTime fechaActualizacion) {
+        this.fechaActualizacion = fechaActualizacion;
+    }
+
+    // Métodos de utilidad para compatibilidad con frontend
+    public String getNombre() {
+        return this.name; // Alias para compatibilidad
+    }
+
+    public void setNombre(String nombre) {
+        this.name = nombre;
+        this.fechaActualizacion = LocalDateTime.now();
     }
 }

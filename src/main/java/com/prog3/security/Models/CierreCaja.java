@@ -36,9 +36,7 @@ public class CierreCaja {
 
     // Cálculos finales
     private double debeTener; // Lo que debería tener en efectivo
-    private double efectivoDeclarado; // Lo que realmente se cuenta
-    private double diferencia; // Diferencia entre debe tener y declarado
-    private boolean cuadreOk;
+    // Eliminados: efectivoDeclarado, diferencia, cuadreOk
 
     // Información adicional
     private int cantidadFacturas;
@@ -193,29 +191,7 @@ public class CierreCaja {
         this.debeTener = debeTener;
     }
 
-    public double getEfectivoDeclarado() {
-        return efectivoDeclarado;
-    }
-
-    public void setEfectivoDeclarado(double efectivoDeclarado) {
-        this.efectivoDeclarado = efectivoDeclarado;
-    }
-
-    public double getDiferencia() {
-        return diferencia;
-    }
-
-    public void setDiferencia(double diferencia) {
-        this.diferencia = diferencia;
-    }
-
-    public boolean isCuadreOk() {
-        return cuadreOk;
-    }
-
-    public void setCuadreOk(boolean cuadreOk) {
-        this.cuadreOk = cuadreOk;
-    }
+    // Métodos eliminados: get/setEfectivoDeclarado, get/setDiferencia, get/setCuadreOk
 
     public int getCantidadFacturas() {
         return cantidadFacturas;

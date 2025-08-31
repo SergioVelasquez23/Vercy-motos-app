@@ -131,20 +131,47 @@ public class SecurityController {
     }
 
     // Endpoint: /login-no-auth
+    @CrossOrigin(origins = {
+    "http://192.168.20.24:5300",
+    "http://192.168.20.24:8081",
+        "http://localhost:5300",
+        "http://127.0.0.1:5300",
+        "http://localhost:3000",
+        "http://localhost:8081",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:8081"
+    }, allowCredentials = "true")
     @PostMapping("/login-no-auth")
     public HashMap<String, Object> loginNoAuth(@RequestBody User theNewUser, final HttpServletResponse response) throws IOException {
+        System.out.println("📱 Received login request for email: " + theNewUser.getEmail());
         HashMap<String, Object> theResponse = new HashMap<>();
-        User theActualUser = this.theUserRepository.getUserByEmail(theNewUser.getEmail());
 
-        if (theActualUser != null
-                && theActualUser.getPassword().equals(theEncryptionService.convertSHA256(theNewUser.getPassword()))) {
+        try {
+            User theActualUser = this.theUserRepository.getUserByEmail(theNewUser.getEmail());
 
-            String token = theJwtService.generateToken(theActualUser).get("token").toString();
-            theActualUser.setPassword(""); // No devolver la contraseña
-            theResponse.put("token", token);
-            theResponse.put("user", theActualUser);
-        } else {
-            response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
+            String plainPassword = theNewUser.getPassword();
+            String hashedInput = theEncryptionService.convertSHA256(plainPassword);
+            String storedHash = (theActualUser != null) ? theActualUser.getPassword() : null;
+            System.out.println("[DEBUG] Contraseña recibida (texto plano): " + plainPassword);
+            System.out.println("[DEBUG] Hash generado desde input:      " + hashedInput);
+            System.out.println("[DEBUG] Hash almacenado en MongoDB:     " + storedHash);
+
+            if (theActualUser != null
+                    && storedHash != null
+                    && storedHash.equals(hashedInput)) {
+
+                String token = theJwtService.generateToken(theActualUser).get("token").toString();
+                theActualUser.setPassword(""); // No devolver la contraseña
+                theResponse.put("token", token);
+                theResponse.put("user", theActualUser);
+            } else {
+                System.out.println("❌ Login failed: Invalid credentials for email: " + theNewUser.getEmail());
+                response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
+            }
+        } catch (Exception e) {
+            System.out.println("❌ Error during login: " + e.getMessage());
+            e.printStackTrace();
+            response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
         }
         return theResponse;
     }

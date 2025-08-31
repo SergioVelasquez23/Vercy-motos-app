@@ -1,4 +1,6 @@
 package com.prog3.security.Controllers;
+import com.prog3.security.Models.CuadreCaja;
+import com.prog3.security.Repositories.CuadreCajaRepository;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -53,6 +55,9 @@ public class ReportesController {
 
     @Autowired
     private PedidoRepository pedidoRepository;
+
+    @Autowired
+    private CuadreCajaRepository cuadreCajaRepository;
 
     @Autowired
     private InventarioRepository inventarioRepository;
@@ -287,6 +292,7 @@ public class ReportesController {
             String observaciones = (String) request.getOrDefault("observaciones", "");
 
             // Obtener montos iniciales del request
+            @SuppressWarnings("unchecked")
             Map<String, Object> montosInicialesObj = (Map<String, Object>) request.getOrDefault("montosIniciales", new HashMap<>());
             Map<String, Double> montosIniciales = new HashMap<>();
             montosInicialesObj.forEach((key, value) -> {
@@ -303,7 +309,7 @@ public class ReportesController {
 
             // Generar y cerrar caja
             CierreCaja cierre = cierreCajaService.generarCierreCaja(inicioDia, finDia, responsable, montosIniciales);
-            CierreCaja cierreCerrado = cierreCajaService.cerrarCaja(cierre, efectivoDeclarado, observaciones);
+            CierreCaja cierreCerrado = cierreCajaService.cerrarCaja(cierre, observaciones);
 
             return responseService.success(cierreCerrado, "Caja cerrada exitosamente");
         } catch (Exception e) {
@@ -418,7 +424,16 @@ public class ReportesController {
             }
 
             // Eliminar pedidos del período
-            List<Pedido> pedidos = pedidoRepository.findByFechaBetween(fechaInicio, fechaFin);
+            // Buscar caja activa para filtrar pedidos
+            List<CuadreCaja> cuadresActivos = cuadreCajaRepository.findByFechaAperturaHoy(fechaInicio)
+                .stream().filter(c -> !c.isCerrada()).toList();
+            List<Pedido> pedidos;
+            if (!cuadresActivos.isEmpty()) {
+                String cuadreCajaId = cuadresActivos.get(0).get_id();
+                pedidos = pedidoRepository.findByCuadreCajaIdAndEstado(cuadreCajaId, "pagado");
+            } else {
+                pedidos = pedidoRepository.findByFechaBetween(fechaInicio, fechaFin);
+            }
             for (Pedido pedido : pedidos) {
                 pedidoRepository.deleteById(pedido.get_id());
             }

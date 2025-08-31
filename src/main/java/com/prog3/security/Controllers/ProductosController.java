@@ -3,6 +3,7 @@ package com.prog3.security.Controllers;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -24,13 +25,12 @@ import com.prog3.security.DTOs.IngredienteConCategoriaDTO;
 import com.prog3.security.Repositories.ProductoRepository;
 import com.prog3.security.Repositories.IngredienteRepository;
 import com.prog3.security.Repositories.CategoriaRepository;
-import com.prog3.security.Services.ResponseService;
 import com.prog3.security.Utils.ApiResponse;
 
 @CrossOrigin
 @RestController
 @RequestMapping("api/productos")
-public class ProductosController {
+public class ProductosController extends BaseController<Producto, String> {
 
     @Autowired
     private ProductoRepository theProductoRepository;
@@ -41,40 +41,56 @@ public class ProductosController {
     @Autowired
     private CategoriaRepository theCategoriaRepository;
 
-    @Autowired
-    private ResponseService responseService;
+    @Override
+    protected MongoRepository<Producto, String> getRepository() {
+        return theProductoRepository;
+    }
+    
+    @Override
+    protected String getEntityName() {
+        return "Producto";
+    }
+    
+    @Override
+    protected ResponseEntity<ApiResponse<Producto>> validateEntity(Producto entity, boolean isUpdate) {
+        if (entity.getNombre() == null || entity.getNombre().trim().isEmpty()) {
+            return responseService.badRequest("El nombre es obligatorio");
+        }
+        if (entity.getPrecio() <= 0) {
+            return responseService.badRequest("El precio debe ser mayor a 0");
+        }
+        return responseService.success(entity, "Validación exitosa");
+    }
+    
+    @Override
+    protected void updateEntityFields(Producto existing, Producto updated) {
+        existing.setNombre(updated.getNombre());
+        existing.setPrecio(updated.getPrecio());
+        existing.setCosto(updated.getCosto());
+        existing.setImpuestos(updated.getImpuestos());
+        existing.setUtilidad(updated.getUtilidad());
+        existing.setTieneVariantes(updated.isTieneVariantes());
+        existing.setEstado(updated.getEstado());
+        existing.setImagenUrl(updated.getImagenUrl());
+        existing.setCategoriaId(updated.getCategoriaId());
+        existing.setDescripcion(updated.getDescripcion());
+        existing.setCantidad(updated.getCantidad());
+        existing.setNota(updated.getNota());
+        existing.setIngredientesDisponibles(updated.getIngredientesDisponibles());
+        existing.setTieneIngredientes(updated.isTieneIngredientes());
+        existing.setTipoProducto(updated.getTipoProducto());
+        existing.setIngredientesRequeridos(updated.getIngredientesRequeridos());
+        existing.setIngredientesOpcionales(updated.getIngredientesOpcionales());
+    }
 
     @GetMapping("")
     public ResponseEntity<ApiResponse<List<Producto>>> find() {
-        try {
-            List<Producto> productos = this.theProductoRepository.findAll();
-
-            // Log para depuración de todos los productos
-            for (Producto p : productos) {
-                if (p.get_id().equals("689143f005eec6328c0d26ee")) {
-                    System.out.println("GET Todos - Producto ID: " + p.get_id() + ", categoriaId: '" + p.getCategoriaId() + "'");
-                }
-            }
-
-            return responseService.success(productos, "Productos obtenidos exitosamente");
-        } catch (Exception e) {
-            return responseService.internalError("Error al obtener productos: " + e.getMessage());
-        }
+        return super.findAllEntities();
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<Producto>> findById(@PathVariable String id) {
-        try {
-            Producto producto = this.theProductoRepository.findById(id).orElse(null);
-            if (producto == null) {
-                return responseService.notFound("Producto no encontrado con ID: " + id);
-            }
-            // Log para depuración del GET
-            System.out.println("GET Producto - ID: " + id + ", categoriaId: '" + producto.getCategoriaId() + "'");
-            return responseService.success(producto, "Producto encontrado");
-        } catch (Exception e) {
-            return responseService.internalError("Error al buscar producto: " + e.getMessage());
-        }
+        return super.findEntityById(id);
     }
 
     @PostMapping
@@ -164,18 +180,8 @@ public class ProductosController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<ApiResponse<Object>> delete(@PathVariable String id) {
-        try {
-            Producto producto = this.theProductoRepository.findById(id).orElse(null);
-            if (producto == null) {
-                return responseService.notFound("Producto no encontrado con ID: " + id);
-            }
-
-            this.theProductoRepository.delete(producto);
-            return responseService.success(null, "Producto eliminado exitosamente");
-        } catch (Exception e) {
-            return responseService.internalError("Error al eliminar producto: " + e.getMessage());
-        }
+    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable String id) {
+        return super.deleteEntity(id);
     }
 
     @GetMapping("/categoria/{categoriaId}")
@@ -195,6 +201,41 @@ public class ProductosController {
             return responseService.success(productos, "Búsqueda completada");
         } catch (Exception e) {
             return responseService.internalError("Error en la búsqueda: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/filtrar")
+    public ResponseEntity<ApiResponse<List<Producto>>> filtrarProductos(
+            @RequestParam(required = false) String nombre,
+            @RequestParam(required = false) String categoriaId) {
+        try {
+            // Si ambos parámetros están vacíos, devolver todos los productos
+            if ((nombre == null || nombre.isEmpty()) && (categoriaId == null || categoriaId.isEmpty())) {
+                List<Producto> productos = this.theProductoRepository.findAll();
+                return responseService.success(productos, "Todos los productos obtenidos");
+            }
+
+            // Procesamiento del nombre para la búsqueda
+            String nombreProcesado = null;
+            if (nombre != null && !nombre.isEmpty()) {
+                nombreProcesado = nombre.toLowerCase();
+            }
+
+            // Procesamiento de la categoría para la búsqueda
+            String categoriaProcesada = null;
+            if (categoriaId != null && !categoriaId.isEmpty()) {
+                // Validar que la categoría exista
+                if (!theCategoriaRepository.existsById(categoriaId)) {
+                    return responseService.badRequest("La categoría con ID " + categoriaId + " no existe");
+                }
+                categoriaProcesada = categoriaId;
+            }
+
+            // Realizar la búsqueda con los parámetros procesados
+            List<Producto> productos = this.theProductoRepository.findByNombreAndCategoriaId(nombreProcesado, categoriaProcesada);
+            return responseService.success(productos, "Filtrado de productos completado");
+        } catch (Exception e) {
+            return responseService.internalError("Error al filtrar productos: " + e.getMessage());
         }
     }
 

@@ -65,13 +65,18 @@ public class CuadreCajaService {
             System.out.println("No hay cajas activas, fondo inicial es 0");
         }
 
-        // Buscar todos los pedidos pagados desde la fecha de referencia (USAR FECHA DE PAGO)
-        List<Pedido> todosPedidosPagados = pedidoRepository.findByFechaPagoGreaterThanEqualAndEstado(fechaReferencia, "pagado");
-        List<Factura> facturas = facturaRepository.findByFechaBetween(fechaReferencia, LocalDateTime.now());
 
-        System.out.println("CAMBIO: Usando fechaPago en lugar de fecha para filtrar pedidos");
-        System.out.println("Fecha de referencia para filtro: " + fechaReferencia);
-        System.out.println("Total de pedidos pagados desde la fecha de referencia: " + todosPedidosPagados.size());
+        // Buscar el cuadre de caja activo (si existe)
+        List<Pedido> todosPedidosPagados;
+        List<Factura> facturas = facturaRepository.findByFechaBetween(fechaReferencia, LocalDateTime.now());
+        if (!cuadresActivos.isEmpty()) {
+            String cuadreCajaId = cuadresActivos.get(0).get_id();
+            todosPedidosPagados = pedidoRepository.findByCuadreCajaIdAndEstado(cuadreCajaId, "pagado");
+            System.out.println("Filtrando pedidos por cuadreCajaId: " + cuadreCajaId);
+        } else {
+            todosPedidosPagados = pedidoRepository.findByFechaPagoGreaterThanEqualAndEstado(fechaReferencia, "pagado");
+        }
+        System.out.println("Total de pedidos pagados filtrados: " + todosPedidosPagados.size());
         System.out.println("Total de facturas desde la fecha de referencia: " + facturas.size());
 
         // Calcular totales por forma de pago (unificando criterios con cierre de caja)
@@ -226,9 +231,7 @@ public class CuadreCajaService {
                 request.getNombre(),
                 request.getResponsable(),
                 request.getFondoInicial(),
-                request.getEfectivoDeclarado(),
                 efectivoEsperado,
-                request.getTolerancia(),
                 request.getObservaciones()
         );
 
@@ -258,7 +261,7 @@ public class CuadreCajaService {
         cuadreCaja.setTotalPagosFacturas(request.getTotalPagosFacturas());
 
         // Establecer domicilios
-        cuadreCaja.setTotalDomicilios(request.getTotalDomicilios());
+    // Eliminado: cuadreCaja.setTotalDomicilios(request.getTotalDomicilios());
 
         // Por defecto, el estado es "pendiente" (configurado en el constructor)
         cuadreCaja.setEstado("pendiente");
@@ -369,9 +372,7 @@ public class CuadreCajaService {
         // Actualizar los campos básicos
         cuadre.setNombre(request.getNombre());
         cuadre.setResponsable(request.getResponsable());
-        cuadre.setEfectivoDeclarado(request.getEfectivoDeclarado());
         cuadre.setObservaciones(request.getObservaciones());
-        cuadre.setTolerancia(request.getTolerancia());
         cuadre.setFondoInicial(request.getFondoInicial());
 
         // Actualizar campos extendidos
@@ -390,13 +391,13 @@ public class CuadreCajaService {
         cuadre.setTotalPagosFacturas(request.getTotalPagosFacturas());
 
         // Actualizar domicilios
-        cuadre.setTotalDomicilios(request.getTotalDomicilios());
+    // Eliminado: cuadre.setTotalDomicilios(request.getTotalDomicilios());
 
         // Recalcular diferencia (efectivo declarado - efectivo esperado)
         double efectivoEsperado = calcularEfectivoEsperado();
         cuadre.setEfectivoEsperado(efectivoEsperado);
-        cuadre.setDiferencia(request.getEfectivoDeclarado() - efectivoEsperado);
-        cuadre.setCuadrado(Math.abs(cuadre.getDiferencia()) <= cuadre.getTolerancia());
+        cuadre.setDiferencia(0);
+        cuadre.setCuadrado(false);
 
         // Si se solicita cerrar la caja y no está cerrada todavía
         if (request.isCerrarCaja() && !cuadre.isCerrada()) {

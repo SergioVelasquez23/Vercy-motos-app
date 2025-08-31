@@ -3,6 +3,7 @@ package com.prog3.security.Controllers;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -17,41 +18,49 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.prog3.security.Models.Categoria;
 import com.prog3.security.Repositories.CategoriaRepository;
-import com.prog3.security.Services.ResponseService;
 import com.prog3.security.Utils.ApiResponse;
 
 @CrossOrigin
 @RestController
 @RequestMapping("api/categorias")
-public class CategoriasController {
+public class CategoriasController extends BaseController<Categoria, String> {
 
     @Autowired
-    CategoriaRepository theCategoriaRepository;
+    private CategoriaRepository theCategoriaRepository;
 
-    @Autowired
-    private ResponseService responseService;
+    @Override
+    protected MongoRepository<Categoria, String> getRepository() {
+        return theCategoriaRepository;
+    }
+    
+    @Override
+    protected String getEntityName() {
+        return "Categoría";
+    }
+    
+    @Override
+    protected ResponseEntity<ApiResponse<Categoria>> validateEntity(Categoria entity, boolean isUpdate) {
+        if (entity.getNombre() == null || entity.getNombre().trim().isEmpty()) {
+            return responseService.badRequest("El nombre es obligatorio");
+        }
+        return responseService.success(entity, "Validación exitosa");
+    }
+    
+    @Override
+    protected void updateEntityFields(Categoria existing, Categoria updated) {
+        existing.setNombre(updated.getNombre());
+        existing.setDescripcion(updated.getDescripcion());
+        existing.setImagenUrl(updated.getImagenUrl());
+    }
 
     @GetMapping("")
     public ResponseEntity<ApiResponse<List<Categoria>>> find() {
-        try {
-            List<Categoria> categorias = this.theCategoriaRepository.findAll();
-            return responseService.success(categorias, "Categorías obtenidas exitosamente");
-        } catch (Exception e) {
-            return responseService.internalError("Error al obtener categorías: " + e.getMessage());
-        }
+        return super.findAllEntities();
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<Categoria>> findById(@PathVariable String id) {
-        try {
-            Categoria categoria = this.theCategoriaRepository.findById(id).orElse(null);
-            if (categoria == null) {
-                return responseService.notFound("Categoría no encontrada con ID: " + id);
-            }
-            return responseService.success(categoria, "Categoría encontrada");
-        } catch (Exception e) {
-            return responseService.internalError("Error al buscar categoría: " + e.getMessage());
-        }
+        return super.findEntityById(id);
     }
 
     @GetMapping("/nombre/{nombre}")
@@ -79,56 +88,28 @@ public class CategoriasController {
 
     @PostMapping
     public ResponseEntity<ApiResponse<Categoria>> create(@RequestBody Categoria newCategoria) {
-        try {
-            // Validar que no exista una categoría con el mismo nombre
-            if (this.theCategoriaRepository.existsByNombre(newCategoria.getNombre())) {
-                return responseService.conflict("Ya existe una categoría con el nombre: " + newCategoria.getNombre());
-            }
-            Categoria categoriaCreada = this.theCategoriaRepository.save(newCategoria);
-            return responseService.created(categoriaCreada, "Categoría creada exitosamente");
-        } catch (Exception e) {
-            return responseService.internalError("Error al crear categoría: " + e.getMessage());
+        // Validar que no exista una categoría con el mismo nombre antes de crear
+        if (this.theCategoriaRepository.existsByNombre(newCategoria.getNombre())) {
+            return responseService.conflict("Ya existe una categoría con el nombre: " + newCategoria.getNombre());
         }
+        return super.createEntity(newCategoria);
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<Categoria>> update(@PathVariable String id, @RequestBody Categoria newCategoria) {
-        try {
-            Categoria actualCategoria = this.theCategoriaRepository.findById(id).orElse(null);
-            if (actualCategoria == null) {
-                return responseService.notFound("Categoría no encontrada con ID: " + id);
-            }
-
-            // Validar que el nuevo nombre no esté en uso por otra categoría
-            Categoria existingCategoria = this.theCategoriaRepository.findByNombre(newCategoria.getNombre());
-            if (existingCategoria != null && !existingCategoria.get_id().equals(id)) {
-                return responseService.conflict("Ya existe una categoría con el nombre: " + newCategoria.getNombre());
-            }
-
-            actualCategoria.setNombre(newCategoria.getNombre());
-            actualCategoria.setDescripcion(newCategoria.getDescripcion());
-            actualCategoria.setImagenUrl(newCategoria.getImagenUrl());
-            Categoria categoriaActualizada = this.theCategoriaRepository.save(actualCategoria);
-            return responseService.success(categoriaActualizada, "Categoría actualizada exitosamente");
-        } catch (Exception e) {
-            return responseService.internalError("Error al actualizar categoría: " + e.getMessage());
+        // Validar que el nuevo nombre no esté en uso por otra categoría
+        Categoria existingCategoria = this.theCategoriaRepository.findByNombre(newCategoria.getNombre());
+        if (existingCategoria != null && !existingCategoria.get_id().equals(id)) {
+            return responseService.conflict("Ya existe una categoría con el nombre: " + newCategoria.getNombre());
         }
+        
+        return super.updateEntity(id, newCategoria);
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable String id) {
-        try {
-            Categoria categoria = this.theCategoriaRepository.findById(id).orElse(null);
-            if (categoria == null) {
-                return responseService.notFound("Categoría no encontrada con ID: " + id);
-            }
-
-            // TODO: Verificar que no haya productos asociados a esta categoría
-            // ProductoRepository.countByCategoriaId(id) == 0
-            this.theCategoriaRepository.delete(categoria);
-            return responseService.success(null, "Categoría eliminada exitosamente");
-        } catch (Exception e) {
-            return responseService.internalError("Error al eliminar categoría: " + e.getMessage());
-        }
+        // TODO: Verificar que no haya productos asociados a esta categoría
+        // ProductoRepository.countByCategoriaId(id) == 0
+        return super.deleteEntity(id);
     }
 }

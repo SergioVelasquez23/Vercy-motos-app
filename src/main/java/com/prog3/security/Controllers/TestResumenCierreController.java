@@ -53,9 +53,7 @@ public class TestResumenCierreController {
             fondoDesglosado.put("efectivo", 500000.0);
             fondoDesglosado.put("transferencia", 0.0);
             request.setFondoInicialDesglosado(fondoDesglosado);
-
-            request.setEfectivoDeclarado(0.0); // Sin declarar aún
-            request.setTolerancia(5000.0); // $5,000 de tolerancia
+            // $5,000 de tolerancia
             request.setObservaciones("Cuadre de prueba para testing del resumen de cierre");
             request.setCerrarCaja(false); // No cerrar aún
 

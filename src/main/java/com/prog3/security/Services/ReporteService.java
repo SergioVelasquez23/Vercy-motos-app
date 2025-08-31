@@ -1,4 +1,6 @@
 package com.prog3.security.Services;
+import com.prog3.security.Models.CuadreCaja;
+import com.prog3.security.Repositories.CuadreCajaRepository;
 
 import com.prog3.security.Entities.ObjetivoVenta;
 import com.prog3.security.Models.Pedido;
@@ -46,6 +48,9 @@ public class ReporteService {
 
     @Autowired
     private GastoRepository gastoRepository;
+
+    @Autowired
+    private CuadreCajaRepository cuadreCajaRepository;
 
     // Valores por defecto para los objetivos
     private static final Map<String, Double> OBJETIVOS_DEFAULT = Map.of(
@@ -147,7 +152,16 @@ public class ReporteService {
             LocalDateTime inicioDiaCalendario = ahora.withHour(0).withMinute(0).withSecond(0);
             LocalDateTime finDiaCalendario = inicioDiaCalendario.plusDays(1);
 
-            List<Pedido> pedidosHoy = pedidoRepository.findByFechaBetween(inicioDiaCalendario, finDiaCalendario);
+            // Buscar caja activa para filtrar pedidos
+            List<CuadreCaja> cuadresActivos = cuadreCajaRepository.findByFechaAperturaHoy(inicioDiaCalendario)
+                .stream().filter(c -> !c.isCerrada()).toList();
+            List<Pedido> pedidosHoy;
+            if (!cuadresActivos.isEmpty()) {
+                String cuadreCajaId = cuadresActivos.get(0).get_id();
+                pedidosHoy = pedidoRepository.findByCuadreCajaIdAndEstado(cuadreCajaId, "activo");
+            } else {
+                pedidosHoy = pedidoRepository.findByFechaBetween(inicioDiaCalendario, finDiaCalendario);
+            }
             long pedidosPendientes = pedidosHoy.stream().filter(p -> "pendiente".equals(p.getEstado())).count();
             long pedidosCompletados = pedidosHoy.stream().filter(p -> "completado".equals(p.getEstado())).count();
 
