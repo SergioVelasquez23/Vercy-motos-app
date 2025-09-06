@@ -133,4 +133,44 @@ public class WebSocketNotificationService {
 
         messagingTemplate.convertAndSendToUser(userId, "/queue/notificaciones", payload);
     }
+
+    /**
+     * Envía una notificación de actualización del dashboard a todos los clientes.
+     */
+    public void notificarActualizacionDashboard(String evento, Map<String, Object> datos) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("event", "dashboard_update");
+        payload.put("tipo", evento);
+        payload.put("data", datos);
+        payload.put("timestamp", LocalDateTime.now().toString());
+
+        messagingTemplate.convertAndSend("/topic/dashboard", payload);
+        System.out.println("📡 WebSocket: Notificación dashboard enviada - " + evento);
+    }
+
+    /**
+     * Notifica cuando se paga un pedido (para actualizar estadísticas del dashboard)
+     */
+    public void notificarPedidoPagado(String pedidoId, String mesa, double total, String formaPago) {
+        Map<String, Object> datos = new HashMap<>();
+        datos.put("pedidoId", pedidoId);
+        datos.put("mesa", mesa);
+        datos.put("total", total);
+        datos.put("formaPago", formaPago);
+        
+        notificarActualizacionDashboard("PEDIDO_PAGADO", datos);
+    }
+
+    /**
+     * Notifica cuando se abre o cierra una caja (para actualizar dashboard)
+     */
+    public void notificarCambioEstadoCaja(String cuadreId, String accion, String responsable, double fondoInicial) {
+        Map<String, Object> datos = new HashMap<>();
+        datos.put("cuadreId", cuadreId);
+        datos.put("accion", accion);
+        datos.put("responsable", responsable);
+        datos.put("fondoInicial", fondoInicial);
+        
+        notificarActualizacionDashboard("CAJA_" + accion.toUpperCase(), datos);
+    }
 }

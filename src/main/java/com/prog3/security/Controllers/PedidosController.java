@@ -2,6 +2,7 @@ package com.prog3.security.Controllers;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -26,6 +27,7 @@ import com.prog3.security.Repositories.CuadreCajaRepository;
 import com.prog3.security.Services.InventarioService;
 import com.prog3.security.Services.ResponseService;
 import com.prog3.security.Services.CuadreCajaService;
+import com.prog3.security.Services.WebSocketNotificationService;
 import com.prog3.security.Utils.ApiResponse;
 import com.prog3.security.DTOs.PagarPedidoRequest;
 import com.prog3.security.DTOs.CancelarProductoRequest;
@@ -49,6 +51,9 @@ public class PedidosController {
 
     @Autowired
     private CuadreCajaService cuadreCajaService;
+
+    @Autowired
+    private WebSocketNotificationService webSocketService;
 
     @GetMapping("")
     public ResponseEntity<ApiResponse<List<Pedido>>> find() {
@@ -156,9 +161,45 @@ public class PedidosController {
         }
     }
 
+    @GetMapping("/cuadre/{cuadreId}")
+    public ResponseEntity<ApiResponse<List<Pedido>>> findByCuadreId(@PathVariable String cuadreId) {
+        try {
+            List<Pedido> pedidos = this.thePedidoRepository.findByCuadreCajaId(cuadreId);
+            return responseService.success(pedidos, "Pedidos del cuadre de caja obtenidos");
+        } catch (Exception e) {
+            return responseService.internalError("Error al obtener pedidos del cuadre: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/cuadre/{cuadreId}/pagados")
+    public ResponseEntity<ApiResponse<List<Pedido>>> findByCuadreIdPagados(@PathVariable String cuadreId) {
+        try {
+            List<Pedido> pedidos = this.thePedidoRepository.findByCuadreCajaIdAndEstado(cuadreId, "pagado");
+            return responseService.success(pedidos, "Pedidos pagados del cuadre de caja obtenidos");
+        } catch (Exception e) {
+            return responseService.internalError("Error al obtener pedidos pagados del cuadre: " + e.getMessage());
+        }
+    }
+
     @PostMapping
     public ResponseEntity<ApiResponse<Pedido>> create(@RequestBody Pedido newPedido) {
         try {
+            // VALIDACIÓN: Verificar que hay una caja abierta antes de crear el pedido
+            List<CuadreCaja> cajasAbiertas = cuadreCajaRepository.findByCerradaFalse();
+            if (cajasAbiertas.isEmpty()) {
+                System.out.println("❌ Intento de crear pedido sin caja abierta");
+                return responseService.badRequest(
+                    "No se puede crear un pedido sin una caja abierta. Debe abrir una caja antes de registrar pedidos.");
+            }
+            
+            // Obtener la caja activa (la primera caja abierta)
+            CuadreCaja cajaActiva = cajasAbiertas.get(0);
+            System.out.println("✅ Caja activa encontrada: " + cajaActiva.get_id() + " - " + cajaActiva.getNombre());
+            
+            // Asignar el cuadreId al pedido
+            newPedido.setCuadreCajaId(cajaActiva.get_id());
+            System.out.println("🔗 Pedido vinculado a cuadre: " + cajaActiva.get_id());
+
             // Asegurar que la fecha esté establecida
             if (newPedido.getFecha() == null) {
                 newPedido.setFecha(LocalDateTime.now());
@@ -366,6 +407,21 @@ public class PedidosController {
                 System.out.println("[PAGAR_PEDIDO] Pedido no encontrado");
                 return responseService.notFound("Pedido no encontrado con ID: " + id);
             }
+            
+            // VALIDACIÓN: Verificar que hay una caja abierta antes de procesar el pago
+            List<CuadreCaja> cajasAbiertas = cuadreCajaRepository.findByCerradaFalse();
+            if (cajasAbiertas.isEmpty()) {
+                System.out.println("❌ Intento de pagar pedido sin caja abierta");
+                return responseService.badRequest(
+                    "No se puede procesar el pago sin una caja abierta. Debe abrir una caja antes de procesar pagos.");
+            }
+            
+            // Asignar cuadre de caja si el pedido no lo tiene
+            if (pedido.getCuadreCajaId() == null || pedido.getCuadreCajaId().isEmpty()) {
+                CuadreCaja cajaActiva = cajasAbiertas.get(0);
+                pedido.setCuadreCajaId(cajaActiva.get_id());
+                System.out.println("🔗 Asignando pedido a cuadre activo: " + cajaActiva.get_id());
+            }
 
             // Validar que el tipo de pago esté especificado
             if (pagarRequest.getTipoPago() == null || pagarRequest.getTipoPago().isEmpty()) {
@@ -410,23 +466,46 @@ public class PedidosController {
             Pedido pedidoProcesado = this.thePedidoRepository.save(pedido);
             System.out.println("[PAGAR_PEDIDO] Pedido guardado correctamente. ID: " + pedidoProcesado.get_id());
 
-            // Asignar al cuadre de caja activo si es un pago real
-            if (pagarRequest.esPagado() && pedidoProcesado != null) {
+            // Asignar al cuadre de caja activo siempre (no solo para pagos)
+            if (pedidoProcesado != null) {
                 boolean asignado = cuadreCajaService.asignarPedidoACuadreActivo(pedidoProcesado.get_id());
                 if (!asignado) {
-                    System.out.println("⚠️ Advertencia: Pedido pagado pero no se pudo asignar a ningún cuadre activo");
+                    System.out.println("⚠️ Advertencia: Pedido procesado pero no se pudo asignar a ningún cuadre activo");
                 } else {
                     System.out.println("[PAGAR_PEDIDO] Pedido asignado a cuadre activo correctamente");
                 }
+                
+                // Notificar vía WebSocket que se pagó un pedido (para actualizar dashboard)
+                try {
+                    webSocketService.notificarPedidoPagado(
+                        pedidoProcesado.get_id(),
+                        pedidoProcesado.getMesa(),
+                        pedidoProcesado.getTotalPagado() > 0 ? pedidoProcesado.getTotalPagado() : pedidoProcesado.getTotal(),
+                        pedidoProcesado.getFormaPago()
+                    );
+                } catch (Exception wsError) {
+                    System.err.println("⚠️ Error enviando notificación WebSocket: " + wsError.getMessage());
+                }
             }
 
-            String mensaje = switch (pagarRequest.getTipoPago()) {
-                case "pagado" -> "Pedido pagado exitosamente";
-                case "cortesia" -> "Pedido marcado como cortesía exitosamente";
-                case "consumo_interno" -> "Pedido marcado como consumo interno exitosamente";
-                case "cancelado" -> "Pedido cancelado exitosamente";
-                default -> "Pedido procesado exitosamente";
-            };
+            String mensaje;
+            switch (pagarRequest.getTipoPago()) {
+                case "pagado":
+                    mensaje = "Pedido pagado exitosamente";
+                    break;
+                case "cortesia":
+                    mensaje = "Pedido marcado como cortesía exitosamente";
+                    break;
+                case "consumo_interno":
+                    mensaje = "Pedido marcado como consumo interno exitosamente";
+                    break;
+                case "cancelado":
+                    mensaje = "Pedido cancelado exitosamente";
+                    break;
+                default:
+                    mensaje = "Pedido procesado exitosamente";
+                    break;
+            }
 
             return responseService.success(pedidoProcesado, mensaje);
         } catch (Exception e) {
@@ -790,6 +869,62 @@ public class PedidosController {
             return responseService.success(cantidad, "Pedidos con estado '" + estado + "': " + cantidad);
         } catch (Exception e) {
             return responseService.internalError("Error al contar pedidos por estado: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Mover un pedido de una mesa a otra
+     */
+    @PutMapping("/{pedidoId}/mover-mesa")
+    public ResponseEntity<ApiResponse<Pedido>> moverPedidoAMesa(
+            @PathVariable String pedidoId,
+            @RequestBody Map<String, String> request) {
+        try {
+            String nuevaMesa = request.get("nuevaMesa");
+            String nombrePedido = request.get("nombrePedido"); // Para mesas especiales
+            
+            if (nuevaMesa == null || nuevaMesa.trim().isEmpty()) {
+                return responseService.badRequest("El nombre de la mesa destino es requerido");
+            }
+            
+            // Buscar el pedido
+            Pedido pedido = this.thePedidoRepository.findById(pedidoId).orElse(null);
+            if (pedido == null) {
+                return responseService.notFound("Pedido no encontrado con ID: " + pedidoId);
+            }
+            
+            // Verificar que el pedido esté en estado activo
+            if (!"activo".equals(pedido.getEstado()) && !"pendiente".equals(pedido.getEstado())) {
+                return responseService.badRequest("Solo se pueden mover pedidos en estado activo o pendiente");
+            }
+            
+            String mesaAnterior = pedido.getMesa();
+            
+            // Actualizar la mesa del pedido
+            pedido.setMesa(nuevaMesa);
+            
+            // Si es mesa especial y se proporciona nombre, actualizarlo
+            if (nombrePedido != null && !nombrePedido.trim().isEmpty()) {
+                pedido.setNombrePedido(nombrePedido);
+            }
+            
+            // Guardar el pedido actualizado
+            Pedido pedidoActualizado = this.thePedidoRepository.save(pedido);
+            
+            System.out.println("🚚 Pedido movido exitosamente:");
+            System.out.println("  - Pedido ID: " + pedidoId);
+            System.out.println("  - Mesa anterior: " + mesaAnterior);
+            System.out.println("  - Mesa nueva: " + nuevaMesa);
+            if (nombrePedido != null) {
+                System.out.println("  - Nombre pedido: " + nombrePedido);
+            }
+            
+            return responseService.success(pedidoActualizado, 
+                "Pedido movido exitosamente de " + mesaAnterior + " a " + nuevaMesa);
+            
+        } catch (Exception e) {
+            System.err.println("❌ Error al mover pedido: " + e.getMessage());
+            return responseService.internalError("Error al mover pedido: " + e.getMessage());
         }
     }
 }
