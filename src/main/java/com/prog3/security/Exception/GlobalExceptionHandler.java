@@ -10,7 +10,7 @@ import org.springframework.web.context.request.WebRequest;
 import org.springframework.validation.FieldError;
 
 import com.prog3.security.Services.ResponseService;
-import com.prog3.security.Utils.ApiResponse;
+// import com.prog3.security.Utils.ApiResponse; // Usando nombre completo para evitar conflictos
 
 import jakarta.validation.ConstraintViolationException;
 import java.util.HashMap;
@@ -31,7 +31,7 @@ public class GlobalExceptionHandler {
      * Maneja errores de validación de Bean Validation (@Valid)
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiResponse<Map<String, String>>> handleValidationExceptions(
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<Map<String, String>>> handleValidationExceptions(
             MethodArgumentNotValidException ex) {
         
         Map<String, String> errors = new HashMap<>();
@@ -44,7 +44,7 @@ public class GlobalExceptionHandler {
         System.out.println("🚨 Errores de validación detectados: " + errors);
         
         return ResponseEntity.badRequest().body(
-            ApiResponse.<Map<String, String>>builder()
+            com.prog3.security.Utils.ApiResponse.<Map<String, String>>builder()
                 .success(false)
                 .message("Errores de validación en los datos enviados")
                 .data(errors)
@@ -57,7 +57,7 @@ public class GlobalExceptionHandler {
      * Maneja violaciones de restricciones de validación
      */
     @ExceptionHandler(ConstraintViolationException.class)
-    public ResponseEntity<ApiResponse<Map<String, String>>> handleConstraintViolationException(
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<Map<String, String>>> handleConstraintViolationException(
             ConstraintViolationException ex) {
         
         Map<String, String> errors = new HashMap<>();
@@ -70,7 +70,7 @@ public class GlobalExceptionHandler {
         System.out.println("🚨 Violaciones de restricciones detectadas: " + errors);
         
         return ResponseEntity.badRequest().body(
-            ApiResponse.<Map<String, String>>builder()
+            com.prog3.security.Utils.ApiResponse.<Map<String, String>>builder()
                 .success(false)
                 .message("Errores de validación en los datos")
                 .data(errors)
@@ -83,7 +83,7 @@ public class GlobalExceptionHandler {
      * Maneja excepciones de argumentos ilegales
      */
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiResponse<String>> handleIllegalArgumentException(
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<String>> handleIllegalArgumentException(
             IllegalArgumentException ex, WebRequest request) {
         
         System.out.println("🚨 Argumento ilegal: " + ex.getMessage() + " en " + request.getDescription(false));
@@ -95,13 +95,13 @@ public class GlobalExceptionHandler {
      * Maneja excepciones de negocio personalizadas
      */
     @ExceptionHandler(BusinessException.class)
-    public ResponseEntity<ApiResponse<String>> handleBusinessException(
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<String>> handleBusinessException(
             BusinessException ex, WebRequest request) {
         
         System.out.println("💼 Excepción de negocio: " + ex.getMessage() + " en " + request.getDescription(false));
         
         return ResponseEntity.status(ex.getHttpStatus()).body(
-            ApiResponse.<String>builder()
+            com.prog3.security.Utils.ApiResponse.<String>builder()
                 .success(false)
                 .message(ex.getMessage())
                 .data(ex.getDetails())
@@ -114,7 +114,7 @@ public class GlobalExceptionHandler {
      * Maneja excepciones de recursos no encontrados
      */
     @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<ApiResponse<String>> handleResourceNotFoundException(
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<String>> handleResourceNotFoundException(
             ResourceNotFoundException ex, WebRequest request) {
         
         System.out.println("🔍 Recurso no encontrado: " + ex.getMessage() + " en " + request.getDescription(false));
@@ -126,13 +126,13 @@ public class GlobalExceptionHandler {
      * Maneja excepciones de acceso no autorizado
      */
     @ExceptionHandler(UnauthorizedException.class)
-    public ResponseEntity<ApiResponse<String>> handleUnauthorizedException(
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<String>> handleUnauthorizedException(
             UnauthorizedException ex, WebRequest request) {
         
         System.out.println("🔒 Acceso no autorizado: " + ex.getMessage() + " en " + request.getDescription(false));
         
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
-            ApiResponse.<String>builder()
+            com.prog3.security.Utils.ApiResponse.<String>builder()
                 .success(false)
                 .message("Acceso no autorizado: " + ex.getMessage())
                 .data(null)
@@ -145,7 +145,7 @@ public class GlobalExceptionHandler {
      * Maneja excepciones de MongoDB
      */
     @ExceptionHandler(org.springframework.dao.DataAccessException.class)
-    public ResponseEntity<ApiResponse<String>> handleDataAccessException(
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<String>> handleDataAccessException(
             org.springframework.dao.DataAccessException ex, WebRequest request) {
         
         System.err.println("🗄️ Error de base de datos: " + ex.getMessage() + " en " + request.getDescription(false));
@@ -158,13 +158,13 @@ public class GlobalExceptionHandler {
      * Maneja excepciones de conexión timeout
      */
     @ExceptionHandler({java.net.SocketTimeoutException.class, java.util.concurrent.TimeoutException.class})
-    public ResponseEntity<ApiResponse<String>> handleTimeoutException(
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<String>> handleTimeoutException(
             Exception ex, WebRequest request) {
         
         System.err.println("⏱️ Timeout: " + ex.getMessage() + " en " + request.getDescription(false));
         
         return ResponseEntity.status(HttpStatus.REQUEST_TIMEOUT).body(
-            ApiResponse.<String>builder()
+            com.prog3.security.Utils.ApiResponse.<String>builder()
                 .success(false)
                 .message("La operación tardó demasiado tiempo. Intente nuevamente.")
                 .data(null)
@@ -177,7 +177,7 @@ public class GlobalExceptionHandler {
      * Maneja todas las demás excepciones no capturadas
      */
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiResponse<String>> handleGlobalException(
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<String>> handleGlobalException(
             Exception ex, WebRequest request) {
         
         System.err.println("💥 Error no manejado: " + ex.getClass().getSimpleName() + 
@@ -197,7 +197,7 @@ public class GlobalExceptionHandler {
      * Maneja errores de JSON mal formateado
      */
     @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
-    public ResponseEntity<ApiResponse<String>> handleHttpMessageNotReadableException(
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<String>> handleHttpMessageNotReadableException(
             org.springframework.http.converter.HttpMessageNotReadableException ex, WebRequest request) {
         
         System.out.println("📄 JSON mal formateado: " + ex.getMessage() + " en " + request.getDescription(false));
@@ -209,13 +209,13 @@ public class GlobalExceptionHandler {
      * Maneja errores de método HTTP no permitido
      */
     @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
-    public ResponseEntity<ApiResponse<String>> handleHttpRequestMethodNotSupportedException(
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<String>> handleHttpRequestMethodNotSupportedException(
             org.springframework.web.HttpRequestMethodNotSupportedException ex, WebRequest request) {
         
         System.out.println("🚫 Método HTTP no permitido: " + ex.getMethod() + " en " + request.getDescription(false));
         
         return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(
-            ApiResponse.<String>builder()
+            com.prog3.security.Utils.ApiResponse.<String>builder()
                 .success(false)
                 .message("Método HTTP '" + ex.getMethod() + "' no permitido para esta URL")
                 .data(null)

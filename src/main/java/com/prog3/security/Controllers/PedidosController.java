@@ -28,7 +28,7 @@ import com.prog3.security.Services.InventarioService;
 import com.prog3.security.Services.ResponseService;
 import com.prog3.security.Services.CuadreCajaService;
 import com.prog3.security.Services.WebSocketNotificationService;
-import com.prog3.security.Utils.ApiResponse;
+// import com.prog3.security.Utils.ApiResponse; // Comentado para evitar conflicto con anotación Swagger
 import com.prog3.security.DTOs.PagarPedidoRequest;
 import com.prog3.security.DTOs.CancelarProductoRequest;
 import com.prog3.security.Exception.BusinessException;
@@ -38,7 +38,6 @@ import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -73,8 +72,8 @@ public class PedidosController {
         description = "Retorna la lista completa de pedidos en el sistema"
     )
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Lista de pedidos obtenida exitosamente"),
-        @ApiResponse(responseCode = "500", description = "Error interno del servidor")
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Lista de pedidos obtenida exitosamente"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Error interno del servidor")
     })
     @GetMapping("")
     public ResponseEntity<com.prog3.security.Utils.ApiResponse<List<Pedido>>> find() {
@@ -87,7 +86,7 @@ public class PedidosController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<Pedido>> findById(@PathVariable String id) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<Pedido>> findById(@PathVariable String id) {
         try {
             Pedido pedido = this.thePedidoRepository.findById(id).orElse(null);
             if (pedido == null) {
@@ -100,7 +99,7 @@ public class PedidosController {
     }
 
     @GetMapping("/tipo/{tipo}")
-    public ResponseEntity<ApiResponse<List<Pedido>>> findByTipo(@PathVariable String tipo) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<List<Pedido>>> findByTipo(@PathVariable String tipo) {
         try {
             List<Pedido> pedidos = this.thePedidoRepository.findByTipo(tipo);
             return responseService.success(pedidos, "Pedidos filtrados por tipo obtenidos");
@@ -110,7 +109,7 @@ public class PedidosController {
     }
 
     @GetMapping("/mesa/{mesa}")
-    public ResponseEntity<ApiResponse<List<Pedido>>> findByMesa(@PathVariable String mesa) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<List<Pedido>>> findByMesa(@PathVariable String mesa) {
         try {
             List<Pedido> pedidos = this.thePedidoRepository.findByMesa(mesa);
             return responseService.success(pedidos, "Pedidos de la mesa obtenidos");
@@ -120,7 +119,7 @@ public class PedidosController {
     }
 
     @GetMapping("/cliente/{cliente}")
-    public ResponseEntity<ApiResponse<List<Pedido>>> findByCliente(@PathVariable String cliente) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<List<Pedido>>> findByCliente(@PathVariable String cliente) {
         try {
             List<Pedido> pedidos = this.thePedidoRepository.findByCliente(cliente);
             return responseService.success(pedidos, "Pedidos del cliente obtenidos");
@@ -130,7 +129,7 @@ public class PedidosController {
     }
 
     @GetMapping("/mesero/{mesero}")
-    public ResponseEntity<ApiResponse<List<Pedido>>> findByMesero(@PathVariable String mesero) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<List<Pedido>>> findByMesero(@PathVariable String mesero) {
         try {
             List<Pedido> pedidos = this.thePedidoRepository.findByMesero(mesero);
             return responseService.success(pedidos, "Pedidos del mesero obtenidos");
@@ -140,7 +139,7 @@ public class PedidosController {
     }
 
     @GetMapping("/estado/{estado}")
-    public ResponseEntity<ApiResponse<List<Pedido>>> findByEstado(@PathVariable String estado) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<List<Pedido>>> findByEstado(@PathVariable String estado) {
         try {
             List<Pedido> pedidos = this.thePedidoRepository.findByEstado(estado);
             return responseService.success(pedidos, "Pedidos filtrados por estado obtenidos");
@@ -150,7 +149,7 @@ public class PedidosController {
     }
 
     @GetMapping("/fechas")
-    public ResponseEntity<ApiResponse<List<Pedido>>> findByFechaRange(
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<List<Pedido>>> findByFechaRange(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaInicio,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaFin) {
         try {
@@ -162,7 +161,7 @@ public class PedidosController {
     }
 
     @GetMapping("/hoy")
-    public ResponseEntity<ApiResponse<List<Pedido>>> findHoy() {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<List<Pedido>>> findHoy() {
         try {
             LocalDateTime inicioHoy = LocalDateTime.now().withHour(0).withMinute(0).withSecond(0);
             List<Pedido> pedidos = this.thePedidoRepository.findByFechaGreaterThanEqual(inicioHoy);
@@ -173,7 +172,7 @@ public class PedidosController {
     }
 
     @GetMapping("/plataforma/{plataforma}")
-    public ResponseEntity<ApiResponse<List<Pedido>>> findByPlataforma(@PathVariable String plataforma) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<List<Pedido>>> findByPlataforma(@PathVariable String plataforma) {
         try {
             List<Pedido> pedidos = this.thePedidoRepository.findByPlataforma(plataforma);
             return responseService.success(pedidos, "Pedidos filtrados por plataforma obtenidos");
@@ -183,7 +182,7 @@ public class PedidosController {
     }
 
     @GetMapping("/cuadre/{cuadreId}")
-    public ResponseEntity<ApiResponse<List<Pedido>>> findByCuadreId(@PathVariable String cuadreId) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<List<Pedido>>> findByCuadreId(@PathVariable String cuadreId) {
         try {
             List<Pedido> pedidos = this.thePedidoRepository.findByCuadreCajaId(cuadreId);
             return responseService.success(pedidos, "Pedidos del cuadre de caja obtenidos");
@@ -193,7 +192,7 @@ public class PedidosController {
     }
 
     @GetMapping("/cuadre/{cuadreId}/pagados")
-    public ResponseEntity<ApiResponse<List<Pedido>>> findByCuadreIdPagados(@PathVariable String cuadreId) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<List<Pedido>>> findByCuadreIdPagados(@PathVariable String cuadreId) {
         try {
             List<Pedido> pedidos = this.thePedidoRepository.findByCuadreCajaIdAndEstado(cuadreId, "pagado");
             return responseService.success(pedidos, "Pedidos pagados del cuadre de caja obtenidos");
@@ -203,7 +202,7 @@ public class PedidosController {
     }
 
     @PostMapping
-    public ResponseEntity<ApiResponse<Pedido>> create(@RequestBody Pedido newPedido) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<Pedido>> create(@RequestBody Pedido newPedido) {
         try {
             // VALIDACIÓN: Verificar que hay una caja abierta antes de crear el pedido
             List<CuadreCaja> cajasAbiertas = cuadreCajaRepository.findByCerradaFalse();
@@ -269,7 +268,7 @@ public class PedidosController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<ApiResponse<Pedido>> update(@PathVariable String id, @RequestBody Pedido newPedido) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<Pedido>> update(@PathVariable String id, @RequestBody Pedido newPedido) {
         try {
             Pedido actualPedido = this.thePedidoRepository.findById(id).orElse(null);
             if (actualPedido == null) {
@@ -307,7 +306,7 @@ public class PedidosController {
     }
 
     @PutMapping("/{id}/estado/{estado}")
-    public ResponseEntity<ApiResponse<Pedido>> cambiarEstado(@PathVariable String id, @PathVariable String estado) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<Pedido>> cambiarEstado(@PathVariable String id, @PathVariable String estado) {
         try {
             Pedido pedido = this.thePedidoRepository.findById(id).orElse(null);
             if (pedido == null) {
@@ -323,7 +322,7 @@ public class PedidosController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable String id) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<Void>> delete(@PathVariable String id) {
         try {
             Pedido pedido = this.thePedidoRepository.findById(id).orElse(null);
             if (pedido == null) {
@@ -343,7 +342,7 @@ public class PedidosController {
     }
 
     @GetMapping("/total-ventas")
-    public ResponseEntity<ApiResponse<TotalVentasResponse>> getTotalVentas(
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<TotalVentasResponse>> getTotalVentas(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaInicio,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaFin) {
 
@@ -435,12 +434,12 @@ public class PedidosController {
             """
     )
     @ApiResponses(value = {
-        @ApiResponse(
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "200", 
             description = "Pedido procesado exitosamente",
             content = @Content(schema = @Schema(implementation = Pedido.class))
         ),
-        @ApiResponse(
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "400", 
             description = "Datos inválidos o caja no abierta",
             content = @Content(examples = @ExampleObject(
@@ -448,11 +447,11 @@ public class PedidosController {
                 value = "{\"success\": false, \"message\": \"No se puede procesar el pago sin una caja abierta\"}"
             ))
         ),
-        @ApiResponse(
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "404", 
             description = "Pedido no encontrado"
         ),
-        @ApiResponse(
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "409", 
             description = "El pedido ya está procesado"
         )
@@ -591,7 +590,7 @@ public class PedidosController {
      * Obtener todos los pedidos activos de una mesa especial
      */
     @GetMapping("/mesa/{mesa}/activos")
-    public ResponseEntity<ApiResponse<List<Pedido>>> getPedidosActivosPorMesa(@PathVariable String mesa) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<List<Pedido>>> getPedidosActivosPorMesa(@PathVariable String mesa) {
         try {
             List<Pedido> pedidos = this.thePedidoRepository.findPedidosActivosByMesa(mesa);
             return responseService.success(pedidos, "Pedidos activos obtenidos exitosamente");
@@ -604,7 +603,7 @@ public class PedidosController {
      * Crear un pedido con nombre específico para mesa especial
      */
     @PostMapping("/mesa-especial")
-    public ResponseEntity<ApiResponse<Pedido>> createPedidoMesaEspecial(@RequestBody Pedido pedido) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<Pedido>> createPedidoMesaEspecial(@RequestBody Pedido pedido) {
         try {
             // Validar que se proporcione el nombre del pedido
             if (pedido.getNombrePedido() == null || pedido.getNombrePedido().trim().isEmpty()) {
@@ -643,7 +642,7 @@ public class PedidosController {
      * Obtener un pedido específico por mesa y nombre
      */
     @GetMapping("/mesa/{mesa}/pedido/{nombrePedido}")
-    public ResponseEntity<ApiResponse<Pedido>> getPedidoPorMesaYNombre(
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<Pedido>> getPedidoPorMesaYNombre(
             @PathVariable String mesa,
             @PathVariable String nombrePedido) {
         try {
@@ -665,7 +664,7 @@ public class PedidosController {
      * Eliminar todos los pedidos activos de una mesa específica
      */
     @DeleteMapping("/mesa/{mesa}/vaciar")
-    public ResponseEntity<ApiResponse<String>> vaciarPedidosMesa(@PathVariable String mesa) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<String>> vaciarPedidosMesa(@PathVariable String mesa) {
         try {
             // Obtener todos los pedidos activos de la mesa
             List<Pedido> pedidosActivos = this.thePedidoRepository.findPedidosActivosByMesa(mesa);
@@ -690,7 +689,7 @@ public class PedidosController {
      * Eliminar un pedido específico por mesa y nombre
      */
     @DeleteMapping("/mesa/{mesa}/pedido/{nombrePedido}")
-    public ResponseEntity<ApiResponse<String>> eliminarPedidoPorNombre(
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<String>> eliminarPedidoPorNombre(
             @PathVariable String mesa,
             @PathVariable String nombrePedido) {
         try {
@@ -715,7 +714,7 @@ public class PedidosController {
      * Obtener los ingredientes que se pueden devolver al cancelar un producto
      */
     @GetMapping("/{pedidoId}/producto/{productoId}/ingredientes-devolucion")
-    public ResponseEntity<ApiResponse<List<CancelarProductoRequest.IngredienteADevolver>>>
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<List<CancelarProductoRequest.IngredienteADevolver>>>
             getIngredientesParaDevolucion(@PathVariable String pedidoId,
                     @PathVariable String productoId,
                     @RequestParam int cantidad) {
@@ -740,7 +739,7 @@ public class PedidosController {
      * Cancelar un producto del pedido con devolución selectiva de ingredientes
      */
     @PostMapping("/cancelar-producto")
-    public ResponseEntity<ApiResponse<Pedido>> cancelarProducto(@RequestBody CancelarProductoRequest request) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<Pedido>> cancelarProducto(@RequestBody CancelarProductoRequest request) {
         try {
             // Buscar el pedido
             Pedido pedido = this.thePedidoRepository.findById(request.getPedidoId()).orElse(null);
@@ -816,7 +815,7 @@ public class PedidosController {
     }
 
     @PostMapping("/{id}/test-inventario")
-    public ResponseEntity<ApiResponse<String>> testProcesarInventario(@PathVariable String id) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<String>> testProcesarInventario(@PathVariable String id) {
         try {
             Pedido pedido = this.thePedidoRepository.findById(id).orElse(null);
             if (pedido == null) {
@@ -838,7 +837,7 @@ public class PedidosController {
      * completamente la base de datos de pedidos
      */
     @DeleteMapping("/admin/eliminar-todos")
-    public ResponseEntity<ApiResponse<String>> eliminarTodosLosPedidos() {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<String>> eliminarTodosLosPedidos() {
         try {
             List<Pedido> todosLosPedidos = thePedidoRepository.findAll();
             int cantidadEliminada = todosLosPedidos.size();
@@ -863,7 +862,7 @@ public class PedidosController {
      * Eliminar pedidos por estado específico
      */
     @DeleteMapping("/admin/eliminar-por-estado/{estado}")
-    public ResponseEntity<ApiResponse<String>> eliminarPedidosPorEstado(@PathVariable String estado) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<String>> eliminarPedidosPorEstado(@PathVariable String estado) {
         try {
             List<Pedido> pedidosPorEstado = thePedidoRepository.findByEstado(estado);
             int cantidadEliminada = pedidosPorEstado.size();
@@ -888,7 +887,7 @@ public class PedidosController {
      * Eliminar pedidos en un rango de fechas
      */
     @DeleteMapping("/admin/eliminar-por-fechas")
-    public ResponseEntity<ApiResponse<String>> eliminarPedidosPorFechas(
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<String>> eliminarPedidosPorFechas(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaInicio,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaFin) {
         try {
@@ -915,7 +914,7 @@ public class PedidosController {
      * Contar todos los pedidos antes de eliminar (para confirmación)
      */
     @GetMapping("/admin/contar-todos")
-    public ResponseEntity<ApiResponse<Integer>> contarTodosLosPedidos() {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<Integer>> contarTodosLosPedidos() {
         try {
             int totalPedidos = (int) thePedidoRepository.count();
 
@@ -931,7 +930,7 @@ public class PedidosController {
      * Contar pedidos por estado
      */
     @GetMapping("/admin/contar-por-estado/{estado}")
-    public ResponseEntity<ApiResponse<Integer>> contarPedidosPorEstado(@PathVariable String estado) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<Integer>> contarPedidosPorEstado(@PathVariable String estado) {
         try {
             List<Pedido> pedidosPorEstado = thePedidoRepository.findByEstado(estado);
             int cantidad = pedidosPorEstado.size();
@@ -948,7 +947,7 @@ public class PedidosController {
      * Mover un pedido de una mesa a otra
      */
     @PutMapping("/{pedidoId}/mover-mesa")
-    public ResponseEntity<ApiResponse<Pedido>> moverPedidoAMesa(
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<Pedido>> moverPedidoAMesa(
             @PathVariable String pedidoId,
             @RequestBody Map<String, String> request) {
         try {
