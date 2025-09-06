@@ -31,10 +31,23 @@ import com.prog3.security.Services.WebSocketNotificationService;
 import com.prog3.security.Utils.ApiResponse;
 import com.prog3.security.DTOs.PagarPedidoRequest;
 import com.prog3.security.DTOs.CancelarProductoRequest;
+import com.prog3.security.Exception.BusinessException;
+import com.prog3.security.Exception.ResourceNotFoundException;
+
+import jakarta.validation.Valid;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 
 @CrossOrigin
 @RestController
 @RequestMapping("api/pedidos")
+@Tag(name = "Pedidos", description = "Gestión completa de pedidos del restaurante")
 public class PedidosController {
 
     @Autowired
@@ -55,8 +68,16 @@ public class PedidosController {
     @Autowired
     private WebSocketNotificationService webSocketService;
 
+    @Operation(
+        summary = "Obtener todos los pedidos",
+        description = "Retorna la lista completa de pedidos en el sistema"
+    )
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Lista de pedidos obtenida exitosamente"),
+        @ApiResponse(responseCode = "500", description = "Error interno del servidor")
+    })
     @GetMapping("")
-    public ResponseEntity<ApiResponse<List<Pedido>>> find() {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<List<Pedido>>> find() {
         try {
             List<Pedido> pedidos = this.thePedidoRepository.findAll();
             return responseService.success(pedidos, "Pedidos obtenidos exitosamente");
@@ -398,22 +419,72 @@ public class PedidosController {
         }
     }
 
+    @Operation(
+        summary = "Procesar pago de pedido",
+        description = """
+            Procesa el pago de un pedido con diferentes tipos:
+            - **pagado**: Pago normal con propina opcional
+            - **cortesia**: Sin costo (cumpleaños, promociones)
+            - **consumo_interno**: Para empleados/gerencia  
+            - **cancelado**: Cancelación del pedido
+            
+            **Validaciones importantes:**
+            - Debe haber una caja abierta
+            - El pedido no debe estar ya procesado
+            - Los campos requeridos según el tipo de pago
+            """
+    )
+    @ApiResponses(value = {
+        @ApiResponse(
+            responseCode = "200", 
+            description = "Pedido procesado exitosamente",
+            content = @Content(schema = @Schema(implementation = Pedido.class))
+        ),
+        @ApiResponse(
+            responseCode = "400", 
+            description = "Datos inválidos o caja no abierta",
+            content = @Content(examples = @ExampleObject(
+                name = "Caja no abierta",
+                value = "{\"success\": false, \"message\": \"No se puede procesar el pago sin una caja abierta\"}"
+            ))
+        ),
+        @ApiResponse(
+            responseCode = "404", 
+            description = "Pedido no encontrado"
+        ),
+        @ApiResponse(
+            responseCode = "409", 
+            description = "El pedido ya está procesado"
+        )
+    })
     @PutMapping("/{id}/pagar")
-    public ResponseEntity<ApiResponse<Pedido>> pagarPedido(@PathVariable String id, @RequestBody PagarPedidoRequest pagarRequest) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<Pedido>> pagarPedido(
+            @Parameter(description = "ID del pedido a procesar", required = true) 
+            @PathVariable String id, 
+            @Parameter(description = "Datos del pago", required = true)
+            @RequestBody @Valid PagarPedidoRequest pagarRequest) {
         try {
             System.out.println("[PAGAR_PEDIDO] Iniciando pago para pedido ID: " + id);
-            Pedido pedido = this.thePedidoRepository.findById(id).orElse(null);
-            if (pedido == null) {
-                System.out.println("[PAGAR_PEDIDO] Pedido no encontrado");
-                return responseService.notFound("Pedido no encontrado con ID: " + id);
+            
+            // Validar que el ID no sea nulo o vacío
+            if (id == null || id.trim().isEmpty()) {
+                throw new IllegalArgumentException("El ID del pedido es requerido");
+            }
+            
+            Pedido pedido = this.thePedidoRepository.findById(id)
+                .orElseThrow(() -> ResourceNotFoundException.pedido(id));
+            
+            // Validar que el pedido no esté ya pagado (evitar dobles pagos)
+            if ("pagado".equals(pedido.getEstado()) || "cortesia".equals(pedido.getEstado()) || 
+                "consumo_interno".equals(pedido.getEstado()) || "cancelado".equals(pedido.getEstado())) {
+                throw BusinessException.pedidoYaPagado(id);
             }
             
             // VALIDACIÓN: Verificar que hay una caja abierta antes de procesar el pago
             List<CuadreCaja> cajasAbiertas = cuadreCajaRepository.findByCerradaFalse();
             if (cajasAbiertas.isEmpty()) {
                 System.out.println("❌ Intento de pagar pedido sin caja abierta");
-                return responseService.badRequest(
-                    "No se puede procesar el pago sin una caja abierta. Debe abrir una caja antes de procesar pagos.");
+                throw BusinessException.cajaNoAbierta();
             }
             
             // Asignar cuadre de caja si el pedido no lo tiene
@@ -423,10 +494,11 @@ public class PedidosController {
                 System.out.println("🔗 Asignando pedido a cuadre activo: " + cajaActiva.get_id());
             }
 
-            // Validar que el tipo de pago esté especificado
-            if (pagarRequest.getTipoPago() == null || pagarRequest.getTipoPago().isEmpty()) {
-                System.out.println("[PAGAR_PEDIDO] Tipo de pago no especificado");
-                return responseService.badRequest("El tipo de pago es requerido");
+            // Validación personalizada adicional
+            if (!pagarRequest.isValid()) {
+                String error = pagarRequest.getValidationError();
+                System.out.println("[PAGAR_PEDIDO] Validación personalizada fallida: " + error);
+                throw new IllegalArgumentException(error);
             }
 
             String notasAdicionales = pagarRequest.getNotas() != null ? pagarRequest.getNotas() : "";

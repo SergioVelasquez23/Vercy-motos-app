@@ -1,14 +1,39 @@
 package com.prog3.security.DTOs;
 
+import jakarta.validation.constraints.*;
+import jakarta.validation.groups.Default;
+
+/**
+ * DTO para procesar pagos de pedidos con validaciones robustas.
+ * Soporta diferentes tipos de pago: pagado, cortesía, consumo interno y cancelación.
+ */
 public class PagarPedidoRequest {
 
-    private String tipoPago; // "pagado", "cortesia", "consumo_interno", "cancelado"
-    private String formaPago; // efectivo, transferencia, tarjeta, otro (solo para tipoPago = "pagado")
-    private double propina; // Solo aplica para tipoPago = "pagado"
-    private String procesadoPor; // Quien procesa (mesero, cajero, etc.)
-    private String notas; // Notas adicionales
-    private String motivoCortesia; // Solo para cortesía (ej: "cumpleaños cliente")
-    private String tipoConsumoInterno; // Solo para consumo interno (ej: "empleado", "gerencia")
+    @NotBlank(message = "El tipo de pago es obligatorio")
+    @Pattern(regexp = "^(pagado|cortesia|consumo_interno|cancelado)$", 
+             message = "El tipo de pago debe ser: pagado, cortesia, consumo_interno o cancelado")
+    private String tipoPago;
+
+    @Pattern(regexp = "^(efectivo|transferencia|tarjeta|otro)?$", 
+             message = "La forma de pago debe ser: efectivo, transferencia, tarjeta u otro")
+    private String formaPago;
+
+    @PositiveOrZero(message = "La propina no puede ser negativa")
+    @DecimalMax(value = "999999.99", message = "La propina no puede exceder $999,999.99")
+    private double propina = 0.0;
+
+    @NotBlank(message = "Debe especificar quién procesa la operación")
+    @Size(min = 2, max = 100, message = "El nombre de quien procesa debe tener entre 2 y 100 caracteres")
+    private String procesadoPor;
+
+    @Size(max = 500, message = "Las notas no pueden exceder 500 caracteres")
+    private String notas;
+
+    @Size(max = 200, message = "El motivo de cortesía no puede exceder 200 caracteres")
+    private String motivoCortesia;
+
+    @Size(max = 100, message = "El tipo de consumo interno no puede exceder 100 caracteres")
+    private String tipoConsumoInterno;
 
     public PagarPedidoRequest() {
     }
@@ -97,5 +122,50 @@ public class PagarPedidoRequest {
 
     public boolean sumaAVentas() {
         return esPagado(); // Solo los pagados suman a ventas
+    }
+
+    /**
+     * Valida que los campos requeridos para cada tipo de pago estén presentes
+     */
+    public boolean isValid() {
+        if (esPagado()) {
+            return formaPago != null && !formaPago.trim().isEmpty();
+        }
+        if (esCortesia()) {
+            return motivoCortesia != null && !motivoCortesia.trim().isEmpty();
+        }
+        if (esConsumoInterno()) {
+            return tipoConsumoInterno != null && !tipoConsumoInterno.trim().isEmpty();
+        }
+        // Para cancelado no se requieren campos adicionales
+        return true;
+    }
+
+    /**
+     * Obtiene el mensaje de error si la validación falla
+     */
+    public String getValidationError() {
+        if (esPagado() && (formaPago == null || formaPago.trim().isEmpty())) {
+            return "La forma de pago es obligatoria para pagos";
+        }
+        if (esCortesia() && (motivoCortesia == null || motivoCortesia.trim().isEmpty())) {
+            return "El motivo de cortesía es obligatorio";
+        }
+        if (esConsumoInterno() && (tipoConsumoInterno == null || tipoConsumoInterno.trim().isEmpty())) {
+            return "El tipo de consumo interno es obligatorio";
+        }
+        return null;
+    }
+
+    @Override
+    public String toString() {
+        return "PagarPedidoRequest{" +
+                "tipoPago='" + tipoPago + '\'' +
+                ", formaPago='" + formaPago + '\'' +
+                ", propina=" + propina +
+                ", procesadoPor='" + procesadoPor + '\'' +
+                ", motivoCortesia='" + motivoCortesia + '\'' +
+                ", tipoConsumoInterno='" + tipoConsumoInterno + '\'' +
+                '}';
     }
 }
