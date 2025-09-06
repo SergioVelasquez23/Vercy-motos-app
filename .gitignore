@@ -160,3 +160,23 @@ buildNumber.properties
 .classpath
 
 # End of https://www.toptal.com/developers/gitignore/api/intellij,java,maven
+
+# JDK Installation files
+*.msi
+temurin-jdk*
+
+# Maven portable installation
+apache-maven-*/
+maven-portable.zip
+
+# Installation and setup scripts
+fix-java-installation.bat
+fix-java-security.ps1
+install-new-jdk.ps1
+run-app-fixed.bat
+run-app.ps1
+run-as-admin.bat
+run-maven.bat
+
+# Maven wrapper config (if needed locally)
+.mvn/jvm.config
