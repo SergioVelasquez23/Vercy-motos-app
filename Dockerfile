@@ -17,7 +17,7 @@ COPY src ./src
 RUN mvn clean package -DskipTests
 
 # Usar imagen más liviana para ejecutar
-FROM openjdk:17-jre-slim
+FROM eclipse-temurin:17-jre-alpine
 
 # Copiar el JAR compilado desde la etapa anterior
 COPY --from=build /app/target/*.jar app.jar
