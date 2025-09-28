@@ -1184,32 +1184,47 @@ public class PedidosController {
      * pago/factura - Mantiene un pedido activo con los productos restantes
      */
     // 🎯 Endpoint con la ruta que espera el frontend
-    @PostMapping("/{id}/pagar-parcial")
+    @PutMapping("/{id}/pagar-parcial")
     public ResponseEntity<?> pagarPedidoParcial(@PathVariable String id, @RequestBody Map<String, Object> request) {
         try {
             System.out.println("🔍 DEBUG PAGO PARCIAL - ID del pedido: " + id);
             System.out.println("🔍 DEBUG PAGO PARCIAL - Request recibido: " + request);
             
             // 📋 Extraer datos del request (el ID viene por PathVariable)
+            // Manejar formato del frontend Flutter
+            @SuppressWarnings("unchecked")
+            List<String> itemIds = (List<String>) request.get("itemIds");
+            String metodoPago = (String) request.get("formaPago"); // Frontend usa "formaPago"
+            String procesadoPor = (String) request.get("procesadoPor");
+            String notas = (String) request.get("notas");
+            Object totalCalculado = request.get("totalCalculado");
+            
+            // Para compatibilidad con formato anterior
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> productosAPagar = (List<Map<String, Object>>) request.get("productos");
-            String metodoPago = (String) request.get("metodoPago");
-            String clienteNombre = (String) request.get("clienteNombre");
-            String clienteDocumento = (String) request.get("clienteDocumento");
+            if (metodoPago == null) {
+                metodoPago = (String) request.get("metodoPago");
+            }
             
             System.out.println("🔍 DEBUG - Datos extraídos:");
             System.out.println("   pedidoId: " + id);
-            System.out.println("   metodoPago: " + metodoPago);
-            System.out.println("   productosAPagar: " + productosAPagar);
+            System.out.println("   formaPago: " + metodoPago);
+            System.out.println("   itemIds: " + itemIds);
+            System.out.println("   procesadoPor: " + procesadoPor);
+            System.out.println("   productosAPagar (legacy): " + productosAPagar);
 
             System.out.println("💰 Iniciando pago parcial:");
             System.out.println("   📦 Pedido origen: " + id);
             System.out.println("   💳 Método pago: " + metodoPago);
-            System.out.println("   👤 Cliente: " + clienteNombre);
-            System.out.println("   📋 Productos a pagar: " + (productosAPagar != null ? productosAPagar.size() : 0));
+            System.out.println("   👤 Procesado por: " + procesadoPor);
+            System.out.println("   📋 Items a pagar: " + (itemIds != null ? itemIds.size() : 0));
+            System.out.println("   📋 Productos (legacy): " + (productosAPagar != null ? productosAPagar.size() : 0));
 
-            // ✅ Validaciones básicas
-            if (id == null || productosAPagar == null || productosAPagar.isEmpty()) {
+            // ✅ Validaciones básicas - priorizar itemIds del frontend
+            boolean tieneProductos = (itemIds != null && !itemIds.isEmpty()) || 
+                                   (productosAPagar != null && !productosAPagar.isEmpty());
+            
+            if (id == null || !tieneProductos) {
                 return responseService.badRequest("Datos incompletos para el pago parcial");
             }
 
