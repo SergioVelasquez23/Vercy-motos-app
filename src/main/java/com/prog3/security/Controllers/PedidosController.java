@@ -1103,22 +1103,43 @@ public class PedidosController {
                 }
             }
 
-            // 🆕 Crear nuevo pedido en mesa destino
-            Pedido nuevoPedido = new Pedido();
-            nuevoPedido.setMesa(mesaDestino);
-            nuevoPedido.setItems(productosNuevoPedido);
-            nuevoPedido.setEstado("activo");
-            nuevoPedido.setFecha(LocalDateTime.now());
+            // 🔍 Buscar pedido existente en mesa destino o crear nuevo
+            Pedido pedidoDestino = null;
+            Optional<Pedido> pedidoExistente = thePedidoRepository.findByMesaAndEstado(mesaDestino, "activo");
+            
+            if (pedidoExistente.isPresent()) {
+                // ➕ Agregar productos al pedido existente
+                pedidoDestino = pedidoExistente.get();
+                pedidoDestino.getItems().addAll(productosNuevoPedido);
+                
+                // 💰 Recalcular total del pedido existente
+                double totalActualizado = pedidoDestino.getItems().stream()
+                        .mapToDouble(ItemPedido::getSubtotal)
+                        .sum();
+                pedidoDestino.setTotal(totalActualizado);
+                pedidoDestino.setFecha(LocalDateTime.now());
+                
+                System.out.println("➕ Productos agregados al pedido existente - Mesa: " + mesaDestino);
+            } else {
+                // 🆕 Crear pedido nuevo solo si no hay uno activo
+                pedidoDestino = new Pedido();
+                pedidoDestino.setMesa(mesaDestino);
+                pedidoDestino.setItems(productosNuevoPedido);
+                pedidoDestino.setEstado("activo");
+                pedidoDestino.setFecha(LocalDateTime.now());
 
-            // 💰 Calcular totales del nuevo pedido
-            double totalNuevo = productosNuevoPedido.stream()
-                    .mapToDouble(ItemPedido::getSubtotal)
-                    .sum();
-            nuevoPedido.setTotal(totalNuevo);
+                // 💰 Calcular totales del nuevo pedido
+                double totalNuevo = productosNuevoPedido.stream()
+                        .mapToDouble(ItemPedido::getSubtotal)
+                        .sum();
+                pedidoDestino.setTotal(totalNuevo);
+                
+                System.out.println("🆕 Nuevo pedido creado - Mesa: " + mesaDestino);
+            }
 
-            // 💾 Guardar nuevo pedido
-            Pedido pedidoGuardado = thePedidoRepository.save(nuevoPedido);
-            System.out.println("✅ Nuevo pedido creado - ID: " + pedidoGuardado.get_id() + ", Mesa: " + mesaDestino);
+            // 💾 Guardar pedido (nuevo o actualizado)
+            Pedido pedidoGuardado = thePedidoRepository.save(pedidoDestino);
+            System.out.println("✅ Pedido guardado - ID: " + pedidoGuardado.get_id() + ", Total: $" + pedidoGuardado.getTotal());
 
             // 🔄 Actualizar pedido original
             if (productosOriginalesActualizados.isEmpty()) {
