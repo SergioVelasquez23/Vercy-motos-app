@@ -1105,11 +1105,12 @@ public class PedidosController {
 
             // 🔍 Buscar pedido existente en mesa destino o crear nuevo
             Pedido pedidoDestino = null;
-            Optional<Pedido> pedidoExistente = thePedidoRepository.findByMesaAndEstado(mesaDestino, "activo");
+            List<Pedido> pedidosActivos = thePedidoRepository.findPedidosActivosByMesa(mesaDestino);
             
-            if (pedidoExistente.isPresent()) {
+            if (!pedidosActivos.isEmpty()) {
+                // Tomar el primer pedido activo encontrado
                 // ➕ Agregar productos al pedido existente
-                pedidoDestino = pedidoExistente.get();
+                pedidoDestino = pedidosActivos.get(0);
                 pedidoDestino.getItems().addAll(productosNuevoPedido);
                 
                 // 💰 Recalcular total del pedido existente
