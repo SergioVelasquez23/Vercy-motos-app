@@ -1198,12 +1198,19 @@ public class PedidosController {
             String procesadoPor = (String) request.get("procesadoPor");
             String notas = (String) request.get("notas");
             Object totalCalculado = request.get("totalCalculado");
+            String clienteNombre = (String) request.get("clienteNombre");
+            String clienteDocumento = (String) request.get("clienteDocumento");
             
             // Para compatibilidad con formato anterior
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> productosAPagar = (List<Map<String, Object>>) request.get("productos");
             if (metodoPago == null) {
                 metodoPago = (String) request.get("metodoPago");
+            }
+            
+            // Si no hay datos de cliente, usar procesadoPor como referencia
+            if (clienteNombre == null && procesadoPor != null) {
+                clienteNombre = "Cliente de " + procesadoPor;
             }
             
             System.out.println("🔍 DEBUG - Datos extraídos:");
