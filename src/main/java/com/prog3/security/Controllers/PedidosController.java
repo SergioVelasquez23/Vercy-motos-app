@@ -1014,7 +1014,7 @@ public class PedidosController {
         try {
             // 📋 Extraer datos del request
             String pedidoId = (String) request.get("pedidoId");
-            Integer mesaDestino = (Integer) request.get("mesaDestino");
+            String mesaDestino = (String) request.get("mesaDestino");
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> productosAMover = (List<Map<String, Object>>) request.get("productos");
 
@@ -1105,7 +1105,7 @@ public class PedidosController {
 
             // 🆕 Crear nuevo pedido en mesa destino
             Pedido nuevoPedido = new Pedido();
-            nuevoPedido.setMesa(String.valueOf(mesaDestino));
+            nuevoPedido.setMesa(mesaDestino);
             nuevoPedido.setItems(productosNuevoPedido);
             nuevoPedido.setEstado("activo");
             nuevoPedido.setFecha(LocalDateTime.now());
