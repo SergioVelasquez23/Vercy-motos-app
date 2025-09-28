@@ -1183,30 +1183,38 @@ public class PedidosController {
      * pedido pagado con los productos seleccionados - Crea un documento de
      * pago/factura - Mantiene un pedido activo con los productos restantes
      */
-    @PostMapping("/pago-parcial")
-    public ResponseEntity<?> pagarProductosParcial(@RequestBody Map<String, Object> request) {
+    // 🎯 Endpoint con la ruta que espera el frontend
+    @PostMapping("/{id}/pagar-parcial")
+    public ResponseEntity<?> pagarPedidoParcial(@PathVariable String id, @RequestBody Map<String, Object> request) {
         try {
-            // 📋 Extraer datos del request
-            String pedidoId = (String) request.get("pedidoId");
+            System.out.println("🔍 DEBUG PAGO PARCIAL - ID del pedido: " + id);
+            System.out.println("🔍 DEBUG PAGO PARCIAL - Request recibido: " + request);
+            
+            // 📋 Extraer datos del request (el ID viene por PathVariable)
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> productosAPagar = (List<Map<String, Object>>) request.get("productos");
             String metodoPago = (String) request.get("metodoPago");
             String clienteNombre = (String) request.get("clienteNombre");
             String clienteDocumento = (String) request.get("clienteDocumento");
+            
+            System.out.println("🔍 DEBUG - Datos extraídos:");
+            System.out.println("   pedidoId: " + id);
+            System.out.println("   metodoPago: " + metodoPago);
+            System.out.println("   productosAPagar: " + productosAPagar);
 
             System.out.println("💰 Iniciando pago parcial:");
-            System.out.println("   📦 Pedido origen: " + pedidoId);
+            System.out.println("   📦 Pedido origen: " + id);
             System.out.println("   💳 Método pago: " + metodoPago);
             System.out.println("   👤 Cliente: " + clienteNombre);
             System.out.println("   📋 Productos a pagar: " + (productosAPagar != null ? productosAPagar.size() : 0));
 
             // ✅ Validaciones básicas
-            if (pedidoId == null || productosAPagar == null || productosAPagar.isEmpty()) {
+            if (id == null || productosAPagar == null || productosAPagar.isEmpty()) {
                 return responseService.badRequest("Datos incompletos para el pago parcial");
             }
 
             // 🔍 Buscar pedido origen
-            Optional<Pedido> pedidoOrigenOpt = thePedidoRepository.findById(pedidoId);
+            Optional<Pedido> pedidoOrigenOpt = thePedidoRepository.findById(id);
             if (!pedidoOrigenOpt.isPresent()) {
                 return responseService.badRequest("Pedido no encontrado");
             }
@@ -1305,7 +1313,7 @@ public class PedidosController {
             String pedidoRestanteId = null;
             if (productosRestantes.isEmpty()) {
                 // 🗑️ Si no quedan productos pendientes, eliminar el pedido original
-                thePedidoRepository.deleteById(pedidoId);
+                thePedidoRepository.deleteById(id);
                 System.out.println("🗑️ Pedido original eliminado (todos los productos pagados)");
             } else {
                 // ✏️ Actualizar pedido original con productos restantes
@@ -1325,7 +1333,7 @@ public class PedidosController {
             documentoPago.put("id", UUID.randomUUID().toString());
             documentoPago.put("tipo", "pago_parcial");
             documentoPago.put("pedidoId", pedidoPagadoGuardado.get_id());
-            documentoPago.put("pedidoOriginalId", pedidoId);
+            documentoPago.put("pedidoOriginalId", id);
             documentoPago.put("mesa", pedidoOrigen.getMesa());
             documentoPago.put("productos", productosPagados);
             documentoPago.put("subtotal", totalPagado);
@@ -1336,7 +1344,10 @@ public class PedidosController {
                     "nombre", clienteNombre != null ? clienteNombre : "Cliente General",
                     "documento", clienteDocumento != null ? clienteDocumento : "N/A"
             ));
-            documentoPago.put("fechaPago", LocalDateTime.now());
+            System.out.println("🔍 DEBUG - Antes de setear fechaPago...");
+            LocalDateTime fechaPago = LocalDateTime.now();
+            System.out.println("🔍 DEBUG - Fecha pago creada: " + fechaPago);
+            documentoPago.put("fechaPago", fechaPago);
             documentoPago.put("numeroDocumento", "DOC-" + System.currentTimeMillis());
 
             // 📊 Preparar respuesta completa
@@ -1360,7 +1371,26 @@ public class PedidosController {
 
         } catch (Exception e) {
             System.err.println("❌ Error en pago parcial: " + e.getMessage());
+            System.err.println("❌ Tipo de error: " + e.getClass().getSimpleName());
+            System.err.println("❌ Stack trace completo:");
             e.printStackTrace();
+            return responseService.internalError("Error en pago parcial: " + e.getMessage());
+        }
+    }
+
+    // 🔄 Endpoint de compatibilidad (mantener por si acaso)
+    @PostMapping("/pago-parcial")
+    public ResponseEntity<?> pagarProductosParcialCompatibilidad(@RequestBody Map<String, Object> request) {
+        try {
+            String pedidoId = (String) request.get("pedidoId");
+            if (pedidoId == null) {
+                return responseService.badRequest("pedidoId es requerido");
+            }
+            
+            // Redirigir al endpoint principal
+            return pagarPedidoParcial(pedidoId, request);
+            
+        } catch (Exception e) {
             return responseService.internalError("Error en pago parcial: " + e.getMessage());
         }
     }
