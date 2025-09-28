@@ -36,6 +36,10 @@ public class ItemPedido {
     private String notas;                           // Notas especiales (opcional)
     private List<String> ingredientesSeleccionados; // Ingredientes customizados
     
+    // 👤 TRACKING DE USUARIOS
+    private String agregadoPor;                     // Usuario que agregó el producto (opcional)
+    private java.time.LocalDateTime fechaAgregado; // Fecha cuando se agregó el producto (opcional)
+    
     // 🏗️ CONSTRUCTORES
     public ItemPedido() {
         this.ingredientesSeleccionados = new ArrayList<>();
@@ -145,6 +149,26 @@ public class ItemPedido {
 
     public String getNotas() {
         return notas; // Reintroducing the getter for the notas field
+    }
+
+    public void setNotas(String notas) {
+        this.notas = notas;
+    }
+
+    public String getAgregadoPor() {
+        return agregadoPor;
+    }
+
+    public void setAgregadoPor(String agregadoPor) {
+        this.agregadoPor = agregadoPor;
+    }
+
+    public java.time.LocalDateTime getFechaAgregado() {
+        return fechaAgregado;
+    }
+
+    public void setFechaAgregado(java.time.LocalDateTime fechaAgregado) {
+        this.fechaAgregado = fechaAgregado;
     }
     // 🛠 MÉTODOS UTILITARIOS
     @Override

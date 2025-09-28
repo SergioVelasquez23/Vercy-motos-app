@@ -1,6 +1,9 @@
 package com.prog3.security.Services;
 import com.prog3.security.Models.CuadreCaja;
 import com.prog3.security.Repositories.CuadreCajaRepository;
+import com.prog3.security.Models.Deuda;
+
+import com.prog3.security.Repositories.DeudaRepository;
 
 import com.prog3.security.Entities.ObjetivoVenta;
 import com.prog3.security.Models.Pedido;
@@ -51,6 +54,9 @@ public class ReporteService {
 
     @Autowired
     private CuadreCajaRepository cuadreCajaRepository;
+
+    @Autowired
+    private DeudaRepository deudaRepository;
 
     // Valores por defecto para los objetivos
     private static final Map<String, Double> OBJETIVOS_DEFAULT = Map.of(
@@ -897,6 +903,79 @@ public class ReporteService {
                 return "Cancelado";
             default:
                 return estado;
+        }
+    }
+    /**
+     * Obtener estadísticas de deudas
+     */
+    public Map<String, Object> getEstadisticasDeudas() {
+        try {
+            System.out.println("=== DEBUG getEstadisticasDeudas ===");
+            
+            Map<String, Object> estadisticas = new HashMap<>();
+            
+            // Contar deudas activas e inactivas
+            long deudasActivas = deudaRepository.countByActivaTrue();
+            long totalDeudas_count = deudaRepository.count();
+            
+            estadisticas.put("deudasActivas", deudasActivas);
+            estadisticas.put("totalDeudas_count", totalDeudas_count);
+            
+            // Obtener deudas activas para cálculos
+            List<Deuda> deudasActivasList = deudaRepository.findByActivaTrue();
+            
+            // Calcular montos
+            double totalDeudas = deudasActivasList.stream()
+                    .mapToDouble(Deuda::getMontoDeuda)
+                    .sum();
+            
+            double promedioDeuda = deudasActivas > 0 ? totalDeudas / deudasActivas : 0;
+            
+            estadisticas.put("totalDeudas", totalDeudas);
+            estadisticas.put("promedioDeuda", promedioDeuda);
+            
+            // Contar deudas vencidas
+            long deudasVencidas = deudaRepository.countDeudasVencidas(LocalDateTime.now());
+            estadisticas.put("deudasVencidas", deudasVencidas);
+            
+            // Estadísticas por mesa (top 10)
+            Map<String, Long> porMesa = deudasActivasList.stream()
+                    .filter(d -> d.getMesaNombre() != null)
+                    .collect(Collectors.groupingBy(
+                            Deuda::getMesaNombre,
+                            Collectors.counting()
+                    ))
+                    .entrySet().stream()
+                    .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+                    .limit(10)
+                    .collect(Collectors.toMap(
+                            Map.Entry::getKey,
+                            Map.Entry::getValue,
+                            (e1, e2) -> e1,
+                            HashMap::new
+                    ));
+            estadisticas.put("porMesa", porMesa);
+            
+            // Distribución por rangos de monto
+            Map<String, Long> porRangoMonto = new HashMap<>();
+            long rango1 = deudasActivasList.stream().filter(d -> d.getMontoDeuda() < 50000).count();
+            long rango2 = deudasActivasList.stream().filter(d -> d.getMontoDeuda() >= 50000 && d.getMontoDeuda() < 100000).count();
+            long rango3 = deudasActivasList.stream().filter(d -> d.getMontoDeuda() >= 100000 && d.getMontoDeuda() < 200000).count();
+            long rango4 = deudasActivasList.stream().filter(d -> d.getMontoDeuda() >= 200000).count();
+            
+            porRangoMonto.put("menos_50k", rango1);
+            porRangoMonto.put("50k_100k", rango2);
+            porRangoMonto.put("100k_200k", rango3);
+            porRangoMonto.put("mas_200k", rango4);
+            estadisticas.put("porRangoMonto", porRangoMonto);
+            
+            System.out.println("Estadísticas de deudas: " + estadisticas);
+            return estadisticas;
+            
+        } catch (Exception e) {
+            System.err.println("Error al obtener estadísticas de deudas: " + e.getMessage());
+            e.printStackTrace();
+            return new HashMap<>();
         }
     }
 }

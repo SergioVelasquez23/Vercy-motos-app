@@ -14,11 +14,13 @@ public class Mesa {
     private boolean ocupada;
     private double total;
     private List<String> productosIds; // IDs de productos en la mesa
+    private TipoMesa tipo;              // Tipo de mesa (NORMAL, ESPECIAL)
 
     public Mesa() {
         this.productosIds = new ArrayList<>();
         this.ocupada = false;
         this.total = 0.0;
+        this.tipo = TipoMesa.NORMAL; // Valor por defecto
     }
 
     public Mesa(String nombre) {
@@ -26,6 +28,15 @@ public class Mesa {
         this.productosIds = new ArrayList<>();
         this.ocupada = false;
         this.total = 0.0;
+        this.tipo = TipoMesa.NORMAL; // Valor por defecto
+    }
+
+    public Mesa(String nombre, TipoMesa tipo) {
+        this.nombre = nombre;
+        this.productosIds = new ArrayList<>();
+        this.ocupada = false;
+        this.total = 0.0;
+        this.tipo = tipo != null ? tipo : TipoMesa.NORMAL;
     }
 
     // Getters y Setters
@@ -69,10 +80,24 @@ public class Mesa {
         this.productosIds = productosIds;
     }
 
+    public TipoMesa getTipo() {
+        return tipo;
+    }
+
+    public void setTipo(TipoMesa tipo) {
+        this.tipo = tipo != null ? tipo : TipoMesa.NORMAL;
+    }
+
     /**
      * Determina si esta mesa puede tener múltiples pedidos simultáneos
      */
     public boolean esEspecial() {
+        // Primero verificar por el campo tipo
+        if (this.tipo == TipoMesa.ESPECIAL) {
+            return true;
+        }
+        
+        // Mantener compatibilidad con la lógica anterior por nombre
         if (this.nombre == null) {
             return false;
         }

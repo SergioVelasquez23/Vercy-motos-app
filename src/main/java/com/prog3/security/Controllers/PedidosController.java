@@ -3,6 +3,11 @@ package com.prog3.security.Controllers;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.Date;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -68,8 +73,8 @@ public class PedidosController {
     private WebSocketNotificationService webSocketService;
 
     @Operation(
-        summary = "Obtener todos los pedidos",
-        description = "Retorna la lista completa de pedidos en el sistema"
+            summary = "Obtener todos los pedidos",
+            description = "Retorna la lista completa de pedidos en el sistema"
     )
     @ApiResponses(value = {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Lista de pedidos obtenida exitosamente"),
@@ -209,13 +214,13 @@ public class PedidosController {
             if (cajasAbiertas.isEmpty()) {
                 System.out.println("❌ Intento de crear pedido sin caja abierta");
                 return responseService.badRequest(
-                    "No se puede crear un pedido sin una caja abierta. Debe abrir una caja antes de registrar pedidos.");
+                        "No se puede crear un pedido sin una caja abierta. Debe abrir una caja antes de registrar pedidos.");
             }
-            
+
             // Obtener la caja activa (la primera caja abierta)
             CuadreCaja cajaActiva = cajasAbiertas.get(0);
             System.out.println("✅ Caja activa encontrada: " + cajaActiva.get_id() + " - " + cajaActiva.getNombre());
-            
+
             // Asignar el cuadreId al pedido
             newPedido.setCuadreCajaId(cajaActiva.get_id());
             System.out.println("🔗 Pedido vinculado a cuadre: " + cajaActiva.get_id());
@@ -419,8 +424,8 @@ public class PedidosController {
     }
 
     @Operation(
-        summary = "Procesar pago de pedido",
-        description = """
+            summary = "Procesar pago de pedido",
+            description = """
             Procesa el pago de un pedido con diferentes tipos:
             - **pagado**: Pago normal con propina opcional
             - **cortesia**: Sin costo (cumpleaños, promociones)
@@ -435,57 +440,57 @@ public class PedidosController {
     )
     @ApiResponses(value = {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
-            responseCode = "200", 
-            description = "Pedido procesado exitosamente",
-            content = @Content(schema = @Schema(implementation = Pedido.class))
+                responseCode = "200",
+                description = "Pedido procesado exitosamente",
+                content = @Content(schema = @Schema(implementation = Pedido.class))
         ),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
-            responseCode = "400", 
-            description = "Datos inválidos o caja no abierta",
-            content = @Content(examples = @ExampleObject(
-                name = "Caja no abierta",
-                value = "{\"success\": false, \"message\": \"No se puede procesar el pago sin una caja abierta\"}"
-            ))
+                responseCode = "400",
+                description = "Datos inválidos o caja no abierta",
+                content = @Content(examples = @ExampleObject(
+                        name = "Caja no abierta",
+                        value = "{\"success\": false, \"message\": \"No se puede procesar el pago sin una caja abierta\"}"
+                ))
         ),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
-            responseCode = "404", 
-            description = "Pedido no encontrado"
+                responseCode = "404",
+                description = "Pedido no encontrado"
         ),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
-            responseCode = "409", 
-            description = "El pedido ya está procesado"
+                responseCode = "409",
+                description = "El pedido ya está procesado"
         )
     })
     @PutMapping("/{id}/pagar")
     public ResponseEntity<com.prog3.security.Utils.ApiResponse<Pedido>> pagarPedido(
-            @Parameter(description = "ID del pedido a procesar", required = true) 
-            @PathVariable String id, 
+            @Parameter(description = "ID del pedido a procesar", required = true)
+            @PathVariable String id,
             @Parameter(description = "Datos del pago", required = true)
             @RequestBody @Valid PagarPedidoRequest pagarRequest) {
         try {
             System.out.println("[PAGAR_PEDIDO] Iniciando pago para pedido ID: " + id);
-            
+
             // Validar que el ID no sea nulo o vacío
             if (id == null || id.trim().isEmpty()) {
                 throw new IllegalArgumentException("El ID del pedido es requerido");
             }
-            
+
             Pedido pedido = this.thePedidoRepository.findById(id)
-                .orElseThrow(() -> ResourceNotFoundException.pedido(id));
-            
+                    .orElseThrow(() -> ResourceNotFoundException.pedido(id));
+
             // Validar que el pedido no esté ya pagado (evitar dobles pagos)
-            if ("pagado".equals(pedido.getEstado()) || "cortesia".equals(pedido.getEstado()) || 
-                "consumo_interno".equals(pedido.getEstado()) || "cancelado".equals(pedido.getEstado())) {
+            if ("pagado".equals(pedido.getEstado()) || "cortesia".equals(pedido.getEstado())
+                    || "consumo_interno".equals(pedido.getEstado()) || "cancelado".equals(pedido.getEstado())) {
                 throw BusinessException.pedidoYaPagado(id);
             }
-            
+
             // VALIDACIÓN: Verificar que hay una caja abierta antes de procesar el pago
             List<CuadreCaja> cajasAbiertas = cuadreCajaRepository.findByCerradaFalse();
             if (cajasAbiertas.isEmpty()) {
                 System.out.println("❌ Intento de pagar pedido sin caja abierta");
                 throw BusinessException.cajaNoAbierta();
             }
-            
+
             // Asignar cuadre de caja si el pedido no lo tiene
             if (pedido.getCuadreCajaId() == null || pedido.getCuadreCajaId().isEmpty()) {
                 CuadreCaja cajaActiva = cajasAbiertas.get(0);
@@ -545,14 +550,14 @@ public class PedidosController {
                 } else {
                     System.out.println("[PAGAR_PEDIDO] Pedido asignado a cuadre activo correctamente");
                 }
-                
+
                 // Notificar vía WebSocket que se pagó un pedido (para actualizar dashboard)
                 try {
                     webSocketService.notificarPedidoPagado(
-                        pedidoProcesado.get_id(),
-                        pedidoProcesado.getMesa(),
-                        pedidoProcesado.getTotalPagado() > 0 ? pedidoProcesado.getTotalPagado() : pedidoProcesado.getTotal(),
-                        pedidoProcesado.getFormaPago()
+                            pedidoProcesado.get_id(),
+                            pedidoProcesado.getMesa(),
+                            pedidoProcesado.getTotalPagado() > 0 ? pedidoProcesado.getTotalPagado() : pedidoProcesado.getTotal(),
+                            pedidoProcesado.getFormaPago()
                     );
                 } catch (Exception wsError) {
                     System.err.println("⚠️ Error enviando notificación WebSocket: " + wsError.getMessage());
@@ -953,35 +958,35 @@ public class PedidosController {
         try {
             String nuevaMesa = request.get("nuevaMesa");
             String nombrePedido = request.get("nombrePedido"); // Para mesas especiales
-            
+
             if (nuevaMesa == null || nuevaMesa.trim().isEmpty()) {
                 return responseService.badRequest("El nombre de la mesa destino es requerido");
             }
-            
+
             // Buscar el pedido
             Pedido pedido = this.thePedidoRepository.findById(pedidoId).orElse(null);
             if (pedido == null) {
                 return responseService.notFound("Pedido no encontrado con ID: " + pedidoId);
             }
-            
+
             // Verificar que el pedido esté en estado activo
             if (!"activo".equals(pedido.getEstado()) && !"pendiente".equals(pedido.getEstado())) {
                 return responseService.badRequest("Solo se pueden mover pedidos en estado activo o pendiente");
             }
-            
+
             String mesaAnterior = pedido.getMesa();
-            
+
             // Actualizar la mesa del pedido
             pedido.setMesa(nuevaMesa);
-            
+
             // Si es mesa especial y se proporciona nombre, actualizarlo
             if (nombrePedido != null && !nombrePedido.trim().isEmpty()) {
                 pedido.setNombrePedido(nombrePedido);
             }
-            
+
             // Guardar el pedido actualizado
             Pedido pedidoActualizado = this.thePedidoRepository.save(pedido);
-            
+
             System.out.println("🚚 Pedido movido exitosamente:");
             System.out.println("  - Pedido ID: " + pedidoId);
             System.out.println("  - Mesa anterior: " + mesaAnterior);
@@ -989,13 +994,352 @@ public class PedidosController {
             if (nombrePedido != null) {
                 System.out.println("  - Nombre pedido: " + nombrePedido);
             }
-            
-            return responseService.success(pedidoActualizado, 
-                "Pedido movido exitosamente de " + mesaAnterior + " a " + nuevaMesa);
-            
+
+            return responseService.success(pedidoActualizado,
+                    "Pedido movido exitosamente de " + mesaAnterior + " a " + nuevaMesa);
+
         } catch (Exception e) {
             System.err.println("❌ Error al mover pedido: " + e.getMessage());
             return responseService.internalError("Error al mover pedido: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 🔄 Mueve productos específicos de un pedido a otra mesa - Edita el pedido
+     * actual eliminando los productos seleccionados - Crea un nuevo pedido en
+     * la mesa destino con esos productos
+     */
+    @PostMapping("/mover-productos-especificos")
+    public ResponseEntity<?> moverProductosEspecificos(@RequestBody Map<String, Object> request) {
+        try {
+            // 📋 Extraer datos del request
+            String pedidoId = (String) request.get("pedidoId");
+            Integer mesaDestino = (Integer) request.get("mesaDestino");
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> productosAMover = (List<Map<String, Object>>) request.get("productos");
+
+            System.out.println("🔄 Iniciando movimiento de productos específicos:");
+            System.out.println("   📦 Pedido origen: " + pedidoId);
+            System.out.println("   🪑 Mesa destino: " + mesaDestino);
+            System.out.println("   📋 Productos a mover: " + productosAMover.size());
+
+            // ✅ Validaciones básicas
+            if (pedidoId == null || mesaDestino == null || productosAMover == null || productosAMover.isEmpty()) {
+                return responseService.badRequest("Datos incompletos para mover productos");
+            }
+
+            // 🔍 Buscar pedido origen
+            Optional<Pedido> pedidoOrigenOpt = thePedidoRepository.findById(pedidoId);
+            if (!pedidoOrigenOpt.isPresent()) {
+                return responseService.badRequest("Pedido origen no encontrado");
+            }
+
+            Pedido pedidoOrigen = pedidoOrigenOpt.get();
+            System.out.println("✅ Pedido origen encontrado - Mesa: " + pedidoOrigen.getMesa());
+
+            // 📦 Crear lista de productos para el nuevo pedido
+            List<ItemPedido> productosNuevoPedido = new ArrayList<>();
+            List<ItemPedido> productosOriginalesActualizados = new ArrayList<>();
+
+            // 🔄 Procesar cada producto del pedido original
+            for (ItemPedido productoOriginal : pedidoOrigen.getItems()) {
+                boolean encontradoEnMover = false;
+                int cantidadAMover = 0;
+
+                // 🔍 Verificar si este producto está en la lista de productos a mover
+                for (Map<String, Object> productoMover : productosAMover) {
+                    String productoId = (String) productoMover.get("productoId");
+                    Integer cantidad = (Integer) productoMover.get("cantidad");
+
+                    if (productoOriginal.getProductoId().equals(productoId)) {
+                        encontradoEnMover = true;
+                        cantidadAMover = cantidad;
+                        break;
+                    }
+                }
+
+                if (encontradoEnMover) {
+                    // ✂️ Producto se va a mover (parcial o totalmente)
+                    if (cantidadAMover >= productoOriginal.getCantidad()) {
+                        // 🚚 Mover todo el producto al nuevo pedido
+                        ItemPedido productoNuevo = new ItemPedido();
+                        productoNuevo.setProductoId(productoOriginal.getProductoId());
+                        productoNuevo.setProductoNombre(productoOriginal.getProductoNombre());
+                        productoNuevo.setCantidad(productoOriginal.getCantidad());
+                        productoNuevo.setPrecioUnitario(productoOriginal.getPrecioUnitario());
+                        productoNuevo.setNotas(productoOriginal.getNotas());
+                        productosNuevoPedido.add(productoNuevo);
+
+                        System.out.println("   🚚 Producto movido completamente: " + productoOriginal.getProductoNombre()
+                                + " (Cantidad: " + productoOriginal.getCantidad() + ")");
+                    } else {
+                        // ✂️ Dividir producto: parte se queda, parte se va
+                        // Crear producto para el nuevo pedido
+                        ItemPedido productoNuevo = new ItemPedido();
+                        productoNuevo.setProductoId(productoOriginal.getProductoId());
+                        productoNuevo.setProductoNombre(productoOriginal.getProductoNombre());
+                        productoNuevo.setCantidad(cantidadAMover);
+                        productoNuevo.setPrecioUnitario(productoOriginal.getPrecioUnitario());
+                        productoNuevo.setNotas(productoOriginal.getNotas());
+                        productosNuevoPedido.add(productoNuevo);
+
+                        // Actualizar producto original (reducir cantidad)
+                        ItemPedido productoActualizado = new ItemPedido();
+                        productoActualizado.setProductoId(productoOriginal.getProductoId());
+                        productoActualizado.setProductoNombre(productoOriginal.getProductoNombre());
+                        productoActualizado.setCantidad(productoOriginal.getCantidad() - cantidadAMover);
+                        productoActualizado.setPrecioUnitario(productoOriginal.getPrecioUnitario());
+                        productoActualizado.setNotas(productoOriginal.getNotas());
+                        productosOriginalesActualizados.add(productoActualizado);
+
+                        System.out.println("   ✂️ Producto dividido: " + productoOriginal.getProductoNombre()
+                                + " (Original: " + productoOriginal.getCantidad()
+                                + ", Movido: " + cantidadAMover
+                                + ", Restante: " + (productoOriginal.getCantidad() - cantidadAMover) + ")");
+                    }
+                } else {
+                    // 🏠 Producto se queda en el pedido original
+                    productosOriginalesActualizados.add(productoOriginal);
+                }
+            }
+
+            // 🆕 Crear nuevo pedido en mesa destino
+            Pedido nuevoPedido = new Pedido();
+            nuevoPedido.setMesa(String.valueOf(mesaDestino));
+            nuevoPedido.setItems(productosNuevoPedido);
+            nuevoPedido.setEstado("activo");
+            nuevoPedido.setFecha(LocalDateTime.now());
+
+            // 💰 Calcular totales del nuevo pedido
+            double totalNuevo = productosNuevoPedido.stream()
+                    .mapToDouble(ItemPedido::getSubtotal)
+                    .sum();
+            nuevoPedido.setTotal(totalNuevo);
+
+            // 💾 Guardar nuevo pedido
+            Pedido pedidoGuardado = thePedidoRepository.save(nuevoPedido);
+            System.out.println("✅ Nuevo pedido creado - ID: " + pedidoGuardado.get_id() + ", Mesa: " + mesaDestino);
+
+            // 🔄 Actualizar pedido original
+            if (productosOriginalesActualizados.isEmpty()) {
+                // 🗑️ Si no quedan productos, eliminar el pedido original
+                thePedidoRepository.deleteById(pedidoId);
+                System.out.println("🗑️ Pedido original eliminado (sin productos restantes)");
+            } else {
+                // ✏️ Actualizar pedido original con productos restantes
+                pedidoOrigen.setItems(productosOriginalesActualizados);
+                double totalOriginalActualizado = productosOriginalesActualizados.stream()
+                        .mapToDouble(ItemPedido::getSubtotal)
+                        .sum();
+                pedidoOrigen.setTotal(totalOriginalActualizado);
+                pedidoOrigen.setFecha(LocalDateTime.now());
+                thePedidoRepository.save(pedidoOrigen);
+                System.out.println("✏️ Pedido original actualizado - Total: $" + totalOriginalActualizado);
+            }
+
+            // 📊 Preparar respuesta
+            Map<String, Object> resultado = new HashMap<>();
+            resultado.put("success", true);
+            resultado.put("message", "Productos movidos exitosamente");
+            resultado.put("nuevoPedidoId", pedidoGuardado.get_id());
+            resultado.put("mesaDestino", mesaDestino);
+            resultado.put("productosMovidos", productosNuevoPedido.size());
+            resultado.put("pedidoOriginalEliminado", productosOriginalesActualizados.isEmpty());
+
+            System.out.println("🎉 Movimiento de productos completado exitosamente");
+            return responseService.success(resultado, "Productos movidos exitosamente");
+
+        } catch (Exception e) {
+            System.err.println("❌ Error al mover productos específicos: " + e.getMessage());
+            e.printStackTrace();
+            return responseService.internalError("Error al mover productos específicos: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 💰 Procesa pago parcial de productos específicos de un pedido - Crea un
+     * pedido pagado con los productos seleccionados - Crea un documento de
+     * pago/factura - Mantiene un pedido activo con los productos restantes
+     */
+    @PostMapping("/pago-parcial")
+    public ResponseEntity<?> pagarProductosParcial(@RequestBody Map<String, Object> request) {
+        try {
+            // 📋 Extraer datos del request
+            String pedidoId = (String) request.get("pedidoId");
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> productosAPagar = (List<Map<String, Object>>) request.get("productos");
+            String metodoPago = (String) request.get("metodoPago");
+            String clienteNombre = (String) request.get("clienteNombre");
+            String clienteDocumento = (String) request.get("clienteDocumento");
+
+            System.out.println("💰 Iniciando pago parcial:");
+            System.out.println("   📦 Pedido origen: " + pedidoId);
+            System.out.println("   💳 Método pago: " + metodoPago);
+            System.out.println("   👤 Cliente: " + clienteNombre);
+            System.out.println("   📋 Productos a pagar: " + (productosAPagar != null ? productosAPagar.size() : 0));
+
+            // ✅ Validaciones básicas
+            if (pedidoId == null || productosAPagar == null || productosAPagar.isEmpty()) {
+                return responseService.badRequest("Datos incompletos para el pago parcial");
+            }
+
+            // 🔍 Buscar pedido origen
+            Optional<Pedido> pedidoOrigenOpt = thePedidoRepository.findById(pedidoId);
+            if (!pedidoOrigenOpt.isPresent()) {
+                return responseService.badRequest("Pedido no encontrado");
+            }
+
+            Pedido pedidoOrigen = pedidoOrigenOpt.get();
+            System.out.println("✅ Pedido origen encontrado - Mesa: " + pedidoOrigen.getMesa());
+
+            // 📦 Crear listas para productos pagados y restantes
+            List<ItemPedido> productosPagados = new ArrayList<>();
+            List<ItemPedido> productosRestantes = new ArrayList<>();
+
+            // 🔄 Procesar cada producto del pedido original
+            for (ItemPedido productoOriginal : pedidoOrigen.getItems()) {
+                boolean encontradoEnPago = false;
+                int cantidadAPagar = 0;
+
+                // 🔍 Verificar si este producto está en la lista de productos a pagar
+                for (Map<String, Object> productoPagar : productosAPagar) {
+                    String productoId = (String) productoPagar.get("productoId");
+                    Integer cantidad = (Integer) productoPagar.get("cantidad");
+
+                    if (productoOriginal.getProductoId().equals(productoId)) {
+                        encontradoEnPago = true;
+                        cantidadAPagar = cantidad;
+                        break;
+                    }
+                }
+
+                if (encontradoEnPago) {
+                    // 💳 Producto se va a pagar (parcial o totalmente)
+                    if (cantidadAPagar >= productoOriginal.getCantidad()) {
+                        // 💰 Pagar todo el producto
+                        ItemPedido productoPagado = new ItemPedido();
+                        productoPagado.setProductoId(productoOriginal.getProductoId());
+                        productoPagado.setProductoNombre(productoOriginal.getProductoNombre());
+                        productoPagado.setCantidad(productoOriginal.getCantidad());
+                        productoPagado.setPrecioUnitario(productoOriginal.getPrecioUnitario());
+                        productoPagado.setNotas(productoOriginal.getNotas());
+                        productosPagados.add(productoPagado);
+
+                        System.out.println("   💰 Producto pagado completamente: " + productoOriginal.getProductoNombre()
+                                + " (Cantidad: " + productoOriginal.getCantidad() + ")");
+                    } else {
+                        // ✂️ Dividir producto: parte se paga, parte queda pendiente
+                        // Crear producto pagado
+                        ItemPedido productoPagado = new ItemPedido();
+                        productoPagado.setProductoId(productoOriginal.getProductoId());
+                        productoPagado.setProductoNombre(productoOriginal.getProductoNombre());
+                        productoPagado.setCantidad(cantidadAPagar);
+                        productoPagado.setPrecioUnitario(productoOriginal.getPrecioUnitario());
+                        productoPagado.setNotas(productoOriginal.getNotas());
+                        productosPagados.add(productoPagado);
+
+                        // Crear producto restante
+                        ItemPedido productoRestante = new ItemPedido();
+                        productoRestante.setProductoId(productoOriginal.getProductoId());
+                        productoRestante.setProductoNombre(productoOriginal.getProductoNombre());
+                        productoRestante.setCantidad(productoOriginal.getCantidad() - cantidadAPagar);
+                        productoRestante.setPrecioUnitario(productoOriginal.getPrecioUnitario());
+                        productoRestante.setNotas(productoOriginal.getNotas());
+                        productosRestantes.add(productoRestante);
+
+                        System.out.println("   ✂️ Producto dividido: " + productoOriginal.getProductoNombre()
+                                + " (Original: " + productoOriginal.getCantidad()
+                                + ", Pagado: " + cantidadAPagar
+                                + ", Restante: " + (productoOriginal.getCantidad() - cantidadAPagar) + ")");
+                    }
+                } else {
+                    // ⏳ Producto queda pendiente (no se paga)
+                    productosRestantes.add(productoOriginal);
+                }
+            }
+
+            // 💰 Calcular total pagado
+            double totalPagado = productosPagados.stream()
+                    .mapToDouble(ItemPedido::getSubtotal)
+                    .sum();
+
+            // 🧾 Crear pedido pagado
+            Pedido pedidoPagado = new Pedido();
+            pedidoPagado.setMesa(pedidoOrigen.getMesa());
+            pedidoPagado.setItems(productosPagados);
+            pedidoPagado.setEstado("pagado");
+            pedidoPagado.setTotal(totalPagado);
+            pedidoPagado.setFormaPago(metodoPago);
+            pedidoPagado.setCliente(clienteNombre);
+            pedidoPagado.setFecha(pedidoOrigen.getFecha());
+            pedidoPagado.setFechaPago(LocalDateTime.now());
+
+            // 💾 Guardar pedido pagado
+            Pedido pedidoPagadoGuardado = thePedidoRepository.save(pedidoPagado);
+            System.out.println("✅ Pedido pagado creado - ID: " + pedidoPagadoGuardado.get_id()
+                    + ", Total: $" + totalPagado);
+
+            // 🔄 Actualizar o eliminar pedido original
+            String pedidoRestanteId = null;
+            if (productosRestantes.isEmpty()) {
+                // 🗑️ Si no quedan productos pendientes, eliminar el pedido original
+                thePedidoRepository.deleteById(pedidoId);
+                System.out.println("🗑️ Pedido original eliminado (todos los productos pagados)");
+            } else {
+                // ✏️ Actualizar pedido original con productos restantes
+                pedidoOrigen.setItems(productosRestantes);
+                double totalRestante = productosRestantes.stream()
+                        .mapToDouble(ItemPedido::getSubtotal)
+                        .sum();
+                pedidoOrigen.setTotal(totalRestante);
+                pedidoOrigen.setFecha(LocalDateTime.now());
+                Pedido pedidoRestanteGuardado = thePedidoRepository.save(pedidoOrigen);
+                pedidoRestanteId = pedidoRestanteGuardado.get_id();
+                System.out.println("✏️ Pedido original actualizado - Total restante: $" + totalRestante);
+            }
+
+            // 📄 Crear documento de pago/factura
+            Map<String, Object> documentoPago = new HashMap<>();
+            documentoPago.put("id", UUID.randomUUID().toString());
+            documentoPago.put("tipo", "pago_parcial");
+            documentoPago.put("pedidoId", pedidoPagadoGuardado.get_id());
+            documentoPago.put("pedidoOriginalId", pedidoId);
+            documentoPago.put("mesa", pedidoOrigen.getMesa());
+            documentoPago.put("productos", productosPagados);
+            documentoPago.put("subtotal", totalPagado);
+            documentoPago.put("impuestos", totalPagado * 0.19); // IVA 19%
+            documentoPago.put("total", totalPagado * 1.19);
+            documentoPago.put("metodoPago", metodoPago);
+            documentoPago.put("cliente", Map.of(
+                    "nombre", clienteNombre != null ? clienteNombre : "Cliente General",
+                    "documento", clienteDocumento != null ? clienteDocumento : "N/A"
+            ));
+            documentoPago.put("fechaPago", LocalDateTime.now());
+            documentoPago.put("numeroDocumento", "DOC-" + System.currentTimeMillis());
+
+            // 📊 Preparar respuesta completa
+            Map<String, Object> resultado = new HashMap<>();
+            resultado.put("success", true);
+            resultado.put("message", "Pago parcial procesado exitosamente");
+            resultado.put("pedidoPagadoId", pedidoPagadoGuardado.get_id());
+            resultado.put("pedidoRestanteId", pedidoRestanteId);
+            resultado.put("totalPagado", totalPagado);
+            resultado.put("totalConImpuestos", totalPagado * 1.19);
+            resultado.put("productosProcessados", productosPagados.size());
+            resultado.put("productosRestantes", productosRestantes.size());
+            resultado.put("documentoPago", documentoPago);
+            resultado.put("pedidoOriginalEliminado", productosRestantes.isEmpty());
+
+            System.out.println("🎉 Pago parcial completado exitosamente");
+            System.out.println("   💰 Total pagado: $" + totalPagado);
+            System.out.println("   📄 Documento: " + documentoPago.get("numeroDocumento"));
+
+            return responseService.success(resultado, "Pago parcial procesado exitosamente");
+
+        } catch (Exception e) {
+            System.err.println("❌ Error en pago parcial: " + e.getMessage());
+            e.printStackTrace();
+            return responseService.internalError("Error en pago parcial: " + e.getMessage());
         }
     }
 }

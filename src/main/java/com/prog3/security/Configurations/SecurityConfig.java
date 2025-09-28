@@ -11,16 +11,20 @@ import org.springframework.security.web.SecurityFilterChain;
 import java.util.List;
 
 @Configuration
+//indica el tipo de la clase (config)
 public class SecurityConfig {
 
     @Bean
+    //metodo que define las reglas de seguridad http
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                //habilita cors con la configuracion definida
                 .csrf(csrf -> csrf.disable())
+                //deshabilita proteccion csrf (no necesaria en APIs REST)
                 .authorizeHttpRequests(auth -> auth
                         .anyRequest().permitAll());
-
+                //permite todas las solicitudes sin autenticacions
         return http.build();
     }
 
@@ -31,9 +35,17 @@ public class SecurityConfig {
         config.addAllowedMethod("*");
         config.addAllowedHeader("*");
         config.setAllowCredentials(false); // Debe ser false cuando se usa allowedOrigin("*")
+        // Configuración CORS para permitir todas las solicitudes (ajustar según necesidades de seguridad)
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
         return source;
     }
 }
+//Este archivo configura la seguridad básica de la API:
+// Permite todas las solicitudes (sin autenticación).
+// Habilita CORS para cualquier origen, método y header.
+// Desactiva CSRF.
+// No permite credenciales con CORS global.
+// Ideal para desarrollo o APIs públicas, pero no recomendado para
+// producción sin restricciones adicionales.

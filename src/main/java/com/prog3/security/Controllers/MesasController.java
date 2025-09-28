@@ -149,6 +149,7 @@ public class MesasController {
             actualMesa.setOcupada(newMesa.isOcupada());
             actualMesa.setTotal(newMesa.getTotal());
             actualMesa.setProductosIds(newMesa.getProductosIds());
+            actualMesa.setTipo(newMesa.getTipo()); // Agregar soporte para TipoMesa
 
             Mesa mesaActualizada = this.theMesaRepository.save(actualMesa);
 

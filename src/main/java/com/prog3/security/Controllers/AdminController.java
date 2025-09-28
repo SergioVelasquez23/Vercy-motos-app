@@ -1,24 +1,30 @@
 package com.prog3.security.Controllers;
 
+//@Autowired para inyección de dependencias
 import org.springframework.beans.factory.annotation.Autowired;
+//Mongotemplate para operaciones con MongoDB
 import org.springframework.data.mongodb.core.MongoTemplate;
+//Para consultas a MongoDB
 import org.springframework.data.mongodb.core.query.Query;
+//Para respuestas HTTP controladas
 import org.springframework.http.ResponseEntity;
+//Anotaciones para controladores REST y manejo de CORS, hash y hashmap
 import org.springframework.web.bind.annotation.*;
 import java.util.HashMap;
 import java.util.Map;
-
+//marca la clase como controlador REST
 @RestController
+//todas las rutas en este controlador comienzan con /api/admin
 @RequestMapping("/api/admin")
+//permite solicitudes CORS desde cualquier origen
 @CrossOrigin(origins = "*")
+
 public class AdminController {
 
     @Autowired
     private MongoTemplate mongoTemplate;
 
-    /**
-     * Limpiar todos los datos de desarrollo (USE CON CUIDADO)
-     */
+    //
     @PostMapping("/clear-data")
     public ResponseEntity<Map<String, Object>> clearAllData() {
         Map<String, Object> response = new HashMap<>();

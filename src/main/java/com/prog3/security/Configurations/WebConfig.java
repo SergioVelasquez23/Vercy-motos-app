@@ -13,7 +13,9 @@ public class WebConfig implements WebMvcConfigurer {
             .allowedOrigins(
                 "http://10.112.216.36:5300",
                 "http://192.168.20.24:5300",
-                "http://192.168.20.24:8081"
+                "http://192.168.20.24:8081",
+                "https://sopa-y-carbon.netlify.app",
+                "https://zingy-kitsune-66762f.netlify.app"
             )
             .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
             .allowedHeaders("*")
