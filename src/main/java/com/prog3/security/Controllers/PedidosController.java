@@ -1244,6 +1244,27 @@ public class PedidosController {
             Pedido pedidoOrigen = pedidoOrigenOpt.get();
             System.out.println("✅ Pedido origen encontrado - Mesa: " + pedidoOrigen.getMesa());
 
+            // Si productosAPagar es null pero itemIds tiene datos, construir productosAPagar
+            if ((productosAPagar == null || productosAPagar.isEmpty()) && itemIds != null && !itemIds.isEmpty()) {
+                productosAPagar = new ArrayList<>();
+                // Buscar el pedido original para obtener los productos
+                Optional<Pedido> pedidoOrigenOpt2 = thePedidoRepository.findById(id);
+                if (pedidoOrigenOpt2.isPresent()) {
+                    Pedido pedidoOrigen2 = pedidoOrigenOpt2.get();
+                    for (String itemId : itemIds) {
+                        for (ItemPedido prod : pedidoOrigen2.getItems()) {
+                            if (prod.getProductoId().equals(itemId)) {
+                                Map<String, Object> prodMap = new java.util.HashMap<>();
+                                prodMap.put("productoId", prod.getProductoId());
+                                prodMap.put("cantidad", prod.getCantidad());
+                                productosAPagar.add(prodMap);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
             // 📦 Crear listas para productos pagados y restantes
             List<ItemPedido> productosPagados = new ArrayList<>();
             List<ItemPedido> productosRestantes = new ArrayList<>();
