@@ -20,6 +20,8 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.UUID;
 
+import java.util.Map;
+
 @CrossOrigin
 @RestController
 @RequestMapping("/api/images")
@@ -85,6 +87,27 @@ public class ImageController {
             }
         } catch (IOException e) {
             return responseService.internalError("Error al eliminar la imagen: " + e.getMessage());
+        }
+    }
+
+    // Nuevo endpoint para subir imágenes en base64
+    @PostMapping("/upload-base64")
+    public ResponseEntity<ApiResponse<String>> uploadImageBase64(@RequestBody Map<String, String> payload) {
+        try {
+            String base64 = payload.get("imageBase64");
+            String fileName = payload.get("fileName");
+            if (base64 == null || fileName == null) {
+                return responseService.badRequest("Faltan datos");
+            }
+            byte[] imageBytes = java.util.Base64.getDecoder().decode(base64);
+            String fileExtension = fileName.substring(fileName.lastIndexOf("."));
+            String uniqueFilename = UUID.randomUUID().toString() + fileExtension;
+            Path targetLocation = imageLocation.resolve(uniqueFilename);
+            Files.write(targetLocation, imageBytes);
+            String imageUrl = "/images/platos/" + uniqueFilename;
+            return responseService.success(imageUrl, "Imagen subida exitosamente");
+        } catch (Exception e) {
+            return responseService.internalError("Error al subir la imagen: " + e.getMessage());
         }
     }
 }
