@@ -37,6 +37,13 @@ public class ImageController {
         try {
             // Crear el directorio si no existe
             Files.createDirectories(imageLocation);
+            
+            // Verificar permisos de lectura/escritura
+            if (!Files.isReadable(imageLocation) || !Files.isWritable(imageLocation)) {
+                throw new RuntimeException("El directorio de imágenes no tiene permisos suficientes");
+            }
+            
+            System.out.println("✅ Directorio de imágenes configurado: " + imageLocation.toAbsolutePath());
         } catch (IOException e) {
             throw new RuntimeException("No se pudo crear el directorio de imágenes", e);
         }
@@ -56,8 +63,13 @@ public class ImageController {
                 return responseService.badRequest("El archivo debe ser una imagen");
             }
 
-            // Generar nombre único para el archivo
+            // Validar nombre de archivo
             String originalFilename = file.getOriginalFilename();
+            if (originalFilename == null || !originalFilename.contains(".")) {
+                return responseService.badRequest("Nombre de archivo inválido");
+            }
+
+            // Generar nombre único para el archivo
             String fileExtension = originalFilename.substring(originalFilename.lastIndexOf("."));
             String uniqueFilename = UUID.randomUUID().toString() + fileExtension;
 
@@ -71,6 +83,33 @@ public class ImageController {
             return responseService.success(imageUrl, "Imagen subida exitosamente");
         } catch (IOException e) {
             return responseService.internalError("Error al subir la imagen: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/platos/{filename:.+}")
+    public ResponseEntity<Resource> getImage(@PathVariable String filename) {
+        try {
+            Path filePath = imageLocation.resolve(filename).normalize();
+            Resource resource = new UrlResource(filePath.toUri());
+            
+            if (resource.exists() && resource.isReadable()) {
+                // Determinar el tipo de contenido
+                String contentType = Files.probeContentType(filePath);
+                if (contentType == null) {
+                    contentType = "application/octet-stream";
+                }
+                
+                return ResponseEntity.ok()
+                        .contentType(MediaType.parseMediaType(contentType))
+                        .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
+                        .body(resource);
+            } else {
+                return ResponseEntity.notFound().build();
+            }
+        } catch (MalformedURLException e) {
+            return ResponseEntity.badRequest().build();
+        } catch (IOException e) {
+            return ResponseEntity.internalServerError().build();
         }
     }
 
