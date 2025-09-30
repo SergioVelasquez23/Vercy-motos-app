@@ -1179,9 +1179,15 @@ public class PedidosController {
     }
 
     /**
-     * 💰 Procesa pago parcial de productos específicos de un pedido - Crea un
-     * pedido pagado con los productos seleccionados - Crea un documento de
-     * pago/factura - Mantiene un pedido activo con los productos restantes
+     * 💰 Procesa pago parcial de productos específicos de un pedido 
+     * - Crea un pedido pagado con los productos seleccionados 
+     * - Crea un documento de pago/factura 
+     * - Mantiene un pedido activo con los productos restantes
+     * - ✅ ACTUALIZADO: Ahora incluye todas las funciones del pago normal:
+     *   • Validación de caja abierta
+     *   • Asignación automática al cuadre de caja activo
+     *   • Notificaciones WebSocket
+     *   • Campos de pago consistentes (totalPagado, pagadoPor, etc.)
      */
     // 🎯 Endpoint con la ruta que espera el frontend
     @PutMapping("/{id}/pagar-parcial")
@@ -1233,6 +1239,13 @@ public class PedidosController {
             
             if (id == null || !tieneProductos) {
                 return responseService.badRequest("Datos incompletos para el pago parcial");
+            }
+
+            // 🏦 VALIDACIÓN: Verificar que hay una caja abierta antes de procesar el pago parcial
+            List<CuadreCaja> cajasAbiertas = cuadreCajaRepository.findByCerradaFalse();
+            if (cajasAbiertas.isEmpty()) {
+                System.out.println("❌ Intento de pago parcial sin caja abierta");
+                return responseService.badRequest("No se puede procesar el pago parcial sin una caja abierta");
             }
 
             // 🔍 Buscar pedido origen
@@ -1340,17 +1353,46 @@ public class PedidosController {
             Pedido pedidoPagado = new Pedido();
             pedidoPagado.setMesa(pedidoOrigen.getMesa());
             pedidoPagado.setItems(productosPagados);
-            pedidoPagado.setEstado("pagado");
             pedidoPagado.setTotal(totalPagado);
-            pedidoPagado.setFormaPago(metodoPago);
             pedidoPagado.setCliente(clienteNombre);
             pedidoPagado.setFecha(pedidoOrigen.getFecha());
-            pedidoPagado.setFechaPago(LocalDateTime.now());
+            
+            // 💰 Usar el método pagar para establecer todos los campos correctamente (igual que pagarPedido)
+            pedidoPagado.pagar(metodoPago, 0.0, procesadoPor); // Sin propina en pagos parciales por defecto
+            
+            // 🏦 Asignar cuadre de caja desde la creación (igual que en pagarPedido)
+            if (!cajasAbiertas.isEmpty()) {
+                CuadreCaja cajaActiva = cajasAbiertas.get(0);
+                pedidoPagado.setCuadreCajaId(cajaActiva.get_id());
+                System.out.println("🔗 Pedido pagado parcial vinculado a cuadre: " + cajaActiva.get_id());
+            }
 
             // 💾 Guardar pedido pagado
             Pedido pedidoPagadoGuardado = thePedidoRepository.save(pedidoPagado);
             System.out.println("✅ Pedido pagado creado - ID: " + pedidoPagadoGuardado.get_id()
                     + ", Total: $" + totalPagado);
+
+            // 🏦 Asignar al cuadre de caja activo (igual que en pagarPedido)
+            if (pedidoPagadoGuardado != null) {
+                boolean asignado = cuadreCajaService.asignarPedidoACuadreActivo(pedidoPagadoGuardado.get_id());
+                if (!asignado) {
+                    System.out.println("⚠️ Advertencia: Pedido pagado parcialmente pero no se pudo asignar a ningún cuadre activo");
+                } else {
+                    System.out.println("[PAGO_PARCIAL] Pedido asignado a cuadre activo correctamente");
+                }
+
+                // Notificar vía WebSocket que se pagó un pedido (para actualizar dashboard)
+                try {
+                    webSocketService.notificarPedidoPagado(
+                            pedidoPagadoGuardado.get_id(),
+                            pedidoPagadoGuardado.getMesa(),
+                            pedidoPagadoGuardado.getTotalPagado() > 0 ? pedidoPagadoGuardado.getTotalPagado() : pedidoPagadoGuardado.getTotal(),
+                            pedidoPagadoGuardado.getFormaPago()
+                    );
+                } catch (Exception wsError) {
+                    System.err.println("⚠️ Error enviando notificación WebSocket en pago parcial: " + wsError.getMessage());
+                }
+            }
 
             // 🔄 Actualizar o eliminar pedido original
             String pedidoRestanteId = null;
@@ -1409,6 +1451,7 @@ public class PedidosController {
             System.out.println("🎉 Pago parcial completado exitosamente");
             System.out.println("   💰 Total pagado: $" + totalPagado);
             System.out.println("   📄 Documento: " + documentoPago.get("numeroDocumento"));
+            System.out.println("   🏦 Asignado a cuadre: " + (pedidoPagadoGuardado.getCuadreCajaId() != null ? "Sí" : "No"));
 
             return responseService.success(resultado, "Pago parcial procesado exitosamente");
 

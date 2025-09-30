@@ -110,4 +110,5 @@ public class ImageController {
             return responseService.internalError("Error al subir la imagen: " + e.getMessage());
         }
     }
+    
 }
