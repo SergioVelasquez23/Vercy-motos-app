@@ -24,7 +24,6 @@ import java.util.Map;
 
 @CrossOrigin
 @RestController
-@RequestMapping("/api/images")
 public class ImageController {
 
     @Autowired
@@ -49,7 +48,11 @@ public class ImageController {
         }
     }
 
-    @PostMapping("/upload")
+    // ================================
+    // 📤 ENDPOINTS API (Para subir y gestionar imágenes)
+    // ================================
+    
+    @PostMapping("/api/images/upload")
     public ResponseEntity<ApiResponse<String>> uploadImage(@RequestParam("file") MultipartFile file) {
         try {
             // Validar que el archivo no esté vacío
@@ -86,10 +89,39 @@ public class ImageController {
         }
     }
 
-    @GetMapping("/platos/{filename:.+}")
-    public ResponseEntity<Resource> getImage(@PathVariable String filename) {
+    // ================================
+    // 🖼️ ENDPOINTS PARA SERVIR IMÁGENES (Acceso directo desde frontend)
+    // ================================
+    
+    /**
+     * Endpoint principal para servir imágenes desde /images/platos/{filename}
+     * Este es el endpoint que usa el frontend para cargar las imágenes
+     */
+    @GetMapping("/images/platos/{filename:.+}")
+    public ResponseEntity<Resource> getImageDirect(@PathVariable String filename) {
+        return serveImage(filename);
+    }
+    
+    /**
+     * Endpoint API alternativo para servir imágenes desde /api/images/platos/{filename}
+     */
+    @GetMapping("/api/images/platos/{filename:.+}")
+    public ResponseEntity<Resource> getImageAPI(@PathVariable String filename) {
+        return serveImage(filename);
+    }
+    
+    /**
+     * Método helper para servir imágenes (reutilizado por ambos endpoints)
+     */
+    private ResponseEntity<Resource> serveImage(String filename) {
         try {
             Path filePath = imageLocation.resolve(filename).normalize();
+            
+            // Verificación de seguridad: asegurar que el archivo está dentro del directorio permitido
+            if (!filePath.startsWith(imageLocation)) {
+                return ResponseEntity.badRequest().build();
+            }
+            
             Resource resource = new UrlResource(filePath.toUri());
             
             if (resource.exists() && resource.isReadable()) {
@@ -102,6 +134,7 @@ public class ImageController {
                 return ResponseEntity.ok()
                         .contentType(MediaType.parseMediaType(contentType))
                         .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
+                        .header(HttpHeaders.CACHE_CONTROL, "max-age=3600") // Cache por 1 hora
                         .body(resource);
             } else {
                 return ResponseEntity.notFound().build();
@@ -113,7 +146,7 @@ public class ImageController {
         }
     }
 
-    @DeleteMapping("/platos/{filename:.+}")
+    @DeleteMapping("/api/images/platos/{filename:.+}")
     public ResponseEntity<ApiResponse<Void>> deleteImage(@PathVariable String filename) {
         try {
             Path filePath = imageLocation.resolve(filename).normalize();
@@ -130,7 +163,7 @@ public class ImageController {
     }
 
     // Nuevo endpoint para subir imágenes en base64
-    @PostMapping("/upload-base64")
+    @PostMapping("/api/images/upload-base64")
     public ResponseEntity<ApiResponse<String>> uploadImageBase64(@RequestBody Map<String, String> payload) {
         try {
             String base64 = payload.get("imageBase64");
