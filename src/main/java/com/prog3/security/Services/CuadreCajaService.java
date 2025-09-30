@@ -169,6 +169,37 @@ public class CuadreCajaService {
         System.out.println("NOTA: El fondo inicial (" + fondoInicial + ") se maneja por separado");
         System.out.println("Total que debería haber en caja: " + (fondoInicial + efectivoEsperadoPorVentas));
 
+        // ✅ AGREGAR: Contar pedidos por forma de pago para el frontend
+        int cantidadEfectivo = 0;
+        int cantidadTransferencias = 0;
+        int cantidadTarjetas = 0;
+        int cantidadOtros = 0;
+        
+        for (Pedido pedido : pedidosPagados) {
+            String formaPago = pedido.getFormaPago();
+            
+            if (formaPago == null) {
+                cantidadOtros++;
+            } else if ("efectivo".equalsIgnoreCase(formaPago.trim())) {
+                cantidadEfectivo++;
+            } else if ("transferencia".equalsIgnoreCase(formaPago.trim())) {
+                cantidadTransferencias++;
+            } else if ("tarjeta".equalsIgnoreCase(formaPago.trim())) {
+                cantidadTarjetas++;
+            } else {
+                cantidadOtros++;
+            }
+        }
+        
+        int totalPedidos = pedidosPagados.size();
+        
+        System.out.println("=== CANTIDADES DE PEDIDOS ===");
+        System.out.println("Total pedidos: " + totalPedidos);
+        System.out.println("Efectivo: " + cantidadEfectivo + " pedidos");
+        System.out.println("Transferencias: " + cantidadTransferencias + " pedidos");
+        System.out.println("Tarjetas: " + cantidadTarjetas + " pedidos");
+        System.out.println("Otros: " + cantidadOtros + " pedidos");
+
         // Crear mapa de respuesta con valores corregidos
         Map<String, Object> resultado = new HashMap<>();
         resultado.put("fondoInicial", fondoInicial);
@@ -177,6 +208,12 @@ public class CuadreCajaService {
         resultado.put("ventasTransferencias", totalTransferencias);
         resultado.put("ventasTarjetas", totalTarjetas);
         resultado.put("ventasOtros", totalOtros);
+        // ✅ AGREGAR: Cantidades de pedidos
+        resultado.put("totalPedidos", totalPedidos);
+        resultado.put("cantidadEfectivo", cantidadEfectivo);
+        resultado.put("cantidadTransferencias", cantidadTransferencias);
+        resultado.put("cantidadTarjetas", cantidadTarjetas);
+        resultado.put("cantidadOtros", cantidadOtros);
         resultado.put("totalGastos", totalGastosReales); // ✅ Ahora incluye facturas desde caja
         resultado.put("totalGastosDirectos", totalGastosDirectos);
         resultado.put("totalFacturasDesdeCaja", totalFacturasDesdeCaja);
@@ -198,6 +235,12 @@ public class CuadreCajaService {
         resultado.put("ventasTransferencias", 0.0);
         resultado.put("ventasTarjetas", 0.0);
         resultado.put("ventasOtros", 0.0);
+        // ✅ AGREGAR: Cantidades de pedidos vacías
+        resultado.put("totalPedidos", 0);
+        resultado.put("cantidadEfectivo", 0);
+        resultado.put("cantidadTransferencias", 0);
+        resultado.put("cantidadTarjetas", 0);
+        resultado.put("cantidadOtros", 0);
         resultado.put("totalGastos", 0.0);
         resultado.put("totalGastosDirectos", 0.0);
         resultado.put("totalFacturasDesdeCaja", 0.0);

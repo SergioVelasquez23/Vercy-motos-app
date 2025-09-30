@@ -15,6 +15,10 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.List;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.ArrayList;
+import java.util.List;
 
 // Importar modelos
 import com.prog3.security.Models.*;
@@ -253,14 +257,44 @@ public class AdminController {
             System.out.println("⚠️ INICIANDO ELIMINACIÓN MASIVA ENTRE " + fechaInicio + " Y " + fechaFin);
             System.out.println("🧾 Incluir facturas: " + incluirFacturas);
             
-            // 1. Eliminar pedidos en rango
-            List<Pedido> pedidos = pedidoRepository.findByFechaBetween(fechaInicio, fechaFin);
-            if (!pedidos.isEmpty()) {
-                pedidoRepository.deleteAll(pedidos);
-                eliminados.put("pedidos", (long) pedidos.size());
-                System.out.println("✅ Eliminados " + pedidos.size() + " pedidos");
+            // 1. Eliminar pedidos en rango (tanto por fecha de creación como por fecha de pago)
+            List<Pedido> pedidosPorFecha = pedidoRepository.findByFechaBetween(fechaInicio, fechaFin);
+            List<Pedido> pedidosPorFechaPago = pedidoRepository.findByFechaPagoBetween(fechaInicio, fechaFin);
+            
+            // Combinar ambas listas evitando duplicados
+            Set<String> idsEliminados = new HashSet<>();
+            List<Pedido> todosLosPedidos = new ArrayList<>();
+            
+            for (Pedido pedido : pedidosPorFecha) {
+                if (!idsEliminados.contains(pedido.get_id())) {
+                    todosLosPedidos.add(pedido);
+                    idsEliminados.add(pedido.get_id());
+                }
+            }
+            
+            for (Pedido pedido : pedidosPorFechaPago) {
+                if (!idsEliminados.contains(pedido.get_id())) {
+                    todosLosPedidos.add(pedido);
+                    idsEliminados.add(pedido.get_id());
+                }
+            }
+            
+            if (!todosLosPedidos.isEmpty()) {
+                System.out.println("🔍 DEPURACIÓN - Pedidos a eliminar:");
+                for (Pedido pedido : todosLosPedidos) {
+                    System.out.println("  📦 ID: " + pedido.get_id() + 
+                                      " | Estado: " + pedido.getEstado() + 
+                                      " | Forma pago: " + pedido.getFormaPago() + 
+                                      " | Fecha creación: " + pedido.getFecha() +
+                                      " | Fecha pago: " + pedido.getFechaPago());
+                }
+                
+                pedidoRepository.deleteAll(todosLosPedidos);
+                eliminados.put("pedidos", (long) todosLosPedidos.size());
+                System.out.println("✅ Eliminados " + todosLosPedidos.size() + " pedidos (por fecha creación y fecha pago)");
             } else {
                 eliminados.put("pedidos", 0L);
+                System.out.println("⚠️ No se encontraron pedidos para eliminar en el rango de fechas");
             }
             
             // 2. Eliminar documentos mesa en rango  

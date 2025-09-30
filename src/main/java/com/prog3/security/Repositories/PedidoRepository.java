@@ -36,6 +36,9 @@ public interface PedidoRepository extends MongoRepository<Pedido, String> {
 
     // Buscar pedidos por rango de fechas
     List<Pedido> findByFechaBetween(LocalDateTime fechaInicio, LocalDateTime fechaFin);
+    
+    // Buscar pedidos por rango de fechas de pago (para eliminación por fechas de pago)
+    List<Pedido> findByFechaPagoBetween(LocalDateTime fechaInicio, LocalDateTime fechaFin);
 
     // Buscar pedidos de hoy
     List<Pedido> findByFechaGreaterThanEqual(LocalDateTime fecha);
