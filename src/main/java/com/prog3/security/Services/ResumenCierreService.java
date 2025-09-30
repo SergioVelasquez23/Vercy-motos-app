@@ -111,34 +111,26 @@ public class ResumenCierreService {
     }
 
     /**
-     * Resumen de ventas por forma de pago - INCLUYE todos los pedidos de la
-     * fecha (como CuadreCajaService)
+     * Resumen de ventas por forma de pago - SOLO pedidos asignados al cuadre específico
+     * CORREGIDO: Solo incluye pedidos realmente pagados y asignados a este cuadre
      */
     private Map<String, Object> generarResumenVentas(CuadreCaja cuadre) {
         Map<String, Object> resumenVentas = new HashMap<>();
 
-        // Obtener la fecha de referencia (fecha de apertura del cuadre)
-        LocalDateTime fechaReferencia = cuadre.getFechaApertura();
+        // CORRECCIÓN: Solo usar pedidos específicamente asignados a este cuadre
+        // Esto evita incluir pedidos de otros días o cuadres
+        List<Pedido> pedidosPagados = pedidoRepository.findByCuadreCajaIdAndEstado(cuadre.get_id(), "pagado");
 
-        // CAMBIO: Usar el mismo criterio que CuadreCajaService - todos los pedidos de la fecha usando fechaPago
-        List<Pedido> pedidosPagados = pedidoRepository.findByFechaPagoGreaterThanEqualAndEstado(fechaReferencia, "pagado");
+        System.out.println("📊 CORREGIDO - Pedidos pagados del cuadre " + cuadre.get_id() + ": " + pedidosPagados.size());
 
-        System.out.println("📊 Pedidos encontrados para fecha " + fechaReferencia + ": " + pedidosPagados.size());
-
-        // Solo pedidos específicos del cuadre para comparación
-        List<Pedido> pedidosDelCuadre = pedidoRepository.findByCuadreCajaIdAndEstado(cuadre.get_id(), "pagado");
-        System.out.println("📊 Pedidos asignados al cuadre " + cuadre.get_id() + ": " + pedidosDelCuadre.size());
-
-        // DEBUG: Verificar si hay pedidos sin asignar a cuadre
-        List<Pedido> pedidosSinCuadre = pedidoRepository.findPedidosPagadosSinCuadre();
-        System.out.println("⚠️ DEBUG: Pedidos pagados sin asignar a cuadre: " + pedidosSinCuadre.size());
-
-        if (!pedidosSinCuadre.isEmpty()) {
-            System.out.println("🔍 Primeros 5 pedidos sin cuadre:");
-            for (int i = 0; i < Math.min(5, pedidosSinCuadre.size()); i++) {
-                Pedido p = pedidosSinCuadre.get(i);
-                System.out.println("   - ID: " + p.get_id() + ", Fecha: " + p.getFecha() + ", FormaPago: " + p.getFormaPago() + ", Total: " + p.getTotalPagado());
-            }
+        // DEBUG: Verificar si hay pedidos sin asignar a cuadre que podrían corresponder a este período
+        LocalDateTime fechaInicio = cuadre.getFechaApertura();
+        LocalDateTime fechaFin = cuadre.getFechaCierre() != null ? cuadre.getFechaCierre() : LocalDateTime.now();
+        
+        List<Pedido> pedidosSinCuadreEnPeriodo = pedidoRepository.findPedidosPagadosSinCuadreEnRango(fechaInicio, fechaFin);
+        if (!pedidosSinCuadreEnPeriodo.isEmpty()) {
+            System.out.println("⚠️ ADVERTENCIA: " + pedidosSinCuadreEnPeriodo.size() + " pedidos pagados en el período sin asignar a cuadre");
+            System.out.println("🔍 Estos pedidos deberían ser asignados al cuadre para un reporte preciso");
         }
 
         // Agrupar por forma de pago
