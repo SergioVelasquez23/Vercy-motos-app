@@ -1,7 +1,6 @@
 package com.prog3.security.Services;
 
 import java.time.LocalDateTime;
-import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -164,15 +163,16 @@ public class ResumenCierreService {
 
     /**
      * Resumen de gastos agrupados por tipo
+     * ✅ ACTUALIZADO: Ahora incluye facturas pagadas desde caja como gastos
+     * Las facturas con pagadoDesdeCaja=true son efectivamente gastos que reducen la caja
      */
     private Map<String, Object> generarResumenGastos(CuadreCaja cuadre) {
         Map<String, Object> resumenGastos = new HashMap<>();
 
-        LocalDateTime fechaInicio = cuadre.getFechaApertura();
-        LocalDateTime fechaFin = cuadre.getFechaCierre() != null ? cuadre.getFechaCierre() : LocalDateTime.now();
-
-        // Obtener gastos del período
-        List<Gasto> gastos = gastoRepository.findByFechaGastoBetween(fechaInicio, fechaFin);
+        // ✅ CORREGIDO: Obtener gastos específicos de este cuadre (consistente con endpoints)
+        List<Gasto> gastos = gastoRepository.findByCuadreCajaId(cuadre.get_id());
+        
+        System.out.println("✅ FILTRO CORREGIDO - Gastos del cuadre: " + cuadre.get_id() + " | Encontrados: " + gastos.size());
 
         // Agrupar por tipo de gasto
         Map<String, Double> gastosPorTipo = new HashMap<>();
@@ -184,12 +184,24 @@ public class ResumenCierreService {
             String tipoGasto = gasto.getTipoGastoNombre() != null ? gasto.getTipoGastoNombre() : "Otros";
             String formaPago = gasto.getFormaPago() != null ? gasto.getFormaPago().toLowerCase() : "efectivo";
             double monto = gasto.getMonto();
+            
+            // 🔍 DEBUG: Log detallado de cada gasto de este cuadre
+            System.out.println("💸 Gasto ID: " + gasto.get_id() + 
+                              " | Monto: $" + monto + 
+                              " | Tipo: " + tipoGasto + 
+                              " | Forma de pago: " + formaPago + 
+                              " | Cuadre: " + gasto.getCuadreCajaId() +
+                              " | Fecha: " + gasto.getFechaGasto());
 
             gastosPorTipo.merge(tipoGasto, monto, Double::sum);
             cantidadPorTipo.merge(tipoGasto, 1, Integer::sum);
             gastosPorFormaPago.merge(formaPago, monto, Double::sum);
             totalGastos += monto;
         }
+        
+        // 🔍 DEBUG: Log del total calculado
+        System.out.println("💰 TOTAL GASTOS CALCULADO: $" + totalGastos);
+        System.out.println("🔢 CANTIDAD DE GASTOS: " + gastos.size());
 
         resumenGastos.put("gastosPorTipo", gastosPorTipo);
         resumenGastos.put("cantidadPorTipo", cantidadPorTipo);
@@ -197,18 +209,35 @@ public class ResumenCierreService {
         resumenGastos.put("totalGastos", totalGastos);
         resumenGastos.put("totalRegistros", gastos.size());
 
+        // ✅ AGREGAR: Incluir información sobre facturas pagadas desde caja
+        // (Las facturas pagadas desde caja también son gastos efectivos)
+        Map<String, Object> resumenCompras = generarResumenCompras(cuadre);
+        Double facturasDesdeCaja = (Double) resumenCompras.get("totalComprasDesdeCaja");
+        double totalFacturasDesdeCaja = facturasDesdeCaja != null ? facturasDesdeCaja : 0.0;
+        
+        resumenGastos.put("facturasPagadasDesdeCaja", totalFacturasDesdeCaja);
+        resumenGastos.put("totalGastosIncluyendoFacturas", totalGastos + totalFacturasDesdeCaja);
+        
+        System.out.println("🧾 FACTURAS PAGADAS DESDE CAJA: $" + totalFacturasDesdeCaja);
+        System.out.println("💰 TOTAL GASTOS + FACTURAS: $" + (totalGastos + totalFacturasDesdeCaja));
+
         // Detalles de gastos
         List<Map<String, Object>> detallesGastos = gastos.stream()
                 .map(this::convertirGastoADetalle)
                 .collect(Collectors.toList());
         resumenGastos.put("detallesGastos", detallesGastos);
 
-        System.out.println("💰 Resumen gastos generado - Total: " + totalGastos + ", Registros: " + gastos.size());
+        System.out.println("💰 Resumen gastos generado (cuadre específico) - Total: " + totalGastos + ", Registros: " + gastos.size());
         return resumenGastos;
     }
 
     /**
      * Resumen de facturas de compras de ingredientes
+     */
+    /**
+     * Resumen de facturas de compras
+     * ✅ IMPORTANTE: Las facturas pagadas desde caja (pagadoDesdeCaja=true) 
+     * se consideran GASTOS en el resumen financiero, ya que reducen el efectivo en caja
      */
     private Map<String, Object> generarResumenCompras(CuadreCaja cuadre) {
         Map<String, Object> resumenCompras = new HashMap<>();
@@ -238,10 +267,20 @@ public class ResumenCierreService {
         for (Factura factura : facturasDesdeCaja) {
             String formaPago = factura.getMedioPago() != null ? factura.getMedioPago().toLowerCase() : "efectivo";
             double monto = factura.getTotal();
+            
+            // 🔍 DEBUG: Log detallado de cada factura
+            System.out.println("📄 Factura ID: " + factura.get_id() + 
+                              " | Total: $" + monto + 
+                              " | Forma de pago: " + formaPago + 
+                              " | Fecha: " + factura.getFecha());
 
             comprasPorFormaPago.merge(formaPago, monto, Double::sum);
             totalComprasDesdeCaja += monto;
         }
+        
+        // 🔍 DEBUG: Log del total calculado
+        System.out.println("🛒 TOTAL COMPRAS DESDE CAJA: $" + totalComprasDesdeCaja);
+        System.out.println("🔢 CANTIDAD DE FACTURAS DESDE CAJA: " + facturasDesdeCaja.size());
 
         // Resumen de facturas NO pagadas desde caja (solo informativo)
         double totalComprasNoDesdeCaja = facturasNoDesdeCaja.stream()
@@ -294,14 +333,22 @@ public class ResumenCierreService {
         @SuppressWarnings("unchecked")
         Map<String, Double> comprasPorFormaPago = (Map<String, Double>) resumenCompras.get("comprasPorFormaPago");
 
-        // Entradas adicionales: ingresos de caja
-        LocalDateTime fechaInicio = cuadre.getFechaApertura();
-        LocalDateTime fechaFin = cuadre.getFechaCierre() != null ? cuadre.getFechaCierre() : LocalDateTime.now();
-        List<IngresoCaja> ingresos = ingresoCajaRepository.findByFechaIngresoBetween(fechaInicio, fechaFin);
+        // ✅ CORREGIDO: Entradas adicionales de este cuadre específico (consistente with endpoints)
+        List<IngresoCaja> ingresos = ingresoCajaRepository.findByCuadreCajaId(cuadre.get_id());
+        
+        System.out.println("✅ FILTRO CORREGIDO - Ingresos del cuadre: " + cuadre.get_id() + " | Encontrados: " + ingresos.size());
         Map<String, Double> ingresosPorFormaPago = new HashMap<>();
         for (IngresoCaja ingreso : ingresos) {
             String formaPago = ingreso.getFormaPago() != null ? ingreso.getFormaPago().toLowerCase() : "efectivo";
             double monto = ingreso.getMonto();
+            
+            // 🔍 DEBUG: Log detallado de cada ingreso de este cuadre
+            System.out.println("💰 Ingreso ID: " + ingreso.getId() + 
+                              " | Monto: $" + monto + 
+                              " | Forma de pago: " + formaPago + 
+                              " | Cuadre: " + ingreso.getCuadreCajaId() +
+                              " | Fecha: " + ingreso.getFechaIngreso());
+                              
             ingresosPorFormaPago.merge(formaPago, monto, Double::sum);
         }
 
@@ -313,8 +360,17 @@ public class ResumenCierreService {
         double gastosEfectivo = gastosPorFormaPago != null ? gastosPorFormaPago.getOrDefault("efectivo", 0.0) : 0.0;
         double comprasEfectivo = comprasPorFormaPago != null ? comprasPorFormaPago.getOrDefault("efectivo", 0.0) : 0.0;
 
-        // Cálculo del efectivo esperado
+        // 🔍 DEBUG: Verificar que las facturas pagadas desde caja se están contando correctamente
+        System.out.println("💰 MOVIMIENTOS DE EFECTIVO:");
+        System.out.println("  Fondo inicial: $" + fondoInicial);
+        System.out.println("  Ventas en efectivo: $" + ventasEfectivo);
+        System.out.println("  Ingresos adicionales: $" + ingresosEfectivo);
+        System.out.println("  Gastos directos en efectivo: $" + gastosEfectivo);
+        System.out.println("  Facturas pagadas en efectivo (desde caja): $" + comprasEfectivo);
+
+        // ✅ Cálculo del efectivo esperado (facturas pagadas desde caja se restan como gastos)
         double efectivoEsperado = fondoInicial + ventasEfectivo + ingresosEfectivo - gastosEfectivo - comprasEfectivo;
+        System.out.println("  EFECTIVO ESPERADO: $" + efectivoEsperado);
         movimientos.put("fondoInicial", fondoInicial);
         movimientos.put("ventasEfectivo", ventasEfectivo);
         movimientos.put("ingresosEfectivo", ingresosEfectivo);
@@ -351,22 +407,46 @@ public class ResumenCierreService {
         Map<String, Object> resumenCompras = generarResumenCompras(cuadre);
         Map<String, Object> movimientos = generarMovimientosEfectivo(cuadre);
 
-        // Obtener valores con validación de null
+        // Obtener valores con validación de null y logging para debug
         Double ventasObj = (Double) resumenVentas.get("totalVentas");
         Double gastosObj = (Double) resumenGastos.get("totalGastos");
         Double comprasObj = (Double) resumenCompras.get("totalComprasDesdeCaja");
 
         double totalVentas = ventasObj != null ? ventasObj : 0.0;
-        double totalGastos = gastosObj != null ? gastosObj : 0.0;
-        double totalCompras = comprasObj != null ? comprasObj : 0.0;
+        double totalGastosDirectos = gastosObj != null ? gastosObj : 0.0;
+        double totalFacturasPagadasDesdeCaja = comprasObj != null ? comprasObj : 0.0;
+        
+        // ✅ CORRECCIÓN: Las facturas pagadas desde caja SON gastos
+        double totalGastosReales = totalGastosDirectos + totalFacturasPagadasDesdeCaja;
+        
+        // 🔍 DEBUG: Log para identificar inconsistencias
+        System.out.println("=== DEBUG RESUMEN FINAL ===");
+        System.out.println("Total Ventas calculado: $" + totalVentas);
+        System.out.println("Gastos directos: $" + totalGastosDirectos);
+        System.out.println("Facturas pagadas desde caja: $" + totalFacturasPagadasDesdeCaja);
+        System.out.println("TOTAL GASTOS REALES (gastos + facturas): $" + totalGastosReales);
+        System.out.println("Gastos en efectivo: $" + movimientos.get("gastosEfectivo"));
+        System.out.println("Compras en efectivo: $" + movimientos.get("comprasEfectivo"));
+        System.out.println("=============================");
 
-    resumenFinal.put("totalVentas", totalVentas);
-    resumenFinal.put("totalGastos", totalGastos);
-    resumenFinal.put("totalCompras", totalCompras);
-    resumenFinal.put("utilidadBruta", totalVentas - totalGastos - totalCompras);
-    resumenFinal.put("efectivoEsperado", movimientos.get("efectivoEsperado"));
-    // Eliminados: efectivoDeclarado, diferencia, cuadrado
-    return resumenFinal;
+        // Usar valores corregidos
+        resumenFinal.put("totalVentas", totalVentas);
+        resumenFinal.put("totalGastos", totalGastosReales); // ✅ Ahora incluye facturas pagadas desde caja
+        resumenFinal.put("totalCompras", totalFacturasPagadasDesdeCaja); // Para mantener compatibilidad
+        resumenFinal.put("utilidadBruta", totalVentas - totalGastosReales); // ✅ Cálculo correcto
+        resumenFinal.put("efectivoEsperado", movimientos.get("efectivoEsperado"));
+        
+        // ✅ Agregar valores de efectivo para consistencia con "Movimientos de Efectivo"
+        resumenFinal.put("gastosEfectivo", movimientos.get("gastosEfectivo"));
+        resumenFinal.put("comprasEfectivo", movimientos.get("comprasEfectivo"));
+        resumenFinal.put("ventasEfectivo", movimientos.get("ventasEfectivo"));
+        resumenFinal.put("fondoInicial", movimientos.get("fondoInicial"));
+        
+        // Desglose para claridad
+        resumenFinal.put("gastosDirectos", totalGastosDirectos);
+        resumenFinal.put("facturasPagadasDesdeCaja", totalFacturasPagadasDesdeCaja);
+        
+        return resumenFinal;
     }
 
     // Métodos auxiliares para convertir entidades a detalles

@@ -4,15 +4,18 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import com.prog3.security.Models.CuadreCaja;
 import com.prog3.security.Models.Pedido;
+import com.prog3.security.Models.Gasto;
 import com.prog3.security.Repositories.CuadreCajaRepository;
 import com.prog3.security.Repositories.PedidoRepository;
 import com.prog3.security.Repositories.FacturaRepository;
+import com.prog3.security.Repositories.GastoRepository;
 import com.prog3.security.Models.Factura;
 import com.prog3.security.DTOs.CuadreCajaRequest;
 
@@ -27,6 +30,9 @@ public class CuadreCajaService {
 
     @Autowired
     private FacturaRepository facturaRepository;
+    
+    @Autowired
+    private GastoRepository gastoRepository;
 
     /**
      * Calcula el efectivo esperado en base al fondo inicial más los pedidos
@@ -40,55 +46,60 @@ public class CuadreCajaService {
 
     /**
      * Calcula detalles completos de ventas y efectivo esperado
+     * ✅ CORREGIDO: 
+     * - Solo cuenta pedidos pagados de la caja específica (no documentos duplicados)
+     * - No incluye facturas en ventas (facturas = gastos/compras)
+     * - Cada caja maneja solo sus pedidos específicos
      */
     public Map<String, Object> calcularDetallesVentas() {
-        // CAMBIO: Usar siempre el inicio del día en lugar de la fecha del último cuadre
-        // Esto asegura que se incluyan todos los pedidos del día actual
         LocalDateTime inicioDia = LocalDateTime.now().withHour(0).withMinute(0).withSecond(0).withNano(0);
-        LocalDateTime fechaReferencia = inicioDia;
         double fondoInicial = 0.0;
 
-        System.out.println("NUEVO CÁLCULO: Calculando detalles de ventas desde INICIO DEL DÍA: " + fechaReferencia);
+        System.out.println("✅ CÁLCULO ESPECÍFICO POR CAJA: Calculando detalles de ventas");
 
-        // Buscar el cuadre actual o el último cuadre abierto para obtener el fondo inicial
+        // Buscar el cuadre activo específico (no todos los del día)
         List<CuadreCaja> cuadresActivos = cuadreCajaRepository.findByFechaAperturaHoy(inicioDia)
                 .stream()
                 .filter(c -> !c.isCerrada())
                 .toList();
 
-        if (!cuadresActivos.isEmpty()) {
-            CuadreCaja cuadreActivo = cuadresActivos.get(0); // Tomar el primero si hay varios
-            fondoInicial = cuadreActivo.getFondoInicial();
-            System.out.println("Fondo inicial de la caja activa: " + fondoInicial);
-            System.out.println("Fecha apertura caja activa: " + cuadreActivo.getFechaApertura());
-        } else {
-            System.out.println("No hay cajas activas, fondo inicial es 0");
+        if (cuadresActivos.isEmpty()) {
+            System.out.println("❌ No hay cajas activas");
+            return crearResultadoVacio();
         }
 
+        CuadreCaja cuadreActivo = cuadresActivos.get(0);
+        fondoInicial = cuadreActivo.getFondoInicial();
+        String cuadreCajaId = cuadreActivo.get_id();
+        
+        System.out.println("📦 Procesando caja específica: " + cuadreActivo.getNombre() + " (ID: " + cuadreCajaId + ")");
+        System.out.println("💰 Fondo inicial: $" + fondoInicial);
 
-        // Buscar el cuadre de caja activo (si existe)
-        List<Pedido> todosPedidosPagados;
-        List<Factura> facturas = facturaRepository.findByFechaBetween(fechaReferencia, LocalDateTime.now());
-        if (!cuadresActivos.isEmpty()) {
-            String cuadreCajaId = cuadresActivos.get(0).get_id();
-            todosPedidosPagados = pedidoRepository.findByCuadreCajaIdAndEstado(cuadreCajaId, "pagado");
-            System.out.println("Filtrando pedidos por cuadreCajaId: " + cuadreCajaId);
-        } else {
-            todosPedidosPagados = pedidoRepository.findByFechaPagoGreaterThanEqualAndEstado(fechaReferencia, "pagado");
+        // ✅ SOLO pedidos pagados asignados a esta caja específica
+        List<Pedido> pedidosPagados = pedidoRepository.findByCuadreCajaIdAndEstado(cuadreCajaId, "pagado");
+        
+        System.out.println("✅ PEDIDOS PAGADOS DE ESTA CAJA: " + pedidosPagados.size());
+        
+        // ✅ DEBUG: Mostrar detalles de cada pedido para verificar
+        for (Pedido pedido : pedidosPagados) {
+            System.out.println("  📦 Pedido ID: " + pedido.get_id() + 
+                              " | Estado: " + pedido.getEstado() + 
+                              " | Total: $" + pedido.getTotalPagado() + 
+                              " | Forma pago: " + pedido.getFormaPago() +
+                              " | Caja: " + pedido.getCuadreCajaId());
         }
-        System.out.println("Total de pedidos pagados filtrados: " + todosPedidosPagados.size());
-        System.out.println("Total de facturas desde la fecha de referencia: " + facturas.size());
 
-        // Calcular totales por forma de pago (unificando criterios con cierre de caja)
+        // Calcular totales por forma de pago (SOLO de pedidos pagados)
         double totalEfectivo = 0.0;
         double totalTransferencias = 0.0;
         double totalTarjetas = 0.0;
         double totalOtros = 0.0;
 
-        // Procesar pedidos
-        for (Pedido pedido : todosPedidosPagados) {
+        // ✅ SOLO procesar pedidos pagados (NO facturas en ventas)
+        for (Pedido pedido : pedidosPagados) {
             String formaPago = pedido.getFormaPago();
             double monto = pedido.getTotalPagado();
+            
             if (formaPago == null) {
                 totalOtros += monto;
             } else if ("efectivo".equalsIgnoreCase(formaPago.trim())) {
@@ -102,57 +113,63 @@ public class CuadreCajaService {
             }
         }
 
-        // Procesar facturas
-        for (Factura factura : facturas) {
-            String medioPago = factura.getMedioPago();
-            double monto = factura.getTotal();
-            if (medioPago == null) {
-                totalOtros += monto;
-            } else if ("efectivo".equalsIgnoreCase(medioPago.trim())) {
-                totalEfectivo += monto;
-            } else if ("transferencia".equalsIgnoreCase(medioPago.trim())) {
-                totalTransferencias += monto;
-            } else if ("tarjeta".equalsIgnoreCase(medioPago.trim())) {
-                totalTarjetas += monto;
-            } else {
-                totalOtros += monto;
-            }
-        }
-
         double totalVentas = totalEfectivo + totalTransferencias + totalTarjetas + totalOtros;
 
-        System.out.println("=== RESUMEN DE VENTAS UNIFICADO ===");
+        System.out.println("=== RESUMEN DE VENTAS DE ESTA CAJA ===");
         System.out.println("Efectivo: " + totalEfectivo);
         System.out.println("Transferencias: " + totalTransferencias);
         System.out.println("Tarjetas: " + totalTarjetas);
         System.out.println("Otros: " + totalOtros);
         System.out.println("Total ventas: " + totalVentas);
 
-        // Calcular gastos para la caja activa
-        double totalGastos = 0.0;
-        double totalPagosFacturas = 0.0;
+        // ✅ CORRECCIÓN: Calcular gastos solo del período de esta caja específica
+        LocalDateTime fechaInicio = cuadreActivo.getFechaApertura();
+        LocalDateTime fechaFin = LocalDateTime.now(); // Caja aún abierta
+        
+        System.out.println("📅 Período de esta caja: " + fechaInicio + " hasta " + fechaFin);
+        
+        // Gastos directos del período de esta caja
+        List<Gasto> gastos = gastoRepository.findByFechaGastoBetween(fechaInicio, fechaFin);
+        double totalGastosDirectos = gastos.stream().mapToDouble(Gasto::getMonto).sum();
+        
+        // Facturas pagadas desde caja del período de esta caja (también son gastos)
+        List<Factura> facturasPagadasDesdeCaja = facturaRepository.findByFechaBetween(fechaInicio, fechaFin)
+                .stream()
+                .filter(f -> "compra".equals(f.getTipoFactura()) && f.isPagadoDesdeCaja())
+                .collect(Collectors.toList());
+        double totalFacturasDesdeCaja = facturasPagadasDesdeCaja.stream().mapToDouble(Factura::getTotal).sum();
+        
+        // ✅ Total de gastos reales (gastos + facturas pagadas desde caja)
+        double totalGastosReales = totalGastosDirectos + totalFacturasDesdeCaja;
+        
+        System.out.println("✅ GASTOS DEL PERÍODO DE ESTA CAJA:");
+        System.out.println("  Gastos directos: $" + totalGastosDirectos + " (" + gastos.size() + " registros)");
+        System.out.println("  Facturas desde caja: $" + totalFacturasDesdeCaja + " (" + facturasPagadasDesdeCaja.size() + " facturas)");
+        System.out.println("  TOTAL GASTOS REALES: $" + totalGastosReales);
 
-        if (!cuadresActivos.isEmpty()) {
-            CuadreCaja cuadreActivo = cuadresActivos.get(0);
-            totalGastos = cuadreActivo.getTotalGastos();
-            totalPagosFacturas = cuadreActivo.getTotalPagosFacturas();
-            System.out.println("Gastos registrados en caja: " + totalGastos);
-            System.out.println("Pagos de facturas: " + totalPagosFacturas);
-        }
+        // ✅ Calcular solo gastos en efectivo para el efectivo esperado
+        double gastosEfectivo = gastos.stream()
+                .filter(g -> "efectivo".equalsIgnoreCase(g.getFormaPago()))
+                .mapToDouble(Gasto::getMonto)
+                .sum();
+        double facturasEfectivo = facturasPagadasDesdeCaja.stream()
+                .filter(f -> "efectivo".equalsIgnoreCase(f.getMedioPago()))
+                .mapToDouble(Factura::getTotal)
+                .sum();
+        double totalSalidasEfectivo = gastosEfectivo + facturasEfectivo;
 
-        // CORRECCIÓN: El efectivo esperado es solo las ventas en efectivo - gastos - pagos de facturas
-        double efectivoEsperadoPorVentas = totalEfectivo - totalGastos - totalPagosFacturas;
+        // ✅ CORRECCIÓN: El efectivo esperado considera solo movimientos de efectivo de esta caja
+        double efectivoEsperadoPorVentas = totalEfectivo - totalSalidasEfectivo;
 
-        System.out.println("=== CÁLCULO EFECTIVO ESPERADO ===");
+        System.out.println("=== CÁLCULO EFECTIVO ESPERADO CORREGIDO ===");
         System.out.println("Efectivo esperado por ventas: " + efectivoEsperadoPorVentas
                 + " (Ventas en efectivo: " + totalEfectivo
-                + " - Gastos: " + totalGastos
-                + " - Pagos facturas: " + totalPagosFacturas + ")");
+                + " - Salidas de efectivo: " + totalSalidasEfectivo + ")");
 
         System.out.println("NOTA: El fondo inicial (" + fondoInicial + ") se maneja por separado");
         System.out.println("Total que debería haber en caja: " + (fondoInicial + efectivoEsperadoPorVentas));
 
-        // Crear mapa de respuesta
+        // Crear mapa de respuesta con valores corregidos
         Map<String, Object> resultado = new HashMap<>();
         resultado.put("fondoInicial", fondoInicial);
         resultado.put("totalVentas", totalVentas);
@@ -160,12 +177,33 @@ public class CuadreCajaService {
         resultado.put("ventasTransferencias", totalTransferencias);
         resultado.put("ventasTarjetas", totalTarjetas);
         resultado.put("ventasOtros", totalOtros);
-        resultado.put("totalGastos", totalGastos);
-        resultado.put("totalPagosFacturas", totalPagosFacturas);
+        resultado.put("totalGastos", totalGastosReales); // ✅ Ahora incluye facturas desde caja
+        resultado.put("totalGastosDirectos", totalGastosDirectos);
+        resultado.put("totalFacturasDesdeCaja", totalFacturasDesdeCaja);
         resultado.put("efectivoEsperadoPorVentas", efectivoEsperadoPorVentas);
         resultado.put("totalEfectivoEnCaja", fondoInicial + efectivoEsperadoPorVentas);
-        resultado.put("fechaReferencia", fechaReferencia);
+        resultado.put("fechaReferencia", inicioDia);
 
+        return resultado;
+    }
+
+    /**
+     * Crea un resultado vacío cuando no hay cajas activas
+     */
+    private Map<String, Object> crearResultadoVacio() {
+        Map<String, Object> resultado = new HashMap<>();
+        resultado.put("fondoInicial", 0.0);
+        resultado.put("totalVentas", 0.0);
+        resultado.put("ventasEfectivo", 0.0);
+        resultado.put("ventasTransferencias", 0.0);
+        resultado.put("ventasTarjetas", 0.0);
+        resultado.put("ventasOtros", 0.0);
+        resultado.put("totalGastos", 0.0);
+        resultado.put("totalGastosDirectos", 0.0);
+        resultado.put("totalFacturasDesdeCaja", 0.0);
+        resultado.put("efectivoEsperadoPorVentas", 0.0);
+        resultado.put("totalEfectivoEnCaja", 0.0);
+        resultado.put("fechaReferencia", LocalDateTime.now());
         return resultado;
     }
 
