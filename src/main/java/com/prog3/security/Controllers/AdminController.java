@@ -24,8 +24,13 @@ import com.prog3.security.Repositories.*;
 @RestController
 //todas las rutas en este controlador comienzan con /api/admin
 @RequestMapping("/api/admin")
-//permite solicitudes CORS desde cualquier origen
-@CrossOrigin(origins = "*")
+//permite solicitudes CORS con credenciales desde localhost y Firebase
+@CrossOrigin(origins = {
+    "http://localhost:3000", 
+    "http://localhost:8080", 
+    "http://127.0.0.1:3000",
+    "https://sopa-y-carbon-app.web.app"
+}, allowCredentials = "true")
 
 public class AdminController {
 

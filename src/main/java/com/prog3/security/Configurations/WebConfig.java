@@ -15,7 +15,8 @@ public class WebConfig implements WebMvcConfigurer {
                 "http://192.168.20.24:5300",
                 "http://192.168.20.24:8081",
                 "https://sopa-y-carbon.netlify.app",
-                "https://zingy-kitsune-66762f.netlify.app"
+                "https://zingy-kitsune-66762f.netlify.app",
+                "https://sopa-y-carbon-app.web.app" // 🔥 Firebase frontend
             )
             .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
             .allowedHeaders("*")
