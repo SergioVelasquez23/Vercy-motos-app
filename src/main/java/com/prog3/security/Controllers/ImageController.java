@@ -21,6 +21,9 @@ import java.nio.file.StandardCopyOption;
 import java.util.UUID;
 
 import java.util.Map;
+import java.util.HashMap;
+import java.util.List;
+import java.util.ArrayList;
 
 @CrossOrigin
 @RestController
@@ -196,6 +199,88 @@ public class ImageController {
             return responseService.success(imageUrl, "Imagen subida exitosamente");
         } catch (Exception e) {
             return responseService.internalError("Error al subir la imagen: " + e.getMessage());
+        }
+    }
+    
+    // ================================
+    // 🔍 ENDPOINTS DE DEBUGGING PARA VERIFICAR ARCHIVOS
+    // ================================
+    
+    /**
+     * Endpoint para listar todas las imágenes disponibles (solo para debugging)
+     */
+    @GetMapping("/api/images/list")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> listAvailableImages() {
+        try {
+            Map<String, Object> result = new HashMap<>();
+            
+            // Verificar directorio uploads/platos
+            Path uploadsDir = Paths.get("uploads/platos");
+            List<String> uploadsFiles = new ArrayList<>();
+            if (Files.exists(uploadsDir)) {
+                try {
+                    Files.list(uploadsDir)
+                        .filter(Files::isRegularFile)
+                        .forEach(file -> uploadsFiles.add(file.getFileName().toString()));
+                } catch (IOException e) {
+                    System.err.println("Error listando uploads: " + e.getMessage());
+                }
+            }
+            
+            // Verificar directorio por defecto
+            List<String> defaultFiles = new ArrayList<>();
+            if (Files.exists(imageLocation)) {
+                try {
+                    Files.list(imageLocation)
+                        .filter(Files::isRegularFile)
+                        .forEach(file -> defaultFiles.add(file.getFileName().toString()));
+                } catch (IOException e) {
+                    System.err.println("Error listando directorio por defecto: " + e.getMessage());
+                }
+            }
+            
+            result.put("uploadsDirectory", uploadsDir.toAbsolutePath().toString());
+            result.put("uploadsExists", Files.exists(uploadsDir));
+            result.put("uploadsFiles", uploadsFiles);
+            result.put("defaultDirectory", imageLocation.toAbsolutePath().toString());
+            result.put("defaultExists", Files.exists(imageLocation));
+            result.put("defaultFiles", defaultFiles);
+            result.put("totalFiles", uploadsFiles.size() + defaultFiles.size());
+            
+            return responseService.success(result, "Lista de archivos obtenida");
+        } catch (Exception e) {
+            return responseService.internalError("Error listando archivos: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Endpoint para verificar si una imagen específica existe
+     */
+    @GetMapping("/api/images/check/{filename:.+}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> checkImage(@PathVariable String filename) {
+        try {
+            Path uploadsPath = Paths.get("uploads/platos").resolve(filename).normalize();
+            Path defaultPath = imageLocation.resolve(filename).normalize();
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("filename", filename);
+            result.put("uploadsPath", uploadsPath.toAbsolutePath().toString());
+            result.put("uploadsExists", Files.exists(uploadsPath));
+            result.put("defaultPath", defaultPath.toAbsolutePath().toString());
+            result.put("defaultExists", Files.exists(defaultPath));
+            result.put("anyExists", Files.exists(uploadsPath) || Files.exists(defaultPath));
+            
+            if (Files.exists(uploadsPath)) {
+                result.put("fileSize", Files.size(uploadsPath));
+                result.put("lastModified", Files.getLastModifiedTime(uploadsPath).toString());
+            } else if (Files.exists(defaultPath)) {
+                result.put("fileSize", Files.size(defaultPath));
+                result.put("lastModified", Files.getLastModifiedTime(defaultPath).toString());
+            }
+            
+            return responseService.success(result, "Verificación de archivo completada");
+        } catch (Exception e) {
+            return responseService.internalError("Error verificando archivo: " + e.getMessage());
         }
     }
     
