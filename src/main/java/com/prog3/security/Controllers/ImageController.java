@@ -112,14 +112,28 @@ public class ImageController {
     
     /**
      * Método helper para servir imágenes (reutilizado por ambos endpoints)
+     * Busca en uploads/platos primero, luego en el directorio por defecto
      */
     private ResponseEntity<Resource> serveImage(String filename) {
         try {
-            Path filePath = imageLocation.resolve(filename).normalize();
+            // ✅ CORREGIDO: Buscar primero en uploads/platos (directorio de producción)
+            Path uploadsPath = Paths.get("uploads/platos").resolve(filename).normalize();
+            Path defaultPath = imageLocation.resolve(filename).normalize();
             
-            // Verificación de seguridad: asegurar que el archivo está dentro del directorio permitido
-            if (!filePath.startsWith(imageLocation)) {
-                return ResponseEntity.badRequest().build();
+            Path filePath = null;
+            
+            // Priorizar uploads/platos si existe
+            if (Files.exists(uploadsPath)) {
+                filePath = uploadsPath;
+                System.out.println("🖼️ Sirviendo imagen desde uploads: " + uploadsPath.toAbsolutePath());
+            } else if (Files.exists(defaultPath)) {
+                filePath = defaultPath;
+                System.out.println("🖼️ Sirviendo imagen desde directorio por defecto: " + defaultPath.toAbsolutePath());
+            } else {
+                System.out.println("❌ Imagen no encontrada: " + filename);
+                System.out.println("   Buscado en: " + uploadsPath.toAbsolutePath());
+                System.out.println("   Buscado en: " + defaultPath.toAbsolutePath());
+                return ResponseEntity.notFound().build();
             }
             
             Resource resource = new UrlResource(filePath.toUri());
@@ -140,8 +154,10 @@ public class ImageController {
                 return ResponseEntity.notFound().build();
             }
         } catch (MalformedURLException e) {
+            System.err.println("❌ URL malformada: " + e.getMessage());
             return ResponseEntity.badRequest().build();
         } catch (IOException e) {
+            System.err.println("❌ Error de IO: " + e.getMessage());
             return ResponseEntity.internalServerError().build();
         }
     }
