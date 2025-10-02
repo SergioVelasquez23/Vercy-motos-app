@@ -6,6 +6,8 @@ import com.prog3.security.Models.ItemPedido;
 
 import java.util.Map;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -471,9 +473,70 @@ public class InventarioController {
     public ResponseEntity<ApiResponse<List<MovimientoInventario>>> getAllMovimientos() {
         try {
             List<MovimientoInventario> movimientos = movimientoRepository.findAll();
+            
+            // ✅ CORRECCIÓN: Convertir fechas a zona horaria de Colombia (UTC-5)
+            movimientos.forEach(mov -> {
+                if (mov.getFecha() != null) {
+                    try {
+                        // Convertir UTC a zona horaria de Colombia
+                        ZonedDateTime fechaLocal = mov.getFecha()
+                            .atZone(ZoneId.of("UTC"))
+                            .withZoneSameInstant(ZoneId.of("America/Bogota"));
+                        mov.setFecha(fechaLocal.toLocalDateTime());
+                    } catch (Exception e) {
+                        System.err.println("⚠️ Error convertir zona horaria para movimiento: " + mov.get_id() + " - " + e.getMessage());
+                    }
+                }
+            });
+            
             return responseService.success(movimientos, "Movimientos de inventario obtenidos correctamente");
         } catch (Exception e) {
             return responseService.internalError("Error al obtener movimientos de inventario: " + e.getMessage());
+        }
+    }
+
+    /**
+     * ✅ NUEVO: Endpoint para limpiar movimientos erróneos del historial
+     */
+    @DeleteMapping("/movimientos/limpiar-errores")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> limpiarMovimientosErroneos() {
+        try {
+            // Buscar movimientos con cantidad 0.0 y tipo salida
+            List<MovimientoInventario> movimientosErroneos = movimientoRepository
+                .findByTipoMovimientoAndCantidadMovimiento("salida", 0.0);
+            
+            // También buscar movimientos con motivos contradictorios
+            List<MovimientoInventario> movimientosContradictorios = movimientoRepository.findAll()
+                .stream()
+                .filter(mov -> mov.getMotivo() != null && 
+                    mov.getMotivo().toLowerCase().contains("entrada") && 
+                    mov.getTipoMovimiento().equals("salida") &&
+                    mov.getCantidadMovimiento() <= 0.0)
+                .collect(Collectors.toList());
+            
+            int totalEliminados = movimientosErroneos.size() + movimientosContradictorios.size();
+            
+            // Eliminar movimientos erróneos
+            if (!movimientosErroneos.isEmpty()) {
+                movimientoRepository.deleteAll(movimientosErroneos);
+                System.out.println("🗑️ Eliminados " + movimientosErroneos.size() + " movimientos con cantidad 0.0");
+            }
+            
+            if (!movimientosContradictorios.isEmpty()) {
+                movimientoRepository.deleteAll(movimientosContradictorios);
+                System.out.println("🗑️ Eliminados " + movimientosContradictorios.size() + " movimientos contradictorios");
+            }
+            
+            Map<String, Object> resultado = new HashMap<>();
+            resultado.put("movimientosEliminados", totalEliminados);
+            resultado.put("movimientosCantidadCero", movimientosErroneos.size());
+            resultado.put("movimientosContradictorios", movimientosContradictorios.size());
+            
+            return responseService.success(resultado, 
+                "Limpieza completada. " + totalEliminados + " movimientos erróneos eliminados");
+                
+        } catch (Exception e) {
+            return responseService.internalError("Error limpiando movimientos: " + e.getMessage());
         }
     }
     

@@ -54,4 +54,7 @@ public interface MovimientoInventarioRepository extends MongoRepository<Movimien
 
     // Obtener los últimos N movimientos ordenados por fecha
     List<MovimientoInventario> findTop10ByOrderByFechaDesc();
+
+    // ✅ NUEVO: Buscar movimientos por tipo y cantidad específica
+    List<MovimientoInventario> findByTipoMovimientoAndCantidadMovimiento(String tipoMovimiento, double cantidadMovimiento);
 }

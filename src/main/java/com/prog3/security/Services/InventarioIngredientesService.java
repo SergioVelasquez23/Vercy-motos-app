@@ -132,16 +132,40 @@ public class InventarioIngredientesService {
 
                 inventario = inventarioRepository.save(inventario);
                 System.out.println("✅ Registro de inventario creado para: " + ingrediente.getNombre());
-            }            // Verificar que hay suficiente stock
+            }            // ✅ CORRECCIÓN: Verificación mejorada de stock
             double stockActual = inventario.getCantidadActual();
             double stockAnterior = stockActual; // Guardamos el stock anterior para el registro
 
+            // Validar que la cantidad sea positiva
+            if (cantidad <= 0) {
+                System.out.println("⚠️ Cantidad inválida para ingrediente " + inventario.getProductoNombre() 
+                    + ": " + cantidad + " - Omitiendo descuento");
+                return; // No procesar movimientos de 0 o negativos
+            }
+
+            // Verificar stock suficiente
             if (stockActual < cantidad) {
-                System.err.println("⚠️ Stock insuficiente para ingrediente " + inventario.getProductoNombre()
+                System.err.println("❌ STOCK INSUFICIENTE para ingrediente " + inventario.getProductoNombre()
                         + ". Stock actual: " + stockActual
-                        + ", Cantidad requerida: " + cantidad);
-                // Continuar con el descuento hasta donde sea posible
-                cantidad = stockActual;
+                        + ", Cantidad requerida: " + cantidad
+                        + " - NO SE REALIZARÁ EL DESCUENTO");
+                
+                // ✅ NUEVO: No continuar si no hay stock suficiente
+                // Crear movimiento de advertencia pero sin descontar
+                MovimientoInventario movimientoFallido = new MovimientoInventario();
+                movimientoFallido.setInventarioId(inventario.get_id());
+                movimientoFallido.setProductoId(ingredienteId);
+                movimientoFallido.setProductoNombre(inventario.getProductoNombre());
+                movimientoFallido.setTipoMovimiento("error");
+                movimientoFallido.setCantidadAnterior(stockAnterior);
+                movimientoFallido.setCantidadMovimiento(0.0); // Sin movimiento
+                movimientoFallido.setCantidadNueva(stockActual); // Stock sin cambios
+                movimientoFallido.setMotivo("ERROR: " + motivo + " - Stock insuficiente (Requerido: " + cantidad + ", Disponible: " + stockActual + ")");
+                movimientoFallido.setResponsable(procesadoPor);
+                movimientoFallido.setFecha(LocalDateTime.now());
+                
+                movimientoInventarioRepository.save(movimientoFallido);
+                return; // Salir sin realizar descuento
             }
 
             // Actualizar el ingrediente - USAR EL QUE YA TENEMOS EN MEMORIA (evitar consultar de nuevo)
@@ -160,7 +184,7 @@ public class InventarioIngredientesService {
             System.out.println("⬇️ Inventario actualizado para " + inventario.getProductoNombre()
                     + ": " + stockActual + " -> " + nuevoStock);
 
-            // Crear movimiento de inventario
+            // ✅ CORRECCIÓN: Crear movimiento de inventario con validaciones
             MovimientoInventario movimiento = new MovimientoInventario();
             movimiento.setInventarioId(inventario.get_id());
             movimiento.setProductoId(ingredienteId);
@@ -169,11 +193,20 @@ public class InventarioIngredientesService {
             movimiento.setCantidadAnterior(stockAnterior);
             movimiento.setCantidadMovimiento(-cantidad); // Negativo para salidas
             movimiento.setCantidadNueva(inventario.getCantidadActual());
-            movimiento.setMotivo(motivo);
+            
+            // ✅ CORRECCIÓN: Motivo descriptivo y correcto
+            String motivoCorregido = motivo;
+            if (motivo.toLowerCase().contains("entrada") && cantidad > 0) {
+                // Corregir motivos contradictorios
+                motivoCorregido = motivo.replace("Entrada de", "Consumo de").replace("entrada", "consumo");
+            }
+            movimiento.setMotivo(motivoCorregido);
             movimiento.setResponsable(procesadoPor);
             movimiento.setFecha(LocalDateTime.now());
 
             movimientoInventarioRepository.save(movimiento);
+            
+            System.out.println("📝 Movimiento registrado: " + motivoCorregido + " - Cantidad: " + cantidad);
 
             System.out.println("✅ Descontado " + cantidad + " " + inventario.getUnidadMedida()
                     + " de " + inventario.getProductoNombre()
