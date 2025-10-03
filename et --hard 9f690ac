@@ -1,0 +1,44 @@
+[33m50ae71a[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m no sepo 2
+[33m5c515db[m no sepo
+[33m104b7df[m el diablazo 2
+[33m06b3a2b[m el diablazo
+[33m9f690ac[m the end?
+[33m2b20d30[m underground methods 10
+[33m5135a4f[m underground methods 6
+[33m12cd9d7[m underground methods 5
+[33mcfdf82b[m underground methods 4
+[33m84ebfff[m underground methods 3
+[33mb0351cf[m underground methods 2
+[33med02a2b[m underground methods
+[33m791644f[m pago hecho 2
+[33mf00b3f0[m pago hecho
+[33m40d3c72[m ya no se
+[33m3e27533[m imagenes 2
+[33m0d1dc7b[m imagenes
+[33m2b54651[m  Fix: Pago parcial ahora construye productosAPagar desde itemIds si es necesario (compatibilidad Flutter)
+[33mf6ef610[m  Fix: Agregar variables clienteNombre y clienteDocumento faltantes
+[33mb3cf9e7[m  Fix: Adaptar endpoint pago parcial al formato del frontend
+[33m8521295[m  Fix: Implementar endpoint correcto /pago-parcial con PathVariable
+[33m0b6987e[m fix: Usar método existente findPedidosActivosByMesa en lugar de findByMesaAndEstado
+[33m385ff3d[m fix: Evitar múltiples pedidos activos en la misma mesa
+[33mb734620[m fix: Corregir manejo de mesas alfanuméricas en mover-productos-especificos
+[33ma3a3dd9[m feat: Implementar endpoints para movimiento y pago parcial de productos
+[33m24406fa[m Agrega favicon y archivos de iconos para el sitio
+[33m437f3f9[m Fix Docker image - use eclipse-temurin:17-jre-alpine
+[33m24c1e18[m Fix Dockerfile - use Maven image instead of mvnw wrapper
+[33md6e75c6[m Configure dynamic port for production deployment
+[33mf5b3a24[m Add Dockerfile for Render deployment
+[33m7b7bb09[m final backend
+[33m3a8261f[m 🚀 Mejoras robustas del backend - Validaciones Bean Validation con @Valid en DTOs - Sistema centralizado de excepciones con @ControllerAdvice - Excepciones personalizadas (BusinessException, ResourceNotFoundException) - Documentación completa con Swagger/OpenAPI - Mejoras en PedidosController con validaciones robustas - Logging mejorado con emojis para debugging - Prevención de dobles pagos y validación de caja abierta
+[33m947d7d1[m Actualizar configuración y .gitignore - Añadir configuración de análisis null para Java - Actualizar .gitignore para excluir archivos de instalación JDK y Maven
+[33m37f2277[m Fix: Mejorar validación de pagos y agregar endpoint para mover pedidos
+[33mfe89d3c[m el diablo ya actualizo mucho
+[33mdf9307a[m actualizacion user roles, facturaicon, documentos mesa
+[33mda98b71[m se descuenta correctamente los ingredientes al procesar los pedidos
+[33m053e0bb[m actualizacion a cuadre de caja e inventario
+[33m8f12c62[m fase 4 backend
+[33m62c21fe[m fase 3
+[33mee686d4[m fase 2 backend
+[33m4ee9347[m actualizacion facturas, inventario, estadisticas dashboard
+[33m7ebaab7[m Implementación inicial del sistema de gestión de restaurante
+[33mf95d0cb[m Initial commit

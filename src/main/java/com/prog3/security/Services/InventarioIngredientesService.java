@@ -352,4 +352,172 @@ public class InventarioIngredientesService {
         }
         return false;
     }
+
+    /**
+     * Descuenta ingredientes del inventario agrupando por producto e ingrediente
+     * 
+     * @param productoId ID del producto
+     * @param cantidad Cantidad de productos
+     * @param ingredientesSeleccionados IDs de ingredientes seleccionados (para combos)
+     * @param motivo Razón del descuento
+     * @param referencia Referencia para agrupar movimientos (ej: ID del pedido)
+     * @param responsable Quien realizó la operación
+     * @return Mapa con resultados de la operación
+     */
+    public java.util.Map<String, Object> descontarIngredientesDelInventarioConAgrupacion(
+            String productoId, 
+            int cantidad, 
+            List<String> ingredientesSeleccionados, 
+            String motivo,
+            String referencia,
+            String responsable) {
+        
+        java.util.Map<String, Object> resultado = new java.util.HashMap<>();
+        java.util.List<java.util.Map<String, Object>> ingredientesDescontados = new java.util.ArrayList<>();
+        
+        try {
+            System.out.println("🔄 Iniciando descuento con agrupación para producto: " + productoId);
+            
+            // Obtener el producto
+            Optional<Producto> productoOpt = productoRepository.findById(productoId);
+            if (!productoOpt.isPresent()) {
+                resultado.put("error", "Producto no encontrado: " + productoId);
+                System.err.println("❌ Producto no encontrado: " + productoId);
+                return resultado;
+            }
+            
+            Producto producto = productoOpt.get();
+            resultado.put("producto", producto.getNombre());
+            resultado.put("tipoProducto", producto.getTipoProducto());
+            
+            // Procesar ingredientes requeridos (siempre se descuentan)
+            if (producto.getIngredientesRequeridos() != null) {
+                for (IngredienteProducto ingredienteProducto : producto.getIngredientesRequeridos()) {
+                    java.util.Map<String, Object> infoDescuento = descontarIngredienteIndividual(
+                            ingredienteProducto.getIngredienteId(),
+                            ingredienteProducto.getCantidadNecesaria() * cantidad,
+                            motivo,
+                            "Requerido: " + ingredienteProducto.getNombre(),
+                            referencia,
+                            responsable
+                    );
+                    ingredientesDescontados.add(infoDescuento);
+                }
+            }
+            
+            // Procesar ingredientes opcionales según el tipo de producto
+            if (producto.getIngredientesOpcionales() != null) {
+                for (IngredienteProducto ingredienteProducto : producto.getIngredientesOpcionales()) {
+                    // Para productos individuales, descontar todos los opcionales
+                    // Para combos, solo los seleccionados
+                    boolean debeDescontar = producto.esCombo() 
+                        ? (ingredientesSeleccionados != null && ingredientesSeleccionados.contains(ingredienteProducto.getIngredienteId()))
+                        : producto.esIndividual();
+                    
+                    if (debeDescontar) {
+                        java.util.Map<String, Object> infoDescuento = descontarIngredienteIndividual(
+                                ingredienteProducto.getIngredienteId(),
+                                ingredienteProducto.getCantidadNecesaria() * cantidad,
+                                motivo,
+                                "Opcional: " + ingredienteProducto.getNombre(),
+                                referencia,
+                                responsable
+                        );
+                        ingredientesDescontados.add(infoDescuento);
+                    }
+                }
+            }
+            
+            resultado.put("ingredientesDescontados", ingredientesDescontados);
+            resultado.put("totalIngredientes", ingredientesDescontados.size());
+            resultado.put("exito", true);
+            
+            System.out.println("✅ Descuento con agrupación completado. Total ingredientes procesados: " + ingredientesDescontados.size());
+            
+        } catch (Exception e) {
+            resultado.put("error", e.getMessage());
+            resultado.put("exito", false);
+            System.err.println("❌ Error en descuento con agrupación: " + e.getMessage());
+            e.printStackTrace();
+        }
+        
+        return resultado;
+    }
+    
+    /**
+     * Descuenta un ingrediente específico del inventario
+     */
+    private java.util.Map<String, Object> descontarIngredienteIndividual(
+            String ingredienteId, 
+            double cantidad, 
+            String motivo, 
+            String observacion,
+            String referencia,
+            String responsable) {
+        
+        java.util.Map<String, Object> resultado = new java.util.HashMap<>();
+        resultado.put("ingredienteId", ingredienteId);
+        
+        try {
+            Optional<Ingrediente> ingredienteOpt = ingredienteRepository.findById(ingredienteId);
+            if (!ingredienteOpt.isPresent()) {
+                resultado.put("error", "Ingrediente no encontrado");
+                System.err.println("❌ Ingrediente no encontrado: " + ingredienteId);
+                return resultado;
+            }
+            
+            Ingrediente ingrediente = ingredienteOpt.get();
+            resultado.put("nombre", ingrediente.getNombre());
+            resultado.put("unidad", ingrediente.getUnidad());
+            
+            // Verificar si es descontable
+            if (!ingrediente.isDescontable()) {
+                resultado.put("mensaje", "Ingrediente no descontable");
+                resultado.put("descontado", false);
+                System.out.println("⚠️ Ingrediente no descontable: " + ingrediente.getNombre());
+                return resultado;
+            }
+            
+            // Registrar cantidades para el movimiento
+            double stockAnterior = ingrediente.getStockActual();
+            double cantidadMovimiento = -cantidad; // Negativo porque es salida
+            double stockNuevo = stockAnterior + cantidadMovimiento;
+            
+            // Actualizar el stock
+            ingrediente.setStockActual(stockNuevo);
+            ingredienteRepository.save(ingrediente);
+            
+            // Registrar el movimiento
+            MovimientoInventario movimiento = new MovimientoInventario();
+            movimiento.setProductoId(ingredienteId);
+            movimiento.setProductoNombre(ingrediente.getNombre());
+            movimiento.setTipoMovimiento("salida");
+            movimiento.setMotivo(motivo);
+            movimiento.setCantidadAnterior(stockAnterior);
+            movimiento.setCantidadMovimiento(cantidadMovimiento);
+            movimiento.setCantidadNueva(stockNuevo);
+            movimiento.setResponsable(responsable);
+            movimiento.setReferencia(referencia);
+            movimiento.setObservaciones(observacion);
+            movimiento.setFecha(LocalDateTime.now());
+            
+            movimientoInventarioRepository.save(movimiento);
+            
+            // Información de resultado
+            resultado.put("stockAnterior", stockAnterior);
+            resultado.put("cantidadDescontada", cantidad);
+            resultado.put("stockNuevo", stockNuevo);
+            resultado.put("descontado", true);
+            resultado.put("movimientoId", movimiento.get_id());
+            
+            System.out.println("✅ Ingrediente descontado: " + ingrediente.getNombre() + " - Cantidad: " + cantidad + " - Stock nuevo: " + stockNuevo);
+            
+        } catch (Exception e) {
+            resultado.put("error", e.getMessage());
+            resultado.put("descontado", false);
+            System.err.println("❌ Error descontando ingrediente " + ingredienteId + ": " + e.getMessage());
+        }
+        
+        return resultado;
+    }
 }
