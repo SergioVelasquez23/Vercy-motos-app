@@ -68,15 +68,18 @@ public class InventarioIngredientesService {
             // Manejar ingredientes opcionales según el tipo de producto
             if (producto.esCombo()) {
                 // PRODUCTO COMBO: Solo descontar ingredientes opcionales seleccionados por el cliente
-                if (producto.getIngredientesOpcionales() != null && ingredientesSeleccionados != null) {
+                if (producto.getIngredientesOpcionales() != null && ingredientesSeleccionados != null && !ingredientesSeleccionados.isEmpty()) {
                     System.out.println("🔸 Procesando selección de combo para: " + ingredientesSeleccionados.size() + " ingredientes");
                     for (IngredienteProducto ingredienteOpc : producto.getIngredientesOpcionales()) {
                         if (ingredientesSeleccionados.contains(ingredienteOpc.getIngredienteId())) {
                             double cantidadTotal = ingredienteOpc.getCantidadNecesaria() * cantidadProducto;
                             descontarIngrediente(ingredienteOpc.getIngredienteId(), cantidadTotal,
                                     "Selección de combo - " + producto.getNombre(), procesadoPor);
+                            System.out.println("✅ Descontado ingrediente de combo: " + ingredienteOpc.getIngredienteId() + ", cantidad: " + cantidadTotal);
                         }
                     }
+                } else {
+                    System.out.println("⚠️ Combo sin ingredientes seleccionados - no se descuenta nada de los opcionales");
                 }
             } else if (producto.esIndividual()) {
                 // PRODUCTO INDIVIDUAL: Descontar TODOS los ingredientes opcionales por defecto
@@ -85,9 +88,14 @@ public class InventarioIngredientesService {
                     for (IngredienteProducto ingredienteOpc : producto.getIngredientesOpcionales()) {
                         double cantidadTotal = ingredienteOpc.getCantidadNecesaria() * cantidadProducto;
                         descontarIngrediente(ingredienteOpc.getIngredienteId(), cantidadTotal,
-                                "Consumo por defecto - " + producto.getNombre(), procesadoPor);
+                                "Consumo automático individual - " + producto.getNombre(), procesadoPor);
+                        System.out.println("✅ Descontado ingrediente individual: " + ingredienteOpc.getIngredienteId() + ", cantidad: " + cantidadTotal);
                     }
+                } else {
+                    System.out.println("ℹ️ Producto individual sin ingredientes opcionales configurados");
                 }
+            } else {
+                System.out.println("⚠️ Tipo de producto no reconocido: " + producto.getTipoProducto());
             }
 
         } catch (Exception e) {
@@ -193,6 +201,8 @@ public class InventarioIngredientesService {
             movimiento.setCantidadAnterior(stockAnterior);
             movimiento.setCantidadMovimiento(-cantidad); // Negativo para salidas
             movimiento.setCantidadNueva(inventario.getCantidadActual());
+            movimiento.setResponsable(procesadoPor);
+            movimiento.setFecha(LocalDateTime.now());
             
             // ✅ CORRECCIÓN: Motivo descriptivo y correcto
             String motivoCorregido = motivo;
@@ -519,5 +529,156 @@ public class InventarioIngredientesService {
         }
         
         return resultado;
+    }
+
+    /**
+     * ✅ NUEVO: Valida si hay stock suficiente para un producto antes de procesarlo
+     * 
+     * @param productoId ID del producto
+     * @param cantidad Cantidad de productos
+     * @param ingredientesSeleccionados Ingredientes seleccionados
+     * @return Map con resultado de validación
+     */
+    public java.util.Map<String, Object> validarStockDisponible(
+            String productoId, 
+            int cantidad, 
+            List<String> ingredientesSeleccionados) {
+        
+        java.util.Map<String, Object> resultado = new java.util.HashMap<>();
+        java.util.List<java.util.Map<String, Object>> ingredientesFaltantes = new java.util.ArrayList<>();
+        java.util.List<java.util.Map<String, Object>> alertasBajo = new java.util.ArrayList<>();
+        
+        try {
+            System.out.println("🔍 Validando stock para producto: " + productoId + " cantidad: " + cantidad);
+            
+            Optional<Producto> productoOpt = productoRepository.findById(productoId);
+            if (!productoOpt.isPresent()) {
+                resultado.put("stockSuficiente", false);
+                resultado.put("error", "Producto no encontrado");
+                return resultado;
+            }
+            
+            Producto producto = productoOpt.get();
+            resultado.put("producto", producto.getNombre());
+            resultado.put("tipoProducto", producto.getTipoProducto());
+            
+            if (!producto.isTieneIngredientes()) {
+                resultado.put("stockSuficiente", true);
+                resultado.put("mensaje", "Producto sin ingredientes - No requiere validación");
+                return resultado;
+            }
+            
+            if (ingredientesSeleccionados == null) {
+                ingredientesSeleccionados = java.util.List.of();
+            }
+            
+            // Validar ingredientes requeridos
+            if (producto.getIngredientesRequeridos() != null) {
+                System.out.println("📋 Validando " + producto.getIngredientesRequeridos().size() + " ingredientes requeridos");
+                for (IngredienteProducto ingredienteReq : producto.getIngredientesRequeridos()) {
+                    validarIngredienteIndividual(
+                        ingredienteReq, cantidad, "requerido", producto.getNombre(),
+                        ingredientesFaltantes, alertasBajo
+                    );
+                }
+            }
+            
+            // Validar ingredientes opcionales seleccionados
+            if (producto.getIngredientesOpcionales() != null) {
+                System.out.println("📋 Validando ingredientes opcionales seleccionados de " + producto.getIngredientesOpcionales().size() + " disponibles");
+                for (IngredienteProducto ingredienteOpc : producto.getIngredientesOpcionales()) {
+                    if (ingredientesSeleccionados.contains(ingredienteOpc.getIngredienteId())) {
+                        System.out.println("   ✓ Validando opcional seleccionado: " + ingredienteOpc.getNombre());
+                        validarIngredienteIndividual(
+                            ingredienteOpc, cantidad, "opcional", producto.getNombre(),
+                            ingredientesFaltantes, alertasBajo
+                        );
+                    }
+                }
+            }
+            
+            boolean stockSuficiente = ingredientesFaltantes.isEmpty();
+            
+            resultado.put("stockSuficiente", stockSuficiente);
+            resultado.put("ingredientesFaltantes", ingredientesFaltantes);
+            resultado.put("alertas", alertasBajo);
+            resultado.put("totalIngredientesValidados", 
+                (producto.getIngredientesRequeridos() != null ? producto.getIngredientesRequeridos().size() : 0) +
+                ingredientesSeleccionados.size());
+            
+            System.out.println("✅ Validación completada - Stock suficiente: " + stockSuficiente + 
+                              ", Faltantes: " + ingredientesFaltantes.size() + 
+                              ", Alertas: " + alertasBajo.size());
+            
+        } catch (Exception e) {
+            resultado.put("stockSuficiente", false);
+            resultado.put("error", "Error validando stock: " + e.getMessage());
+            System.err.println("❌ Error en validación de stock: " + e.getMessage());
+            e.printStackTrace();
+        }
+        
+        return resultado;
+    }
+
+    /**
+     * ✅ MÉTODO AUXILIAR: Valida un ingrediente individual
+     */
+    private void validarIngredienteIndividual(
+            IngredienteProducto ingredienteProducto, 
+            int cantidad, 
+            String tipo,
+            String nombreProducto,
+            java.util.List<java.util.Map<String, Object>> ingredientesFaltantes,
+            java.util.List<java.util.Map<String, Object>> alertasBajo) {
+        
+        try {
+            Optional<Ingrediente> ingredienteOpt = ingredienteRepository.findById(ingredienteProducto.getIngredienteId());
+            if (!ingredienteOpt.isPresent()) {
+                System.err.println("❌ Ingrediente no encontrado: " + ingredienteProducto.getIngredienteId());
+                return;
+            }
+            
+            Ingrediente ingrediente = ingredienteOpt.get();
+            double cantidadNecesaria = ingredienteProducto.getCantidadNecesaria() * cantidad;
+            double stockActual = ingrediente.getStockActual();
+            
+            System.out.println("   🔍 " + ingrediente.getNombre() + 
+                              " - Stock: " + stockActual + 
+                              ", Necesario: " + cantidadNecesaria + 
+                              " (" + tipo + ")");
+            
+            if (stockActual < cantidadNecesaria) {
+                // Stock insuficiente
+                java.util.Map<String, Object> faltante = new java.util.HashMap<>();
+                faltante.put("ingredienteId", ingrediente.get_id());
+                faltante.put("nombre", ingrediente.getNombre());
+                faltante.put("stockActual", stockActual);
+                faltante.put("cantidadNecesaria", cantidadNecesaria);
+                faltante.put("unidad", ingrediente.getUnidad());
+                faltante.put("tipo", tipo);
+                faltante.put("producto", nombreProducto);
+                faltante.put("faltante", cantidadNecesaria - stockActual);
+                ingredientesFaltantes.add(faltante);
+                
+                System.out.println("   ❌ STOCK INSUFICIENTE: " + ingrediente.getNombre() + 
+                                  " (Faltante: " + (cantidadNecesaria - stockActual) + " " + ingrediente.getUnidad() + ")");
+            } else if (stockActual - cantidadNecesaria <= (ingrediente.getStockMinimo() != null ? ingrediente.getStockMinimo() : 0)) {
+                // Stock bajo pero suficiente
+                java.util.Map<String, Object> alerta = new java.util.HashMap<>();
+                alerta.put("ingrediente", ingrediente.getNombre());
+                alerta.put("stockActual", stockActual);
+                alerta.put("stockMinimo", ingrediente.getStockMinimo());
+                alerta.put("stockDespues", stockActual - cantidadNecesaria);
+                alerta.put("unidad", ingrediente.getUnidad());
+                alertasBajo.add(alerta);
+                
+                System.out.println("   ⚠️ STOCK BAJO: " + ingrediente.getNombre() + 
+                                  " (Después: " + (stockActual - cantidadNecesaria) + " " + ingrediente.getUnidad() + ")");
+            } else {
+                System.out.println("   ✅ Stock suficiente: " + ingrediente.getNombre());
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Error validando ingrediente: " + e.getMessage());
+        }
     }
 }

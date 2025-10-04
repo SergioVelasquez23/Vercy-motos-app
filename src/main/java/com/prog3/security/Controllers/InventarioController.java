@@ -1,15 +1,14 @@
 package com.prog3.security.Controllers;
 
 import java.util.Set;
-import java.util.HashSet;
 import com.prog3.security.Models.ItemPedido;
 
 import java.util.Map;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -36,17 +35,12 @@ import com.prog3.security.Services.InventarioIngredientesService;
 import com.prog3.security.Models.MovimientoInventario;
 import com.prog3.security.Models.Pedido;
 import com.prog3.security.Models.Producto;
-import com.prog3.security.Models.User;
 import com.prog3.security.Repositories.IngredienteRepository;
 import com.prog3.security.Repositories.InventarioRepository;
 import com.prog3.security.Repositories.MovimientoInventarioRepository;
 import com.prog3.security.Repositories.PedidoRepository;
-import com.prog3.security.Repositories.ProductoRepository;
-import com.prog3.security.Repositories.UserRepository;
 import com.prog3.security.Services.InventarioService;
 import com.prog3.security.Services.ResponseService;
-import com.prog3.security.Utils.ApiResponse;
-
 import com.prog3.security.Utils.ApiResponse;
 
 @CrossOrigin
@@ -119,6 +113,101 @@ public class InventarioController {
             e.printStackTrace();
         }
         return responseService.success(resultado, "Diagnóstico completado");
+    }
+
+    /**
+     * ✅ NUEVO: Endpoint para validar stock disponible antes de procesar un pedido
+     * Permite al frontend verificar si hay suficiente stock antes de agregar al carrito
+     */
+    @PostMapping("/validar-stock")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> validarStock(
+            @RequestParam String productoId,
+            @RequestParam int cantidad,
+            @RequestBody(required = false) List<String> ingredientesSeleccionados) {
+        try {
+            System.out.println("🔍 Validando stock para producto: " + productoId + ", cantidad: " + cantidad);
+            
+            if (ingredientesSeleccionados == null) {
+                ingredientesSeleccionados = new ArrayList<>();
+            }
+            
+            Map<String, Object> resultado = inventarioIngredientesService.validarStockDisponible(
+                productoId, cantidad, ingredientesSeleccionados
+            );
+            
+            boolean stockSuficiente = (Boolean) resultado.get("stockSuficiente");
+            String mensaje = stockSuficiente 
+                ? "Stock suficiente para procesar el pedido"
+                : "Stock insuficiente para algunos ingredientes";
+            
+            // Agregar información adicional para el frontend
+            resultado.put("timestamp", LocalDateTime.now());
+            resultado.put("validacionExitosa", true);
+            
+            return responseService.success(resultado, mensaje);
+        } catch (Exception e) {
+            Map<String, Object> errorResult = new HashMap<>();
+            errorResult.put("stockSuficiente", false);
+            errorResult.put("error", e.getMessage());
+            errorResult.put("validacionExitosa", false);
+            errorResult.put("timestamp", LocalDateTime.now());
+            
+            System.err.println("❌ Error validando stock: " + e.getMessage());
+            return responseService.internalError("Error al validar stock: " + e.getMessage());
+        }
+    }
+
+    /**
+     * ✅ NUEVO: Endpoint para obtener información detallada de stock de un ingrediente
+     * Útil para mostrar información detallada en el frontend
+     */
+    @GetMapping("/ingrediente/{ingredienteId}/info")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getInfoIngrediente(@PathVariable String ingredienteId) {
+        try {
+            Optional<Ingrediente> ingredienteOpt = ingredienteRepository.findById(ingredienteId);
+            if (!ingredienteOpt.isPresent()) {
+                return responseService.notFound("Ingrediente no encontrado con ID: " + ingredienteId);
+            }
+            
+            Ingrediente ingrediente = ingredienteOpt.get();
+            Map<String, Object> info = new HashMap<>();
+            
+            // Información básica
+            info.put("id", ingrediente.get_id());
+            info.put("nombre", ingrediente.getNombre());
+            info.put("stockActual", ingrediente.getStockActual());
+            info.put("stockMinimo", ingrediente.getStockMinimo());
+            info.put("unidad", ingrediente.getUnidad());
+            info.put("descontable", ingrediente.isDescontable());
+            
+            // Estado del stock
+            boolean stockBajo = ingrediente.getStockActual() <= ingrediente.getStockMinimo();
+            boolean stockCritico = ingrediente.getStockActual() <= 0;
+            
+            info.put("estadoStock", stockCritico ? "critico" : (stockBajo ? "bajo" : "normal"));
+            info.put("stockBajo", stockBajo);
+            info.put("stockCritico", stockCritico);
+            
+            // Información del inventario si existe
+            Inventario inventario = inventarioRepository.findByProductoId(ingredienteId);
+            if (inventario != null) {
+                info.put("inventarioId", inventario.get_id());
+                info.put("cantidadInventario", inventario.getCantidadActual());
+                info.put("fechaUltimaActualizacion", inventario.getFechaUltimaActualizacion());
+                
+                // Verificar sincronización
+                boolean sincronizado = Math.abs(ingrediente.getStockActual() - inventario.getCantidadActual()) < 0.0001;
+                info.put("sincronizado", sincronizado);
+            } else {
+                info.put("inventarioId", null);
+                info.put("sincronizado", false);
+                info.put("mensaje", "Sin registro de inventario - Se creará automáticamente si es necesario");
+            }
+            
+            return responseService.success(info, "Información del ingrediente obtenida exitosamente");
+        } catch (Exception e) {
+            return responseService.internalError("Error al obtener información del ingrediente: " + e.getMessage());
+        }
     }
 
     @GetMapping("")
@@ -537,6 +626,61 @@ public class InventarioController {
                 
         } catch (Exception e) {
             return responseService.internalError("Error limpiando movimientos: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * ✅ NUEVO: Endpoint para sincronizar inventario con ingredientes
+     */
+    @PostMapping("/sincronizar-con-ingredientes")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> sincronizarInventarioConIngredientes() {
+        try {
+            List<Ingrediente> ingredientes = ingredienteRepository.findAll();
+            Map<String, Object> resultado = new HashMap<>();
+            List<String> sincronizados = new ArrayList<>();
+            List<String> creados = new ArrayList<>();
+            int contadorSincronizados = 0;
+            int contadorCreados = 0;
+
+            for (Ingrediente ingrediente : ingredientes) {
+                Inventario inventario = inventarioRepository.findByProductoId(ingrediente.get_id());
+                
+                if (inventario == null) {
+                    // Crear registro de inventario para ingrediente
+                    inventario = new Inventario();
+                    inventario.setProductoId(ingrediente.get_id());
+                    inventario.setProductoNombre(ingrediente.getNombre());
+                    inventario.setCategoria("Ingrediente");
+                    inventario.setCantidadActual(ingrediente.getStockActual());
+                    inventario.setCantidadMinima(ingrediente.getStockMinimo());
+                    inventario.setUnidadMedida(ingrediente.getUnidad());
+                    inventario.setCostoUnitario(0.0);
+                    inventario.setFechaUltimaActualizacion(LocalDateTime.now());
+                    inventario.setEstado("activo");
+                    
+                    inventarioRepository.save(inventario);
+                    creados.add(ingrediente.getNombre());
+                    contadorCreados++;
+                } else {
+                    // Sincronizar stock si hay diferencias
+                    if (Math.abs(inventario.getCantidadActual() - ingrediente.getStockActual()) > 0.0001) {
+                        inventario.setCantidadActual(ingrediente.getStockActual());
+                        inventario.setFechaUltimaActualizacion(LocalDateTime.now());
+                        inventarioRepository.save(inventario);
+                        sincronizados.add(ingrediente.getNombre() + " (" + inventario.getCantidadActual() + " -> " + ingrediente.getStockActual() + ")");
+                        contadorSincronizados++;
+                    }
+                }
+            }
+
+            resultado.put("ingredientesCreados", contadorCreados);
+            resultado.put("ingredientesSincronizados", contadorSincronizados);
+            resultado.put("detallesCreados", creados);
+            resultado.put("detallesSincronizados", sincronizados);
+
+            return responseService.success(resultado, "Sincronización completada exitosamente");
+        } catch (Exception e) {
+            return responseService.internalError("Error al sincronizar inventario: " + e.getMessage());
         }
     }
     
