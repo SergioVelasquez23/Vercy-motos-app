@@ -147,16 +147,16 @@ public class CuadreCajaService {
         System.out.println("  Facturas desde caja: $" + totalFacturasDesdeCaja + " (" + facturasPagadasDesdeCaja.size() + " facturas)");
         System.out.println("  TOTAL GASTOS REALES: $" + totalGastosReales);
 
-        // ✅ Calcular solo gastos en efectivo para el efectivo esperado
-        double gastosEfectivo = gastos.stream()
-                .filter(g -> "efectivo".equalsIgnoreCase(g.getFormaPago()))
+        // ✅ Calcular solo gastos en efectivo que salen de caja para el efectivo esperado
+        double gastosEfectivoDesdeCaja = gastos.stream()
+                .filter(g -> "efectivo".equalsIgnoreCase(g.getFormaPago()) && g.isPagadoDesdeCaja())
                 .mapToDouble(Gasto::getMonto)
                 .sum();
         double facturasEfectivo = facturasPagadasDesdeCaja.stream()
                 .filter(f -> "efectivo".equalsIgnoreCase(f.getMedioPago()))
                 .mapToDouble(Factura::getTotal)
                 .sum();
-        double totalSalidasEfectivo = gastosEfectivo + facturasEfectivo;
+        double totalSalidasEfectivo = gastosEfectivoDesdeCaja + facturasEfectivo;
 
         // ✅ CORRECCIÓN: El efectivo esperado considera solo movimientos de efectivo de esta caja
         double efectivoEsperadoPorVentas = totalEfectivo - totalSalidasEfectivo;
@@ -164,8 +164,9 @@ public class CuadreCajaService {
         System.out.println("=== CÁLCULO EFECTIVO ESPERADO CORREGIDO ===");
         System.out.println("Efectivo esperado por ventas: " + efectivoEsperadoPorVentas
                 + " (Ventas en efectivo: " + totalEfectivo
-                + " - Salidas de efectivo: " + totalSalidasEfectivo + ")");
-
+                + " - Gastos efectivo desde caja: " + gastosEfectivoDesdeCaja
+                + " - Facturas efectivo: " + facturasEfectivo + ")");
+        System.out.println("NOTA: Gastos no pagados desde caja NO afectan el efectivo esperado");
         System.out.println("NOTA: El fondo inicial (" + fondoInicial + ") se maneja por separado");
         System.out.println("Total que debería haber en caja: " + (fondoInicial + efectivoEsperadoPorVentas));
 
@@ -200,6 +201,21 @@ public class CuadreCajaService {
         System.out.println("Tarjetas: " + cantidadTarjetas + " pedidos");
         System.out.println("Otros: " + cantidadOtros + " pedidos");
 
+        // Calcular gastos separados por si salen de caja o no
+        double gastosNoDesdeCaja = gastos.stream()
+                .filter(g -> !g.isPagadoDesdeCaja())
+                .mapToDouble(Gasto::getMonto)
+                .sum();
+        double gastosDesdeCaja = gastos.stream()
+                .filter(g -> g.isPagadoDesdeCaja())
+                .mapToDouble(Gasto::getMonto)
+                .sum();
+        
+        System.out.println("💰 DESGLOSE DE GASTOS POR ORIGEN:");
+        System.out.println("  Gastos DESDE caja: $" + gastosDesdeCaja + " (afectan efectivo)");
+        System.out.println("  Gastos NO desde caja: $" + gastosNoDesdeCaja + " (NO afectan efectivo)");
+        System.out.println("  Solo gastos efectivo desde caja: $" + gastosEfectivoDesdeCaja);
+
         // Crear mapa de respuesta con valores corregidos
         Map<String, Object> resultado = new HashMap<>();
         resultado.put("fondoInicial", fondoInicial);
@@ -217,6 +233,10 @@ public class CuadreCajaService {
         resultado.put("totalGastos", totalGastosReales); // ✅ Ahora incluye facturas desde caja
         resultado.put("totalGastosDirectos", totalGastosDirectos);
         resultado.put("totalFacturasDesdeCaja", totalFacturasDesdeCaja);
+        // ✅ NUEVO: Separar gastos según si salen de caja o no
+        resultado.put("gastosDesdeCaja", gastosDesdeCaja);
+        resultado.put("gastosNoDesdeCaja", gastosNoDesdeCaja);
+        resultado.put("gastosEfectivoDesdeCaja", gastosEfectivoDesdeCaja);
         resultado.put("efectivoEsperadoPorVentas", efectivoEsperadoPorVentas);
         resultado.put("totalEfectivoEnCaja", fondoInicial + efectivoEsperadoPorVentas);
         resultado.put("fechaReferencia", inicioDia);
@@ -244,6 +264,10 @@ public class CuadreCajaService {
         resultado.put("totalGastos", 0.0);
         resultado.put("totalGastosDirectos", 0.0);
         resultado.put("totalFacturasDesdeCaja", 0.0);
+        // ✅ NUEVO: Campos para gastos desde caja
+        resultado.put("gastosDesdeCaja", 0.0);
+        resultado.put("gastosNoDesdeCaja", 0.0);
+        resultado.put("gastosEfectivoDesdeCaja", 0.0);
         resultado.put("efectivoEsperadoPorVentas", 0.0);
         resultado.put("totalEfectivoEnCaja", 0.0);
         resultado.put("fechaReferencia", LocalDateTime.now());
