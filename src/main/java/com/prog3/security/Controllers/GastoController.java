@@ -3,6 +3,7 @@ package com.prog3.security.Controllers;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -165,6 +166,17 @@ public class GastoController {
             return responseService.success(null, "Gasto eliminado exitosamente");
         } catch (Exception e) {
             return responseService.internalError("Error al eliminar gasto: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/migrar-campo-pagado-desde-caja")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> migrarCampoPagadoDesdeCaja() {
+        try {
+            Map<String, Object> result = gastoService.migrarCampoPagadoDesdeCaja();
+            return responseService.success(result, "Migración completada: todos los gastos ahora tienen pagadoDesdeCaja = false");
+            
+        } catch (Exception e) {
+            return responseService.internalError("Error en la migración: " + e.getMessage());
         }
     }
 

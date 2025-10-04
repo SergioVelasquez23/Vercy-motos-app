@@ -386,4 +386,34 @@ public class GastoService {
         
         return resultado;
     }
+
+    /**
+     * Migrar todos los gastos existentes para que tengan el campo pagadoDesdeCaja en false
+     */
+    public Map<String, Object> migrarCampoPagadoDesdeCaja() {
+        Map<String, Object> resultado = new HashMap<>();
+        
+        try {
+            // Obtener todos los gastos
+            List<Gasto> todosLosGastos = gastoRepository.findAll();
+            int gastosActualizados = 0;
+            
+            for (Gasto gasto : todosLosGastos) {
+                // Forzar que todos los gastos existentes tengan pagadoDesdeCaja = false
+                gasto.setPagadoDesdeCaja(false);
+                gastoRepository.save(gasto);
+                gastosActualizados++;
+            }
+            
+            resultado.put("gastosActualizados", gastosActualizados);
+            resultado.put("totalGastos", todosLosGastos.size());
+            resultado.put("exito", true);
+            
+        } catch (Exception e) {
+            resultado.put("error", "Error en la migración: " + e.getMessage());
+            resultado.put("exito", false);
+        }
+        
+        return resultado;
+    }
 }

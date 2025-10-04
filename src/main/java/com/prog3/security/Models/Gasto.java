@@ -1,6 +1,7 @@
 package com.prog3.security.Models;
 
 import java.time.LocalDateTime;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class Gasto {
 
@@ -17,7 +18,8 @@ public class Gasto {
     private String numeroFactura;
     private String proveedor;
     private String formaPago;     // "efectivo", "transferencia", etc.
-    private boolean pagadoDesdeCaja; // Indica si el gasto fue pagado desde la caja (descuenta del efectivo)
+    @JsonProperty("pagadoDesdeCaja")
+    private Boolean pagadoDesdeCaja; // Indica si el gasto fue pagado desde la caja (descuenta del efectivo)
     private double subtotal;      // Valor antes de impuestos
     private double impuestos;     // Valor de impuestos
     private String estado;        // "pendiente", "aprobado", "rechazado"
@@ -28,7 +30,7 @@ public class Gasto {
         this.fechaGasto = LocalDateTime.now();
         this.estado = "pendiente";
         this.formaPago = "efectivo"; // Por defecto
-        this.pagadoDesdeCaja = false; // Por defecto no se paga desde caja
+        this.pagadoDesdeCaja = Boolean.FALSE; // Por defecto no se paga desde caja
     }
 
     // Constructor con campos básicos
@@ -174,10 +176,11 @@ public class Gasto {
     }
 
     public boolean isPagadoDesdeCaja() {
-        return pagadoDesdeCaja;
+        // ✅ Manejar valores nulos para gastos existentes sin este campo
+        return pagadoDesdeCaja != null ? pagadoDesdeCaja : false;
     }
 
     public void setPagadoDesdeCaja(boolean pagadoDesdeCaja) {
-        this.pagadoDesdeCaja = pagadoDesdeCaja;
+        this.pagadoDesdeCaja = Boolean.valueOf(pagadoDesdeCaja);
     }
 }
