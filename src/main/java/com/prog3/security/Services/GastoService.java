@@ -26,6 +26,9 @@ public class GastoService {
     @Autowired
     private CuadreCajaRepository cuadreCajaRepository;
 
+    @Autowired
+    private CuadreCajaService cuadreCajaService;
+
     /**
      * Obtiene todos los gastos
      */
@@ -67,6 +70,11 @@ public class GastoService {
             throw new RuntimeException("No se pueden agregar gastos a un cuadre cerrado");
         }
 
+        // ✅ NUEVA FUNCIONALIDAD: Validar si se puede pagar desde caja
+        if (request.isPagadoDesdeCaja()) {
+            validarPagoDesdeEfectivoCaja(cuadreCaja, request.getMonto());
+        }
+
         Gasto gasto = new Gasto(
                 request.getCuadreCajaId(),
                 request.getTipoGastoId(),
@@ -99,6 +107,15 @@ public class GastoService {
             gasto.setImpuestos(request.getImpuestos());
         }
 
+        // ✅ NUEVA FUNCIONALIDAD: Establecer pagadoDesdeCaja
+        gasto.setPagadoDesdeCaja(request.isPagadoDesdeCaja());
+
+        // ✅ Si se paga desde caja, forzar forma de pago a efectivo
+        if (request.isPagadoDesdeCaja()) {
+            gasto.setFormaPago("efectivo");
+            System.out.println("💰 Gasto marcado como pagado desde caja - Forma de pago establecida en 'efectivo'");
+        }
+
         // Guardar el gasto
         Gasto gastoGuardado = gastoRepository.save(gasto);
 
@@ -122,6 +139,12 @@ public class GastoService {
         CuadreCaja cuadreCaja = cuadreCajaRepository.findById(gasto.getCuadreCajaId()).orElse(null);
         if (cuadreCaja != null && cuadreCaja.isCerrada()) {
             throw new RuntimeException("No se pueden modificar gastos de un cuadre cerrado");
+        }
+
+        // ✅ NUEVA FUNCIONALIDAD: Validar cambio en pagadoDesdeCaja
+        boolean cambiaAPagadoDesdeCaja = !gasto.isPagadoDesdeCaja() && request.isPagadoDesdeCaja();
+        if (cambiaAPagadoDesdeCaja) {
+            validarPagoDesdeEfectivoCaja(cuadreCaja, request.getMonto() > 0 ? request.getMonto() : gasto.getMonto());
         }
 
         // Actualizar tipo de gasto si cambió
@@ -164,6 +187,15 @@ public class GastoService {
         }
         if (request.getImpuestos() > 0) {
             gasto.setImpuestos(request.getImpuestos());
+        }
+
+        // ✅ NUEVA FUNCIONALIDAD: Actualizar pagadoDesdeCaja
+        gasto.setPagadoDesdeCaja(request.isPagadoDesdeCaja());
+
+        // ✅ Si se paga desde caja, forzar forma de pago a efectivo
+        if (request.isPagadoDesdeCaja()) {
+            gasto.setFormaPago("efectivo");
+            System.out.println("💰 Gasto actualizado como pagado desde caja - Forma de pago establecida en 'efectivo'");
         }
 
         // Guardar el gasto actualizado
@@ -244,5 +276,114 @@ public class GastoService {
         System.out.println("Totales de gastos actualizados en cuadre " + cuadreCaja.get_id()
                 + ": Total = " + totalGastos
                 + ", Desglose = " + cuadreCaja.getGastosDesglosados());
+    }
+
+    /**
+     * ✅ NUEVA FUNCIONALIDAD: Valida si hay suficiente efectivo en caja para realizar un gasto
+     */
+    private void validarPagoDesdeEfectivoCaja(CuadreCaja cuadreCaja, double montoGasto) {
+        try {
+            System.out.println("💰 Validando pago desde efectivo de caja...");
+            System.out.println("💰 Monto del gasto: $" + montoGasto);
+            
+            // Obtener los detalles actuales de la caja usando el servicio
+            Map<String, Object> detallesCaja = cuadreCajaService.calcularDetallesVentas();
+            
+            // Obtener el fondo inicial de la caja
+            double fondoInicial = cuadreCaja.getFondoInicial();
+            
+            // Obtener el efectivo por ventas del cálculo
+            double efectivoPorVentas = (double) detallesCaja.get("efectivoEsperadoPorVentas");
+            
+            // Calcular el efectivo total disponible
+            double efectivoTotalDisponible = fondoInicial + efectivoPorVentas;
+            
+            // Obtener gastos en efectivo ya registrados para esta caja
+            List<Gasto> gastosEfectivoExistentes = gastoRepository.findByCuadreCajaId(cuadreCaja.get_id())
+                    .stream()
+                    .filter(g -> "efectivo".equalsIgnoreCase(g.getFormaPago()) || g.isPagadoDesdeCaja())
+                    .toList();
+            
+            double gastosEfectivoYaRealizados = gastosEfectivoExistentes.stream()
+                    .mapToDouble(Gasto::getMonto)
+                    .sum();
+            
+            // Calcular efectivo disponible después de gastos existentes
+            double efectivoDisponible = efectivoTotalDisponible - gastosEfectivoYaRealizados;
+            
+            System.out.println("💰 === VALIDACIÓN DE EFECTIVO EN CAJA ===");
+            System.out.println("💰 Fondo inicial: $" + fondoInicial);
+            System.out.println("💰 Efectivo por ventas: $" + efectivoPorVentas);
+            System.out.println("💰 Efectivo total: $" + efectivoTotalDisponible);
+            System.out.println("💰 Gastos en efectivo ya realizados: $" + gastosEfectivoYaRealizados + " (" + gastosEfectivoExistentes.size() + " gastos)");
+            System.out.println("💰 Efectivo disponible: $" + efectivoDisponible);
+            System.out.println("💰 Monto del nuevo gasto: $" + montoGasto);
+            
+            if (efectivoDisponible < montoGasto) {
+                String mensajeError = String.format(
+                    "Efectivo insuficiente en caja. Disponible: $%.2f, Requerido: $%.2f. Faltante: $%.2f",
+                    efectivoDisponible, montoGasto, (montoGasto - efectivoDisponible)
+                );
+                System.err.println("❌ " + mensajeError);
+                throw new RuntimeException(mensajeError);
+            }
+            
+            System.out.println("✅ Efectivo suficiente para realizar el gasto");
+            
+        } catch (RuntimeException e) {
+            // Re-lanzar errores de validación
+            throw e;
+        } catch (Exception e) {
+            System.err.println("❌ Error al validar efectivo en caja: " + e.getMessage());
+            throw new RuntimeException("Error al validar disponibilidad de efectivo: " + e.getMessage());
+        }
+    }
+
+    /**
+     * ✅ NUEVA FUNCIONALIDAD: Calcula el efectivo disponible en una caja
+     */
+    public Map<String, Object> calcularEfectivoDisponible(String cuadreCajaId) {
+        Map<String, Object> resultado = new HashMap<>();
+        
+        try {
+            CuadreCaja cuadreCaja = cuadreCajaRepository.findById(cuadreCajaId).orElse(null);
+            if (cuadreCaja == null) {
+                resultado.put("error", "Cuadre de caja no encontrado");
+                return resultado;
+            }
+            
+            // Obtener detalles de ventas
+            Map<String, Object> detallesCaja = cuadreCajaService.calcularDetallesVentas();
+            
+            double fondoInicial = cuadreCaja.getFondoInicial();
+            double efectivoPorVentas = (double) detallesCaja.get("efectivoEsperadoPorVentas");
+            double efectivoTotal = fondoInicial + efectivoPorVentas;
+            
+            // Calcular gastos en efectivo
+            List<Gasto> gastosEfectivo = gastoRepository.findByCuadreCajaId(cuadreCajaId)
+                    .stream()
+                    .filter(g -> "efectivo".equalsIgnoreCase(g.getFormaPago()) || g.isPagadoDesdeCaja())
+                    .toList();
+            
+            double totalGastosEfectivo = gastosEfectivo.stream()
+                    .mapToDouble(Gasto::getMonto)
+                    .sum();
+            
+            double efectivoDisponible = efectivoTotal - totalGastosEfectivo;
+            
+            resultado.put("fondoInicial", fondoInicial);
+            resultado.put("efectivoPorVentas", efectivoPorVentas);
+            resultado.put("efectivoTotal", efectivoTotal);
+            resultado.put("gastosEfectivo", totalGastosEfectivo);
+            resultado.put("efectivoDisponible", efectivoDisponible);
+            resultado.put("cantidadGastosEfectivo", gastosEfectivo.size());
+            resultado.put("exito", true);
+            
+        } catch (Exception e) {
+            resultado.put("error", "Error al calcular efectivo disponible: " + e.getMessage());
+            resultado.put("exito", false);
+        }
+        
+        return resultado;
     }
 }

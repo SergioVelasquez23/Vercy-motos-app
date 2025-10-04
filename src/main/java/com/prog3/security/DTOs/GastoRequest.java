@@ -15,6 +15,7 @@ public class GastoRequest {
     private String numeroFactura;
     private String proveedor;
     private String formaPago;
+    private boolean pagadoDesdeCaja;
     private double subtotal;
     private double impuestos;
 
@@ -124,5 +125,13 @@ public class GastoRequest {
 
     public void setImpuestos(double impuestos) {
         this.impuestos = impuestos;
+    }
+
+    public boolean isPagadoDesdeCaja() {
+        return pagadoDesdeCaja;
+    }
+
+    public void setPagadoDesdeCaja(boolean pagadoDesdeCaja) {
+        this.pagadoDesdeCaja = pagadoDesdeCaja;
     }
 }

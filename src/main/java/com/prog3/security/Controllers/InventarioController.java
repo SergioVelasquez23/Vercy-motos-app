@@ -964,4 +964,145 @@ public class InventarioController {
             return responseService.internalError("Error al procesar el pedido para inventario: " + e.getMessage());
         }
     }
+
+    // ==============================
+    // DEBUG ENDPOINTS - DIAGNOSTICAR PRODUCTOS
+    // ==============================
+    
+    @GetMapping("/debug/producto/{productoId}")
+    public ResponseEntity<Map<String, Object>> debugProducto(@PathVariable String productoId) {
+        try {
+            Map<String, Object> debug = new HashMap<>();
+            
+            // Buscar el producto
+            Optional<Producto> productoOpt = productoRepository.findById(productoId);
+            if (!productoOpt.isPresent()) {
+                debug.put("error", "Producto no encontrado");
+                return ResponseEntity.notFound().build();
+            }
+            
+            Producto producto = productoOpt.get();
+            
+            // Información básica del producto
+            debug.put("id", producto.get_id());
+            debug.put("nombre", producto.getNombre());
+            debug.put("tipoProducto", producto.getTipoProducto());
+            debug.put("tieneIngredientes", producto.isTieneIngredientes());
+            debug.put("esCombo", producto.esCombo());
+            debug.put("esIndividual", producto.esIndividual());
+            
+            // Información de ingredientes
+            List<Map<String, Object>> ingredientesRequeridos = new ArrayList<>();
+            if (producto.getIngredientesRequeridos() != null) {
+                for (IngredienteProducto ing : producto.getIngredientesRequeridos()) {
+                    Map<String, Object> ingInfo = new HashMap<>();
+                    ingInfo.put("ingredienteId", ing.getIngredienteId());
+                    ingInfo.put("cantidadNecesaria", ing.getCantidadNecesaria());
+                    
+                    // Verificar stock
+                    Inventario inventario = inventarioRepository.findByProductoId(ing.getIngredienteId());
+                    if (inventario != null) {
+                        ingInfo.put("stockDisponible", inventario.getCantidadActual());
+                        ingInfo.put("stockMinimo", inventario.getCantidadMinima());
+                        ingInfo.put("nombreIngrediente", inventario.getProductoNombre());
+                    } else {
+                        ingInfo.put("stockDisponible", "NO ENCONTRADO EN INVENTARIO");
+                    }
+                    
+                    ingredientesRequeridos.add(ingInfo);
+                }
+            }
+            debug.put("ingredientesRequeridos", ingredientesRequeridos);
+            
+            List<Map<String, Object>> ingredientesOpcionales = new ArrayList<>();
+            if (producto.getIngredientesOpcionales() != null) {
+                for (IngredienteProducto ing : producto.getIngredientesOpcionales()) {
+                    Map<String, Object> ingInfo = new HashMap<>();
+                    ingInfo.put("ingredienteId", ing.getIngredienteId());
+                    ingInfo.put("cantidadNecesaria", ing.getCantidadNecesaria());
+                    
+                    // Verificar stock
+                    Inventario inventario = inventarioRepository.findByProductoId(ing.getIngredienteId());
+                    if (inventario != null) {
+                        ingInfo.put("stockDisponible", inventario.getCantidadActual());
+                        ingInfo.put("stockMinimo", inventario.getCantidadMinima());
+                        ingInfo.put("nombreIngrediente", inventario.getProductoNombre());
+                    } else {
+                        ingInfo.put("stockDisponible", "NO ENCONTRADO EN INVENTARIO");
+                    }
+                    
+                    ingredientesOpcionales.add(ingInfo);
+                }
+            }
+            debug.put("ingredientesOpcionales", ingredientesOpcionales);
+            
+            // Diagnóstico
+            List<String> diagnosticos = new ArrayList<>();
+            if (!producto.isTieneIngredientes()) {
+                diagnosticos.add("❌ Producto no está configurado para manejar ingredientes (tieneIngredientes = false)");
+            }
+            if (producto.esIndividual() && (producto.getIngredientesOpcionales() == null || producto.getIngredientesOpcionales().isEmpty())) {
+                diagnosticos.add("⚠️ Producto individual sin ingredientes opcionales - no se descuentan ingredientes");
+            }
+            if (producto.esCombo() && (producto.getIngredientesOpcionales() == null || producto.getIngredientesOpcionales().isEmpty())) {
+                diagnosticos.add("⚠️ Producto combo sin ingredientes opcionales - solo se permiten personalizaciones");
+            }
+            if (!producto.esCombo() && !producto.esIndividual()) {
+                diagnosticos.add("❌ Tipo de producto no reconocido: '" + producto.getTipoProducto() + "'");
+            }
+            
+            debug.put("diagnosticos", diagnosticos);
+            
+            return ResponseEntity.ok(debug);
+            
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", "Error al debuggar producto: " + e.getMessage());
+            return ResponseEntity.status(500).body(error);
+        }
+    }
+
+    @PostMapping("/debug/test-descuento/{productoId}")
+    public ResponseEntity<Map<String, Object>> testDescuentoProducto(
+            @PathVariable String productoId,
+            @RequestParam(defaultValue = "1") int cantidad,
+            @RequestBody(required = false) List<String> ingredientesSeleccionados) {
+        
+        try {
+            Map<String, Object> resultado = new HashMap<>();
+            
+            System.out.println("🧪 ===========================================");
+            System.out.println("🧪 TEST DE DESCUENTO - INICIO");
+            System.out.println("🧪 Producto ID: " + productoId);
+            System.out.println("🧪 Cantidad: " + cantidad);
+            System.out.println("🧪 Ingredientes seleccionados: " + ingredientesSeleccionados);
+            System.out.println("🧪 ===========================================");
+            
+            // Llamar al método de descuento
+            inventarioIngredientesService.descontarIngredientesDelInventario(
+                productoId, 
+                cantidad, 
+                ingredientesSeleccionados, 
+                "TEST-USER"
+            );
+            
+            resultado.put("status", "success");
+            resultado.put("message", "Test de descuento completado. Revisa los logs para ver el resultado.");
+            resultado.put("productoId", productoId);
+            resultado.put("cantidad", cantidad);
+            resultado.put("ingredientesSeleccionados", ingredientesSeleccionados);
+            
+            System.out.println("🧪 ===========================================");
+            System.out.println("🧪 TEST DE DESCUENTO - FIN");
+            System.out.println("🧪 ===========================================");
+            
+            return ResponseEntity.ok(resultado);
+            
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", "Error en test de descuento: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(500).body(error);
+        }
+    }
 }

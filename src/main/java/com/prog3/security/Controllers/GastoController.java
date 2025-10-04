@@ -2,6 +2,7 @@ package com.prog3.security.Controllers;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -92,8 +93,19 @@ public class GastoController {
                 return responseService.badRequest("El monto debe ser un valor positivo");
             }
 
+            // ✅ NUEVA VALIDACIÓN: Si se marca como pagado desde caja, verificar disponibilidad
+            if (request.isPagadoDesdeCaja()) {
+                System.out.println("💰 Creando gasto pagado desde caja por valor de $" + request.getMonto());
+            }
+
             Gasto nuevoGasto = gastoService.crearGasto(request);
-            return responseService.created(nuevoGasto, "Gasto creado exitosamente");
+            
+            String mensaje = "Gasto creado exitosamente";
+            if (nuevoGasto.isPagadoDesdeCaja()) {
+                mensaje += " y descontado del efectivo de caja";
+            }
+            
+            return responseService.created(nuevoGasto, mensaje);
         } catch (Exception e) {
             return responseService.internalError("Error al crear gasto: " + e.getMessage());
         }
@@ -109,6 +121,11 @@ public class GastoController {
                 return responseService.badRequest("El monto no puede ser negativo");
             }
 
+            // ✅ NUEVA VALIDACIÓN: Informar si se cambia a pagado desde caja
+            if (request.isPagadoDesdeCaja()) {
+                System.out.println("💰 Actualizando gasto como pagado desde caja por valor de $" + request.getMonto());
+            }
+
             Gasto gastoActualizado;
             try {
                 gastoActualizado = gastoService.actualizarGasto(id, request);
@@ -120,7 +137,12 @@ public class GastoController {
                 return responseService.notFound("Gasto no encontrado con ID: " + id);
             }
 
-            return responseService.success(gastoActualizado, "Gasto actualizado exitosamente");
+            String mensaje = "Gasto actualizado exitosamente";
+            if (gastoActualizado.isPagadoDesdeCaja()) {
+                mensaje += " (pagado desde efectivo de caja)";
+            }
+
+            return responseService.success(gastoActualizado, mensaje);
         } catch (Exception e) {
             return responseService.internalError("Error al actualizar gasto: " + e.getMessage());
         }
@@ -143,6 +165,21 @@ public class GastoController {
             return responseService.success(null, "Gasto eliminado exitosamente");
         } catch (Exception e) {
             return responseService.internalError("Error al eliminar gasto: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/cuadre/{cuadreId}/efectivo-disponible")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getEfectivoDisponible(@PathVariable String cuadreId) {
+        try {
+            Map<String, Object> efectivoInfo = gastoService.calcularEfectivoDisponible(cuadreId);
+            
+            if (efectivoInfo.containsKey("error")) {
+                return responseService.badRequest((String) efectivoInfo.get("error"));
+            }
+            
+            return responseService.success(efectivoInfo, "Información de efectivo disponible obtenida");
+        } catch (Exception e) {
+            return responseService.internalError("Error al calcular efectivo disponible: " + e.getMessage());
         }
     }
 }

@@ -55,14 +55,22 @@ public class InventarioIngredientesService {
 
             System.out.println("🥘 Descontando ingredientes para " + producto.getTipoProducto() + ": " + producto.getNombre()
                     + " (Cantidad: " + cantidadProducto + ")");
+            System.out.println("🔍 DEBUG - Tipo de producto: " + producto.getTipoProducto());
+            System.out.println("🔍 DEBUG - esCombo(): " + producto.esCombo());
+            System.out.println("🔍 DEBUG - esIndividual(): " + producto.esIndividual());
+            System.out.println("🔍 DEBUG - Ingredientes requeridos: " + (producto.getIngredientesRequeridos() != null ? producto.getIngredientesRequeridos().size() : "null"));
+            System.out.println("🔍 DEBUG - Ingredientes opcionales: " + (producto.getIngredientesOpcionales() != null ? producto.getIngredientesOpcionales().size() : "null"));
 
             // Descontar ingredientes requeridos (siempre se consumen independientemente del tipo)
             if (producto.getIngredientesRequeridos() != null) {
+                System.out.println("📋 Procesando " + producto.getIngredientesRequeridos().size() + " ingredientes requeridos");
                 for (IngredienteProducto ingredienteReq : producto.getIngredientesRequeridos()) {
                     double cantidadTotal = ingredienteReq.getCantidadNecesaria() * cantidadProducto;
                     descontarIngrediente(ingredienteReq.getIngredienteId(), cantidadTotal,
                             "Consumo automático - " + producto.getNombre(), procesadoPor);
                 }
+            } else {
+                System.out.println("ℹ️ No hay ingredientes requeridos configurados");
             }
 
             // Manejar ingredientes opcionales según el tipo de producto
@@ -83,19 +91,26 @@ public class InventarioIngredientesService {
                 }
             } else if (producto.esIndividual()) {
                 // PRODUCTO INDIVIDUAL: Descontar TODOS los ingredientes opcionales por defecto
-                if (producto.getIngredientesOpcionales() != null) {
-                    System.out.println("🔹 Procesando producto individual - descontando todos los ingredientes por defecto");
+                System.out.println("🔹 PROCESANDO PRODUCTO INDIVIDUAL");
+                System.out.println("🔹 Producto: " + producto.getNombre());
+                System.out.println("🔹 Ingredientes opcionales disponibles: " + (producto.getIngredientesOpcionales() != null ? producto.getIngredientesOpcionales().size() : "null"));
+                
+                if (producto.getIngredientesOpcionales() != null && !producto.getIngredientesOpcionales().isEmpty()) {
+                    System.out.println("🔹 Descontando TODOS los " + producto.getIngredientesOpcionales().size() + " ingredientes opcionales por defecto");
                     for (IngredienteProducto ingredienteOpc : producto.getIngredientesOpcionales()) {
                         double cantidadTotal = ingredienteOpc.getCantidadNecesaria() * cantidadProducto;
+                        System.out.println("🔹 Descontando ingrediente: " + ingredienteOpc.getIngredienteId() + " - Cantidad: " + cantidadTotal);
                         descontarIngrediente(ingredienteOpc.getIngredienteId(), cantidadTotal,
                                 "Consumo automático individual - " + producto.getNombre(), procesadoPor);
                         System.out.println("✅ Descontado ingrediente individual: " + ingredienteOpc.getIngredienteId() + ", cantidad: " + cantidadTotal);
                     }
                 } else {
-                    System.out.println("ℹ️ Producto individual sin ingredientes opcionales configurados");
+                    System.out.println("⚠️ PROBLEMA: Producto individual '" + producto.getNombre() + "' NO TIENE ingredientes opcionales configurados");
+                    System.out.println("⚠️ Esto significa que no se descuenta nada del inventario para este producto individual");
                 }
             } else {
-                System.out.println("⚠️ Tipo de producto no reconocido: " + producto.getTipoProducto());
+                System.out.println("⚠️ Tipo de producto no reconocido: '" + producto.getTipoProducto() + "'");
+                System.out.println("⚠️ esCombo(): " + producto.esCombo() + ", esIndividual(): " + producto.esIndividual());
             }
 
         } catch (Exception e) {
