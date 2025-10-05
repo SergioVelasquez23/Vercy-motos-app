@@ -47,6 +47,8 @@ import com.prog3.security.Utils.ApiResponse;
 @RestController
 @RequestMapping("/api/inventario")
 public class InventarioController {
+    @Autowired
+    private com.prog3.security.Repositories.UnidadRepository unidadRepository;
 
     @Autowired
     private InventarioRepository inventarioRepository;
@@ -211,10 +213,21 @@ public class InventarioController {
     }
 
     @GetMapping("")
-    public ResponseEntity<ApiResponse<List<Inventario>>> findAll() {
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> findAll() {
         try {
             List<Inventario> inventarios = inventarioRepository.findAll();
-            return responseService.success(inventarios, "Inventario obtenido exitosamente");
+            List<Map<String, Object>> resultado = new ArrayList<>();
+            for (Inventario inv : inventarios) {
+                Map<String, Object> map = new HashMap<>();
+                map.put("inventario", inv);
+                if (inv.getUnidadId() != null) {
+                    unidadRepository.findById(inv.getUnidadId()).ifPresent(u -> {
+                        map.put("unidad", u);
+                    });
+                }
+                resultado.add(map);
+            }
+            return responseService.success(resultado, "Inventario obtenido exitosamente");
         } catch (Exception e) {
             return responseService.internalError("Error al obtener el inventario: " + e.getMessage());
         }
@@ -331,6 +344,10 @@ public class InventarioController {
 
     @PostMapping
     public ResponseEntity<ApiResponse<Inventario>> create(@RequestBody Inventario inventario) {
+            // Validar unidadId
+            if (inventario.getUnidadId() == null || !unidadRepository.existsById(inventario.getUnidadId())) {
+                return responseService.badRequest("La unidad seleccionada no existe");
+            }
         try {
             // Verificar si ya existe inventario para este producto
             if (inventarioRepository.existsByProductoId(inventario.getProductoId())) {
@@ -362,6 +379,10 @@ public class InventarioController {
 
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<Inventario>> update(@PathVariable String id, @RequestBody Inventario inventarioActualizado) {
+            // Validar unidadId
+            if (inventarioActualizado.getUnidadId() == null || !unidadRepository.existsById(inventarioActualizado.getUnidadId())) {
+                return responseService.badRequest("La unidad seleccionada no existe");
+            }
         try {
             Inventario inventarioExistente = inventarioRepository.findById(id).orElse(null);
             if (inventarioExistente == null) {
@@ -722,12 +743,27 @@ public class InventarioController {
                     ingrediente.setStockActual(nuevoStock);
                     ingredienteRepository.save(ingrediente);
                     
-                    // Crear DTO para este ingrediente devuelto
+                    // Obtener datos de unidad
+                    String unidadId = ingrediente.getUnidadId();
+                    String unidadNombre = null;
+                    String unidadAbreviatura = null;
+                    if (unidadId != null) {
+                        com.prog3.security.Models.Unidad unidad = null;
+                        try {
+                            unidad = unidadRepository.findById(unidadId).orElse(null);
+                        } catch (Exception ex) {}
+                        if (unidad != null) {
+                            unidadNombre = unidad.getNombre();
+                            unidadAbreviatura = unidad.getAbreviatura();
+                        }
+                    }
                     IngredienteDevueltoDTO ingredienteDevueltoDTO = new IngredienteDevueltoDTO(
                         ingredienteId,
                         ingrediente.getNombre(),
                         cantidadADevolver,
-                        ingrediente.getUnidad(),
+                        unidadId,
+                        unidadNombre,
+                        unidadAbreviatura,
                         stockAnterior,
                         nuevoStock
                     );

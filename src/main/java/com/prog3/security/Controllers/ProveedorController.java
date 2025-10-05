@@ -144,13 +144,9 @@ public class ProveedorController {
     @PostMapping("")
     public ResponseEntity<ApiResponse<Proveedor>> crearProveedor(@RequestBody Proveedor proveedor) {
         try {
-            // Validar campos obligatorios
+            // Validar campo obligatorio: solo nombre
             if (proveedor.getNombre() == null || proveedor.getNombre().trim().isEmpty()) {
                 return responseService.badRequest("El nombre del proveedor es obligatorio");
-            }
-
-            if (proveedor.getTelefono() == null || proveedor.getTelefono().trim().isEmpty()) {
-                return responseService.badRequest("El teléfono del proveedor es obligatorio");
             }
 
             // Validar duplicados

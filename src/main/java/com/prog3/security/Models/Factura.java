@@ -9,6 +9,20 @@ import java.util.ArrayList;
 @Document
 public class Factura {
 
+    public boolean getPagadoDesdeCaja() {
+        return pagadoDesdeCaja;
+    }
+
+    private String cuadreCajaId;
+
+    public String getCuadreCajaId() {
+        return cuadreCajaId;
+    }
+
+    public void setCuadreCajaId(String cuadreCajaId) {
+        this.cuadreCajaId = cuadreCajaId;
+    }
+
     @Id
     private String _id;
 

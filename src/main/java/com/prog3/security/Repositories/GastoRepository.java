@@ -7,6 +7,9 @@ import com.prog3.security.Models.Gasto;
 
 public interface GastoRepository extends MongoRepository<Gasto, String> {
 
+    // Buscar gastos por cuadreCajaId y rango de fechas
+    List<Gasto> findByCuadreCajaIdAndFechaGastoBetween(String cuadreCajaId, LocalDateTime fechaInicio, LocalDateTime fechaFin);
+
     List<Gasto> findByCuadreCajaId(String cuadreCajaId);
 
     List<Gasto> findByTipoGastoId(String tipoGastoId);

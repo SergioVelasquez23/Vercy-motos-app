@@ -5,6 +5,16 @@ import java.util.ArrayList;
 
 public class ProductoPedido {
 
+    private String usuarioCreador; // Usuario que agregó el producto
+
+    public String getUsuarioCreador() {
+        return usuarioCreador;
+    }
+
+    public void setUsuarioCreador(String usuarioCreador) {
+        this.usuarioCreador = usuarioCreador;
+    }
+
     private String productoId;
     private String nombreProducto;
     private int cantidad;

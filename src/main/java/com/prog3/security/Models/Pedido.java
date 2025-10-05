@@ -10,6 +10,65 @@ import java.util.ArrayList;
 @Document
 public class Pedido {
 
+    // Pagos parciales: cada pago tiene monto y forma
+    public static class PagoParcial {
+
+        private double monto;
+        private String formaPago;
+        private LocalDateTime fecha;
+        private String procesadoPor;
+
+        public PagoParcial(double monto, String formaPago, String procesadoPor) {
+            this.monto = monto;
+            this.formaPago = formaPago;
+            this.fecha = LocalDateTime.now();
+            this.procesadoPor = procesadoPor;
+        }
+
+        public double getMonto() {
+            return monto;
+        }
+
+        public String getFormaPago() {
+            return formaPago;
+        }
+
+        public LocalDateTime getFecha() {
+            return fecha;
+        }
+
+        public String getProcesadoPor() {
+            return procesadoPor;
+        }
+
+        public void setMonto(double monto) {
+            this.monto = monto;
+        }
+
+        public void setFormaPago(String formaPago) {
+            this.formaPago = formaPago;
+        }
+
+        public void setFecha(LocalDateTime fecha) {
+            this.fecha = fecha;
+        }
+
+        public void setProcesadoPor(String procesadoPor) {
+            this.procesadoPor = procesadoPor;
+        }
+    }
+
+    private List<PagoParcial> pagosParciales = new ArrayList<>();
+
+    public List<PagoParcial> getPagosParciales() {
+        return pagosParciales;
+    }
+
+    public void agregarPagoParcial(double monto, String formaPago, String procesadoPor) {
+        pagosParciales.add(new PagoParcial(monto, formaPago, procesadoPor));
+        this.totalPagado += monto;
+    }
+
     @Id
     @JsonProperty("_id")
     private String _id;

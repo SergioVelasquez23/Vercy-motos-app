@@ -6,7 +6,9 @@ public class IngredienteConCategoriaDTO {
     private String categoriaId;
     private String categoriaNombre;
     private String nombre;
-    private String unidad;
+    private String unidadId;
+    private String unidadNombre;
+    private String unidadAbreviatura;
     private Double stockActual;
     private Double stockMinimo;
 
@@ -14,12 +16,14 @@ public class IngredienteConCategoriaDTO {
     }
 
     public IngredienteConCategoriaDTO(String _id, String categoriaId, String categoriaNombre, String nombre,
-            String unidad, Double stockActual, Double stockMinimo) {
+            String unidadId, String unidadNombre, String unidadAbreviatura, Double stockActual, Double stockMinimo) {
         this._id = _id;
         this.categoriaId = categoriaId;
         this.categoriaNombre = categoriaNombre;
         this.nombre = nombre;
-        this.unidad = unidad;
+        this.unidadId = unidadId;
+        this.unidadNombre = unidadNombre;
+        this.unidadAbreviatura = unidadAbreviatura;
         this.stockActual = stockActual;
         this.stockMinimo = stockMinimo;
     }
@@ -58,11 +62,23 @@ public class IngredienteConCategoriaDTO {
     }
 
     public String getUnidad() {
-        return unidad;
+    return unidadNombre;
     }
 
     public void setUnidad(String unidad) {
-        this.unidad = unidad;
+        this.unidadNombre = unidad;
+    }
+    public String getUnidadId() {
+        return unidadId;
+    }
+    public void setUnidadId(String unidadId) {
+        this.unidadId = unidadId;
+    }
+    public String getUnidadAbreviatura() {
+        return unidadAbreviatura;
+    }
+    public void setUnidadAbreviatura(String unidadAbreviatura) {
+        this.unidadAbreviatura = unidadAbreviatura;
     }
 
     public Double getStockActual() {

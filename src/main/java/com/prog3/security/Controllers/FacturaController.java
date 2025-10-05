@@ -218,7 +218,13 @@ public class FacturaController {
 
             // Calcular total
             factura.calcularTotal();
-
+            // Validar pagadoDesdeCaja
+            if (factura.getTipoFactura() != null && factura.getTipoFactura().equalsIgnoreCase("compra")) {
+                // Si el campo no viene, poner false
+                if (!factura.isPagadoDesdeCaja() && factura.isPagadoDesdeCaja() != false) {
+                    factura.setPagadoDesdeCaja(false);
+                }
+            }
             Factura nuevaFactura = facturaRepository.save(factura);
             return ResponseEntity.status(HttpStatus.CREATED).body(nuevaFactura);
         } catch (Exception e) {
@@ -283,9 +289,16 @@ public class FacturaController {
             facturaExistente.setMedioPago(facturaActualizada.getMedioPago());
             facturaExistente.setFormaPago(facturaActualizada.getFormaPago());
             facturaExistente.setAtendidoPor(facturaActualizada.getAtendidoPor());
-
+            // Validar pagadoDesdeCaja
+            if (facturaExistente.getTipoFactura() != null && facturaExistente.getTipoFactura().equalsIgnoreCase("compra")) {
+                // Si el campo no viene, poner false
+                if (!facturaActualizada.isPagadoDesdeCaja() && facturaActualizada.isPagadoDesdeCaja() != false) {
+                    facturaExistente.setPagadoDesdeCaja(false);
+                } else {
+                    facturaExistente.setPagadoDesdeCaja(facturaActualizada.isPagadoDesdeCaja());
+                }
+            }
             facturaExistente.calcularTotal();
-
             Factura facturaGuardada = facturaRepository.save(facturaExistente);
             return ResponseEntity.ok(facturaGuardada);
         } catch (Exception e) {

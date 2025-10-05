@@ -6,6 +6,12 @@ import java.time.LocalDateTime;
 
 @Document
 public class Inventario {
+    public String getUnidadId() {
+        return unidadId;
+    }
+    public void setUnidadId(String unidadId) {
+        this.unidadId = unidadId;
+    }
 
     // Para compatibilidad con frontend: exponer stockActual en el JSON
     public double getStockActual() {
@@ -19,7 +25,7 @@ public class Inventario {
     private double cantidadActual;
     private double cantidadMinima; // Stock mínimo para alertas
     private double cantidadMaxima; // Stock máximo recomendado
-    private String unidadMedida; // kg, litros, unidades, etc.
+    private String unidadId; // Referencia al id de Unidad
     private double costoUnitario;
     private double costoTotal;
     private String proveedor;
@@ -42,11 +48,11 @@ public class Inventario {
     }
 
     public Inventario(String productoId, String productoNombre, double cantidadActual, String unidadMedida) {
-        this();
-        this.productoId = productoId;
-        this.productoNombre = productoNombre;
-        this.cantidadActual = cantidadActual;
-        this.unidadMedida = unidadMedida;
+    this();
+    this.productoId = productoId;
+    this.productoNombre = productoNombre;
+    this.cantidadActual = cantidadActual;
+    this.unidadId = unidadMedida;
     }
 
     // Getters y Setters
@@ -101,11 +107,11 @@ public class Inventario {
     }
 
     public String getUnidadMedida() {
-        return unidadMedida;
+    return unidadId;
     }
 
     public void setUnidadMedida(String unidadMedida) {
-        this.unidadMedida = unidadMedida;
+    this.unidadId = unidadMedida;
     }
 
     public double getCostoUnitario() {

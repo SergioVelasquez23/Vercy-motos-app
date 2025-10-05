@@ -5,12 +5,18 @@ import org.springframework.data.mongodb.core.mapping.Document;
 
 @Document(collection = "ingredientes")
 public class Ingrediente {
+    public String getUnidadId() {
+        return unidadId;
+    }
+    public void setUnidadId(String unidadId) {
+        this.unidadId = unidadId;
+    }
 
     @Id
     private String _id;
     private String categoriaId;
     private String nombre;
-    private String unidad;
+    private String unidadId; // Referencia al id de Unidad
     private Double stockActual;
     private Double stockMinimo;
     private boolean descontable; // Nuevo atributo: indica si se descuenta del stock
@@ -23,22 +29,22 @@ public class Ingrediente {
     public Ingrediente(String categoriaId, String nombre, String unidad,
             Double stockActual, Double stockMinimo) {
         // No establecemos _id aquí, MongoDB lo generará automáticamente
-        this.categoriaId = categoriaId;
-        this.nombre = nombre;
-        this.unidad = unidad;
-        this.stockActual = stockActual;
-        this.stockMinimo = stockMinimo;
-        this.descontable = true; // Por defecto, los ingredientes son descontables
+    this.categoriaId = categoriaId;
+    this.nombre = nombre;
+    this.unidadId = unidad;
+    this.stockActual = stockActual;
+    this.stockMinimo = stockMinimo;
+    this.descontable = true; // Por defecto, los ingredientes son descontables
     }
 
     public Ingrediente(String categoriaId, String nombre, String unidad,
             Double stockActual, Double stockMinimo, boolean descontable) {
-        this.categoriaId = categoriaId;
-        this.nombre = nombre;
-        this.unidad = unidad;
-        this.stockActual = stockActual;
-        this.stockMinimo = stockMinimo;
-        this.descontable = descontable;
+    this.categoriaId = categoriaId;
+    this.nombre = nombre;
+    this.unidadId = unidad;
+    this.stockActual = stockActual;
+    this.stockMinimo = stockMinimo;
+    this.descontable = descontable;
     }
 
     // Getters y Setters
@@ -67,11 +73,11 @@ public class Ingrediente {
     }
 
     public String getUnidad() {
-        return unidad;
+    return unidadId;
     }
 
     public void setUnidad(String unidad) {
-        this.unidad = unidad;
+    this.unidadId = unidad;
     }
 
     public Double getStockActual() {
@@ -104,7 +110,7 @@ public class Ingrediente {
                 + "_id='" + _id + '\''
                 + ", categoriaId='" + categoriaId + '\''
                 + ", nombre='" + nombre + '\''
-                + ", unidad='" + unidad + '\''
+                + ", unidadId='" + unidadId + '\''
                 + ", stockActual=" + stockActual
                 + ", stockMinimo=" + stockMinimo
                 + ", descontable=" + descontable

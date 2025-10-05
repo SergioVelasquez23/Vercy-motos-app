@@ -15,7 +15,8 @@ public class Proveedor {
 
     // Campos obligatorios
     private String nombre;              // Obligatorio
-    private String telefono;            // Obligatorio
+    // Todos los demás campos son opcionales
+    private String telefono;            // Opcional
 
     // Campos opcionales
     private String nombreComercial;     // Opcional

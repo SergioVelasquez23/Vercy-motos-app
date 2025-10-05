@@ -1,4 +1,7 @@
 package com.prog3.security.Controllers;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.ArrayList;
 
 import java.util.List;
 
@@ -18,6 +21,8 @@ import com.prog3.security.Utils.ApiResponse;
 @RestController
 @RequestMapping("/api/ingredientes")
 public class IngredienteController {
+    @Autowired
+    private com.prog3.security.Repositories.UnidadRepository unidadRepository;
 
     @Autowired
     private IngredienteRepository ingredienteRepository;
@@ -32,10 +37,21 @@ public class IngredienteController {
     private ResponseService responseService;
 
     @GetMapping("")
-    public ResponseEntity<ApiResponse<List<Ingrediente>>> findAll() {
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> findAll() {
         try {
             List<Ingrediente> ingredientes = this.ingredienteRepository.findAll();
-            return responseService.success(ingredientes, "Ingredientes obtenidos exitosamente");
+            List<Map<String, Object>> resultado = new ArrayList<>();
+            for (Ingrediente ing : ingredientes) {
+                Map<String, Object> map = new HashMap<>();
+                map.put("ingrediente", ing);
+                if (ing.getUnidadId() != null) {
+                    unidadRepository.findById(ing.getUnidadId()).ifPresent(u -> {
+                        map.put("unidad", u);
+                    });
+                }
+                resultado.add(map);
+            }
+            return responseService.success(resultado, "Ingredientes obtenidos exitosamente");
         } catch (Exception e) {
             return responseService.internalError("Error al obtener ingredientes: " + e.getMessage());
         }
@@ -91,14 +107,16 @@ public class IngredienteController {
             if (this.ingredienteRepository.existsByNombre(ingrediente.getNombre())) {
                 return responseService.conflict("Ya existe un ingrediente con el nombre: " + ingrediente.getNombre());
             }
-
             // Validar que la categoría exista
             if (ingrediente.getCategoriaId() == null || ingrediente.getCategoriaId().trim().isEmpty()) {
                 return responseService.badRequest("El ID de categoría es obligatorio");
             }
-
             if (!this.categoriaRepository.existsById(ingrediente.getCategoriaId())) {
                 return responseService.badRequest("La categoría con ID '" + ingrediente.getCategoriaId() + "' no existe");
+            }
+            // Validar unidadId
+            if (ingrediente.getUnidadId() == null || !unidadRepository.existsById(ingrediente.getUnidadId())) {
+                return responseService.badRequest("La unidad seleccionada no existe");
             }
 
             // Asegurar que el ID sea null antes de guardar (MongoDB lo generará automáticamente)
@@ -189,14 +207,16 @@ public class IngredienteController {
             if (existingByNombre != null && !existingByNombre.get_id().equals(id)) {
                 return responseService.conflict("Ya existe un ingrediente con el nombre: " + ingrediente.getNombre());
             }
-
             // Validar que la categoría exista
             if (ingrediente.getCategoriaId() == null || ingrediente.getCategoriaId().trim().isEmpty()) {
                 return responseService.badRequest("El ID de categoría es obligatorio");
             }
-
             if (!this.categoriaRepository.existsById(ingrediente.getCategoriaId())) {
                 return responseService.badRequest("La categoría con ID '" + ingrediente.getCategoriaId() + "' no existe");
+            }
+            // Validar unidadId
+            if (ingrediente.getUnidadId() == null || !unidadRepository.existsById(ingrediente.getUnidadId())) {
+                return responseService.badRequest("La unidad seleccionada no existe");
             }
 
             // Actualizar campos

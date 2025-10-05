@@ -31,6 +31,8 @@ import com.prog3.security.Utils.ApiResponse;
 @RestController
 @RequestMapping("api/productos")
 public class ProductosController extends BaseController<Producto, String> {
+    @Autowired
+    private com.prog3.security.Repositories.UnidadRepository unidadRepository;
 
     @Autowired
     private ProductoRepository theProductoRepository;
@@ -379,12 +381,28 @@ public class ProductosController extends BaseController<Producto, String> {
                             }
                         }
 
+                        // Obtener datos de unidad
+                        String unidadId = ingrediente.getUnidadId();
+                        String unidadNombre = null;
+                        String unidadAbreviatura = null;
+                        if (unidadId != null) {
+                            com.prog3.security.Models.Unidad unidad = null;
+                            try {
+                                unidad = unidadRepository.findById(unidadId).orElse(null);
+                            } catch (Exception ex) {}
+                            if (unidad != null) {
+                                unidadNombre = unidad.getNombre();
+                                unidadAbreviatura = unidad.getAbreviatura();
+                            }
+                        }
                         return new IngredienteConCategoriaDTO(
                                 ingrediente.get_id(),
                                 ingrediente.getCategoriaId(),
                                 categoriaNombre,
                                 ingrediente.getNombre(),
-                                ingrediente.getUnidad(),
+                                unidadId,
+                                unidadNombre,
+                                unidadAbreviatura,
                                 ingrediente.getStockActual(),
                                 ingrediente.getStockMinimo()
                         );

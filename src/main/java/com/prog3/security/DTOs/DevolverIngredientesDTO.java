@@ -26,13 +26,6 @@ public class DevolverIngredientesDTO {
     }
 
     // Getters y Setters
-    public String getProductoId() {
-        return productoId;
-    }
-
-    public void setProductoId(String productoId) {
-        this.productoId = productoId;
-    }
 
     public String getProductoNombre() {
         return productoNombre;
@@ -70,22 +63,26 @@ public class DevolverIngredientesDTO {
      * DTO interno para representar cada ingrediente devuelto
      */
     public static class IngredienteDevueltoDTO {
-        private String ingredienteId;
-        private String ingredienteNombre;
-        private double cantidadDevuelta;
-        private String unidad;
-        private double stockAnterior;
-        private double stockActual;
+    private String ingredienteId;
+    private String ingredienteNombre;
+    private double cantidadDevuelta;
+    private String unidadId;
+    private String unidadNombre;
+    private String unidadAbreviatura;
+    private double stockAnterior;
+    private double stockActual;
 
         // Constructores
         public IngredienteDevueltoDTO() {}
 
         public IngredienteDevueltoDTO(String ingredienteId, String ingredienteNombre, double cantidadDevuelta,
-                                    String unidad, double stockAnterior, double stockActual) {
+                                    String unidadId, String unidadNombre, String unidadAbreviatura, double stockAnterior, double stockActual) {
             this.ingredienteId = ingredienteId;
             this.ingredienteNombre = ingredienteNombre;
             this.cantidadDevuelta = cantidadDevuelta;
-            this.unidad = unidad;
+            this.unidadId = unidadId;
+            this.unidadNombre = unidadNombre;
+            this.unidadAbreviatura = unidadAbreviatura;
             this.stockAnterior = stockAnterior;
             this.stockActual = stockActual;
         }
@@ -116,11 +113,23 @@ public class DevolverIngredientesDTO {
         }
 
         public String getUnidad() {
-            return unidad;
+            return unidadNombre;
         }
 
         public void setUnidad(String unidad) {
-            this.unidad = unidad;
+            this.unidadNombre = unidad;
+        }
+        public String getUnidadId() {
+            return unidadId;
+        }
+        public void setUnidadId(String unidadId) {
+            this.unidadId = unidadId;
+        }
+        public String getUnidadAbreviatura() {
+            return unidadAbreviatura;
+        }
+        public void setUnidadAbreviatura(String unidadAbreviatura) {
+            this.unidadAbreviatura = unidadAbreviatura;
         }
 
         public double getStockAnterior() {

@@ -39,6 +39,8 @@ import com.prog3.security.DTOs.PagarPedidoRequest;
 import com.prog3.security.DTOs.CancelarProductoRequest;
 import com.prog3.security.Exception.BusinessException;
 import com.prog3.security.Exception.ResourceNotFoundException;
+import com.prog3.security.Models.Mesa;
+import com.prog3.security.Repositories.MesaRepository;
 
 import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
@@ -54,6 +56,95 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 @RequestMapping("api/pedidos")
 @Tag(name = "Pedidos", description = "Gestión completa de pedidos del restaurante")
 public class PedidosController {
+
+    @PutMapping("/{id}/pagos/{index}")
+    public ResponseEntity<?> editarPagoParcial(@PathVariable String id, @PathVariable int index, @RequestBody Map<String, Object> nuevoPago) {
+        try {
+            Pedido pedido = this.thePedidoRepository.findById(id).orElse(null);
+            if (pedido == null) {
+                return ResponseEntity.status(404).body("Pedido no encontrado");
+            }
+            if (index < 0 || index >= pedido.getPagosParciales().size()) {
+                return ResponseEntity.status(400).body("Índice de pago inválido");
+            }
+            Pedido.PagoParcial pagoAnterior = pedido.getPagosParciales().get(index);
+            double montoAnterior = pagoAnterior.getMonto();
+            String formaPagoAnterior = pagoAnterior.getFormaPago();
+            // Leer nuevos datos
+            double montoNuevo = Double.parseDouble(nuevoPago.getOrDefault("monto", montoAnterior).toString());
+            String formaPagoNueva = nuevoPago.getOrDefault("formaPago", formaPagoAnterior).toString();
+            Object fechaObj = nuevoPago.getOrDefault("fecha", pagoAnterior.getFecha());
+            LocalDateTime fechaNueva;
+            if (fechaObj instanceof String) {
+                fechaNueva = LocalDateTime.parse((String) fechaObj);
+            } else if (fechaObj instanceof LocalDateTime) {
+                fechaNueva = (LocalDateTime) fechaObj;
+            } else {
+                fechaNueva = pagoAnterior.getFecha();
+            }
+            String procesadoPorNuevo = nuevoPago.getOrDefault("procesadoPor", pagoAnterior.getProcesadoPor()).toString();
+            // Actualizar pago parcial
+            pagoAnterior.setMonto(montoNuevo);
+            pagoAnterior.setFormaPago(formaPagoNueva);
+            pagoAnterior.setFecha(fechaNueva);
+            pagoAnterior.setProcesadoPor(procesadoPorNuevo);
+            // Recalcular total pagado
+            pedido.setTotalPagado(pedido.getTotalPagado() - montoAnterior + montoNuevo);
+            // Actualizar cuadre de caja (restar anterior, sumar nuevo)
+            cuadreCajaService.sumarPagoACuadreActivo(-montoAnterior, formaPagoAnterior);
+            cuadreCajaService.sumarPagoACuadreActivo(montoNuevo, formaPagoNueva);
+            // Actualizar estado del pedido
+            if (pedido.getTotalPagado() < pedido.getTotal() + pedido.getPropina()) {
+                pedido.setEstado("pendiente");
+            } else {
+                pedido.setEstado("pagado");
+            }
+            this.thePedidoRepository.save(pedido);
+            return ResponseEntity.ok(pedido.getPagosParciales());
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("Error al editar pago: " + e.getMessage());
+        }
+    }
+
+    @DeleteMapping("/{id}/pagos/{index}")
+    public ResponseEntity<?> eliminarPagoParcial(@PathVariable String id, @PathVariable int index) {
+        try {
+            Pedido pedido = this.thePedidoRepository.findById(id).orElse(null);
+            if (pedido == null) {
+                return ResponseEntity.status(404).body("Pedido no encontrado");
+            }
+            if (index < 0 || index >= pedido.getPagosParciales().size()) {
+                return ResponseEntity.status(400).body("Índice de pago inválido");
+            }
+            // Obtener y eliminar el pago
+            Pedido.PagoParcial pago = pedido.getPagosParciales().get(index);
+            pedido.getPagosParciales().remove(index);
+            pedido.setTotalPagado(pedido.getTotalPagado() - pago.getMonto());
+            // Actualizar cuadre de caja
+            cuadreCajaService.sumarPagoACuadreActivo(-pago.getMonto(), pago.getFormaPago());
+            // Actualizar estado del pedido
+            if (pedido.getTotalPagado() < pedido.getTotal() + pedido.getPropina()) {
+                pedido.setEstado("pendiente");
+            }
+            this.thePedidoRepository.save(pedido);
+            return ResponseEntity.ok(pedido.getPagosParciales());
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("Error al eliminar pago: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/{id}/pagos")
+    public ResponseEntity<?> getPagosParciales(@PathVariable String id) {
+        try {
+            Pedido pedido = this.thePedidoRepository.findById(id).orElse(null);
+            if (pedido == null) {
+                return ResponseEntity.status(404).body("Pedido no encontrado");
+            }
+            return ResponseEntity.ok(pedido.getPagosParciales());
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("Error al obtener pagos: " + e.getMessage());
+        }
+    }
 
     @Autowired
     PedidoRepository thePedidoRepository;
@@ -245,6 +336,18 @@ public class PedidosController {
             // Limpiar ID antes de guardar para que MongoDB genere uno nuevo
             newPedido.set_id(null);
 
+            // Asignar el usuario que agrega cada producto
+            String usuarioActual = newPedido.getMesero() != null ? newPedido.getMesero() : newPedido.getPedidoPor();
+            if (usuarioActual == null) {
+                usuarioActual = "sistema";
+            }
+            if (newPedido.getItems() != null) {
+                for (ItemPedido item : newPedido.getItems()) {
+                    item.setAgregadoPor(usuarioActual);
+                    item.setFechaAgregado(LocalDateTime.now());
+                }
+            }
+
             Pedido pedidoCreado = this.thePedidoRepository.save(newPedido);
 
             // Verificar que el pedido se guardó correctamente con un ID válido
@@ -291,13 +394,25 @@ public class PedidosController {
             actualPedido.setMesa(newPedido.getMesa());
             actualPedido.setCliente(newPedido.getCliente());
             actualPedido.setMesero(newPedido.getMesero());
-            actualPedido.setItems(newPedido.getItems());
             actualPedido.setNotas(newPedido.getNotas());
             actualPedido.setPlataforma(newPedido.getPlataforma());
             actualPedido.setPedidoPor(newPedido.getPedidoPor());
             actualPedido.setGuardadoPor(newPedido.getGuardadoPor());
             actualPedido.setFechaCortesia(newPedido.getFechaCortesia());
             actualPedido.setEstado(newPedido.getEstado());
+
+            // Asignar el usuario que edita/agrega cada producto
+            String usuarioActual = newPedido.getMesero() != null ? newPedido.getMesero() : newPedido.getPedidoPor();
+            if (usuarioActual == null) {
+                usuarioActual = "sistema";
+            }
+            if (newPedido.getItems() != null) {
+                for (ItemPedido item : newPedido.getItems()) {
+                    item.setAgregadoPor(usuarioActual);
+                    item.setFechaAgregado(LocalDateTime.now());
+                }
+            }
+            actualPedido.setItems(newPedido.getItems());
 
             Pedido pedidoActualizado = this.thePedidoRepository.save(actualPedido);
 
@@ -518,9 +633,27 @@ public class PedidosController {
                 System.out.println(
                         "[PAGAR_PEDIDO] Procesando pago real. FormaPago: " + pagarRequest.getFormaPago() + ", Propina: "
                         + pagarRequest.getPropina() + ", ProcesadoPor: " + pagarRequest.getProcesadoPor());
-                pedido.pagar(pagarRequest.getFormaPago(), pagarRequest.getPropina(), pagarRequest.getProcesadoPor());
-                pedido.setIncluyePropina(pagarRequest.getPropina() > 0);
+                // Pagos parciales y múltiples formas de pago
+                // Sumar propina
+                if (pagarRequest.getPropina() > 0) {
+                    pedido.setPropina(pedido.getPropina() + pagarRequest.getPropina());
+                }
+                // Registrar el pago parcial (requiere campo monto en el DTO)
+                double montoPago = pagarRequest.getPropina(); // Debe venir un campo montoPago en el DTO
+                if (pagarRequest.getFormaPago() != null && montoPago > 0) {
+                    pedido.agregarPagoParcial(montoPago, pagarRequest.getFormaPago(), pagarRequest.getProcesadoPor());
+                    // Sumar a caja según forma de pago
+                    cuadreCajaService.sumarPagoACuadreActivo(montoPago, pagarRequest.getFormaPago());
+                }
+                pedido.setPagadoPor(pagarRequest.getProcesadoPor());
                 pedido.setNotas(notasAdicionales);
+                // Estado: pagado si cubre el total, pendiente si no
+                if (pedido.getTotalPagado() >= pedido.getTotal() + pedido.getPropina()) {
+                    pedido.setEstado("pagado");
+                    pedido.setFechaPago(LocalDateTime.now());
+                } else {
+                    pedido.setEstado("pendiente");
+                }
             } else if (pagarRequest.esCortesia()) {
                 System.out.println("[PAGAR_PEDIDO] Procesando cortesía");
                 pedido.setEstado("cortesia");
@@ -530,6 +663,17 @@ public class PedidosController {
                 String motivoCortesia = pagarRequest.getMotivoCortesia() != null ? pagarRequest.getMotivoCortesia()
                         : "";
                 pedido.setNotas("CORTESÍA - " + motivoCortesia + " - " + notasAdicionales);
+                // Liberar la mesa si existe
+                if (pedido.getMesa() != null && !pedido.getMesa().isEmpty()) {
+                    MesaRepository mesaRepository = (MesaRepository) org.springframework.beans.factory.BeanFactoryUtils.beanOfTypeIncludingAncestors(
+                            org.springframework.web.context.ContextLoader.getCurrentWebApplicationContext(), MesaRepository.class);
+                    Mesa mesa = mesaRepository.findByNombre(pedido.getMesa());
+                    if (mesa != null) {
+                        mesa.setOcupada(false);
+                        mesaRepository.save(mesa);
+                        System.out.println("[PAGAR_PEDIDO] Mesa liberada por cortesía: " + mesa.getNombre());
+                    }
+                }
             } else if (pagarRequest.esConsumoInterno()) {
                 System.out.println("[PAGAR_PEDIDO] Procesando consumo interno");
                 pedido.setEstado("consumo_interno");
@@ -538,6 +682,17 @@ public class PedidosController {
                 String tipoConsumo = pagarRequest.getTipoConsumoInterno() != null ? pagarRequest.getTipoConsumoInterno()
                         : "";
                 pedido.setNotas("CONSUMO INTERNO - " + tipoConsumo + " - " + notasAdicionales);
+                // Liberar la mesa si existe
+                if (pedido.getMesa() != null && !pedido.getMesa().isEmpty()) {
+                    MesaRepository mesaRepository = (MesaRepository) org.springframework.beans.factory.BeanFactoryUtils.beanOfTypeIncludingAncestors(
+                            org.springframework.web.context.ContextLoader.getCurrentWebApplicationContext(), MesaRepository.class);
+                    Mesa mesa = mesaRepository.findByNombre(pedido.getMesa());
+                    if (mesa != null) {
+                        mesa.setOcupada(false);
+                        mesaRepository.save(mesa);
+                        System.out.println("[PAGAR_PEDIDO] Mesa liberada por consumo interno: " + mesa.getNombre());
+                    }
+                }
             } else if (pagarRequest.esCancelado()) {
                 System.out.println("[PAGAR_PEDIDO] Procesando cancelación");
                 pedido.setEstado("cancelado");
@@ -798,13 +953,39 @@ public class PedidosController {
                 return responseService.notFound("Producto no encontrado en el pedido");
             }
 
-            // Devolver ingredientes seleccionados al inventario
+            // Validar que solo se devuelvan ingredientes realmente seleccionados en el producto
             if (request.getIngredientesADevolver() != null && !request.getIngredientesADevolver().isEmpty()) {
-                inventarioService.devolverIngredientesAlInventario(
-                        request.getPedidoId(),
-                        request.getProductoId(),
-                        request.getIngredientesADevolver(),
-                        request.getCanceladoPor());
+                // Buscar el item pedido correspondiente
+                ItemPedido itemPedidoSeleccionado = null;
+                if (pedido.getItems() != null) {
+                    for (ItemPedido item : pedido.getItems()) {
+                        if (item.getProductoId().equals(request.getProductoId())) {
+                            itemPedidoSeleccionado = item;
+                            break;
+                        }
+                    }
+                }
+                List<com.prog3.security.DTOs.CancelarProductoRequest.IngredienteADevolver> ingredientesFiltrados = new ArrayList<>();
+                if (itemPedidoSeleccionado != null && itemPedidoSeleccionado.getIngredientesSeleccionados() != null) {
+                    int cantidadOriginal = itemPedidoSeleccionado.getCantidad() + request.getCantidadACancelar(); // antes de cancelar
+                    int cantidadCancelada = request.getCantidadACancelar();
+                    double proporcionCancelada = cantidadOriginal > 0 ? ((double) cantidadCancelada / cantidadOriginal) : 0;
+                    for (com.prog3.security.DTOs.CancelarProductoRequest.IngredienteADevolver ing : request.getIngredientesADevolver()) {
+                        if (itemPedidoSeleccionado.getIngredientesSeleccionados().contains(ing.getIngredienteId()) && ing.isDevolver() && ing.getCantidadADevolver() > 0) {
+                            // Ajustar cantidad a devolver proporcionalmente
+                            double cantidadProporcional = ing.getCantidadOriginal() * proporcionCancelada;
+                            ing.setCantidadADevolver(cantidadProporcional);
+                            ingredientesFiltrados.add(ing);
+                        }
+                    }
+                }
+                if (!ingredientesFiltrados.isEmpty()) {
+                    inventarioService.devolverIngredientesAlInventario(
+                            request.getPedidoId(),
+                            request.getProductoId(),
+                            ingredientesFiltrados,
+                            request.getCanceladoPor());
+                }
             }
 
             // Recalcular total del pedido
@@ -816,12 +997,29 @@ public class PedidosController {
             }
             pedido.setTotal(nuevoTotal);
 
-            // Agregar nota de cancelación
+            // Agregar nota de cancelación con detalle de ingredientes devueltos y no devueltos
+            StringBuilder detalleIngredientes = new StringBuilder();
+            if (request.getIngredientesADevolver() != null && !request.getIngredientesADevolver().isEmpty()) {
+                detalleIngredientes.append("\nIngredientes devueltos:");
+                for (com.prog3.security.DTOs.CancelarProductoRequest.IngredienteADevolver ing : request.getIngredientesADevolver()) {
+                    if (ing.isDevolver() && ing.getCantidadADevolver() > 0) {
+                        detalleIngredientes.append("\n- ").append(ing.getNombreIngrediente()).append(": ").append(ing.getCantidadADevolver()).append(" ").append(ing.getUnidad());
+                    }
+                }
+                detalleIngredientes.append("\nIngredientes NO devueltos:");
+                for (com.prog3.security.DTOs.CancelarProductoRequest.IngredienteADevolver ing : request.getIngredientesADevolver()) {
+                    if (!ing.isDevolver()) {
+                        detalleIngredientes.append("\n- ").append(ing.getNombreIngrediente()).append(" (Motivo: ").append(ing.getMotivoNoDevolucion() != null ? ing.getMotivoNoDevolucion() : "No especificado").append(")");
+                    }
+                }
+            }
             String notaCancelacion = "CANCELACIÓN: " + request.getMotivoCancelacion();
             if (request.getNotas() != null && !request.getNotas().isEmpty()) {
                 notaCancelacion += " - " + request.getNotas();
             }
-
+            if (detalleIngredientes.length() > 0) {
+                notaCancelacion += detalleIngredientes.toString();
+            }
             String notasActuales = pedido.getNotas() != null ? pedido.getNotas() : "";
             pedido.setNotas(notasActuales.isEmpty() ? notaCancelacion : notasActuales + "\n" + notaCancelacion);
 
