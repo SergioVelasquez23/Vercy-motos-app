@@ -5,10 +5,12 @@ import com.prog3.security.Models.ItemFacturaIngrediente;
 import com.prog3.security.Models.Ingrediente;
 import com.prog3.security.Models.Inventario;
 import com.prog3.security.Models.MovimientoInventario;
+import com.prog3.security.Models.CuadreCaja;
 import com.prog3.security.Repositories.FacturaRepository;
 import com.prog3.security.Repositories.IngredienteRepository;
 import com.prog3.security.Repositories.InventarioRepository;
 import com.prog3.security.Repositories.MovimientoInventarioRepository;
+import com.prog3.security.Repositories.CuadreCajaRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -33,6 +35,9 @@ public class FacturaComprasService {
 
     @Autowired
     private MovimientoInventarioRepository movimientoInventarioRepository;
+
+    @Autowired
+    private CuadreCajaRepository cuadreCajaRepository;
 
     /**
      * Procesa una factura de compras, aumentando el stock de ingredientes
@@ -195,5 +200,186 @@ public class FacturaComprasService {
         return facturaRepository.findAll().stream()
                 .filter(f -> f.getProveedorNit() != null && f.getProveedorNit().equals(proveedorNit))
                 .toList();
+    }
+
+    /**
+     * Elimina una factura de compras y revierte todos los cambios realizados
+     */
+    public boolean eliminarFacturaCompra(String facturaId) {
+        try {
+            System.out.println("🗑️ Iniciando eliminación de factura de compra: " + facturaId);
+
+            // Buscar la factura
+            Optional<Factura> facturaOpt = facturaRepository.findById(facturaId);
+            if (!facturaOpt.isPresent()) {
+                System.err.println("❌ Factura no encontrada: " + facturaId);
+                return false;
+            }
+
+            Factura factura = facturaOpt.get();
+            
+            // Verificar que es una factura de compra
+            if (!"compra".equals(factura.getTipoFactura())) {
+                throw new RuntimeException("La factura no es de tipo compra");
+            }
+
+            // 1. Revertir los cambios en el inventario
+            revertirCambiosInventario(factura);
+
+            // 2. Si la factura fue pagada desde caja, devolver el dinero
+            if (factura.isPagadoDesdeCaja()) {
+                revertirPagoEnCaja(factura);
+            }
+
+            // 3. Eliminar los movimientos de inventario relacionados
+            eliminarMovimientosInventario(facturaId);
+
+            // 4. Finalmente eliminar la factura
+            facturaRepository.deleteById(facturaId);
+
+            System.out.println("✅ Factura de compra eliminada exitosamente: " + facturaId);
+            return true;
+
+        } catch (Exception e) {
+            System.err.println("❌ Error al eliminar factura de compra: " + e.getMessage());
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    /**
+     * Revierte los cambios realizados en el inventario por la factura de compra
+     */
+    private void revertirCambiosInventario(Factura factura) {
+        System.out.println("📦 Revirtiendo cambios en inventario para factura: " + factura.getNumero());
+
+        for (ItemFacturaIngrediente item : factura.getItemsIngredientes()) {
+            try {
+                // Buscar el ingrediente
+                Optional<Ingrediente> ingredienteOpt = ingredienteRepository.findById(item.getIngredienteId());
+                if (!ingredienteOpt.isPresent()) {
+                    System.err.println("⚠️ Ingrediente no encontrado: " + item.getIngredienteId());
+                    continue;
+                }
+
+                Ingrediente ingrediente = ingredienteOpt.get();
+                
+                // Solo procesar ingredientes descontables
+                if (!ingrediente.isDescontable()) {
+                    System.out.println("ℹ️ Saltando ingrediente no descontable: " + ingrediente.getNombre());
+                    continue;
+                }
+
+                // Revertir el stock del ingrediente
+                double stockAnterior = ingrediente.getStockActual() != null ? ingrediente.getStockActual() : 0.0;
+                double nuevaCantidad = stockAnterior - item.getCantidad(); // Descontar lo que se había agregado
+
+                // Validar que no quede negativo
+                if (nuevaCantidad < 0) {
+                    System.err.println("⚠️ Warning: El stock quedaría negativo para " + ingrediente.getNombre() + 
+                                      ". Stock actual: " + stockAnterior + ", cantidad a descontar: " + item.getCantidad());
+                    nuevaCantidad = 0; // No permitir stock negativo
+                }
+
+                ingrediente.setStockActual(nuevaCantidad);
+                ingredienteRepository.save(ingrediente);
+
+                // Buscar el inventario del ingrediente para crear el movimiento de reversión
+                Inventario inventario = inventarioRepository.findByProductoId(ingrediente.get_id());
+                if (inventario != null) {
+                    // Actualizar también el inventario
+                    inventario.setCantidadActual(nuevaCantidad);
+                    inventarioRepository.save(inventario);
+                    
+                    // Crear movimiento de inventario para registrar la reversión
+                    crearMovimientoReversion(inventario, stockAnterior, nuevaCantidad, item, factura.get_id());
+                } else {
+                    System.err.println("⚠️ Inventario no encontrado para ingrediente: " + ingrediente.getNombre());
+                }
+
+                System.out.println("📉 Stock revertido para " + ingrediente.getNombre() + 
+                                  ": " + stockAnterior + " → " + nuevaCantidad);
+
+            } catch (Exception e) {
+                System.err.println("❌ Error al revertir inventario para item: " + item.getIngredienteId() + " - " + e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Revierte el pago en caja si la factura fue pagada desde allí
+     */
+    private void revertirPagoEnCaja(Factura factura) {
+        try {
+            System.out.println("💰 Revirtiendo pago en caja para factura: " + factura.getNumero() + " - $" + factura.getTotal());
+
+            // Buscar el cuadre de caja activo más reciente
+            // Nota: Podrías necesitar ajustar esta lógica según cómo manejes los cuadres
+            List<CuadreCaja> cuadresAbiertos = cuadreCajaRepository.findAll().stream()
+                .filter(c -> !c.isCerrada())
+                .sorted((c1, c2) -> c2.getFechaApertura().compareTo(c1.getFechaApertura()))
+                .toList();
+
+            if (!cuadresAbiertos.isEmpty()) {
+                CuadreCaja cuadreActivo = cuadresAbiertos.get(0);
+                double fondoActual = cuadreActivo.getFondoInicial();
+                double nuevoFondo = fondoActual + factura.getTotal();
+
+                cuadreActivo.setFondoInicial(nuevoFondo);
+                cuadreCajaRepository.save(cuadreActivo);
+
+                System.out.println("💵 Efectivo devuelto a caja: $" + factura.getTotal() + 
+                                  ". Fondo antes: $" + fondoActual + 
+                                  ", después: $" + nuevoFondo);
+            } else {
+                System.err.println("⚠️ No se encontró un cuadre de caja abierto para devolver el dinero");
+            }
+
+        } catch (Exception e) {
+            System.err.println("❌ Error al revertir pago en caja: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Elimina los movimientos de inventario relacionados con la factura
+     */
+    private void eliminarMovimientosInventario(String facturaId) {
+        try {
+            List<MovimientoInventario> movimientos = movimientoInventarioRepository.findByReferencia(facturaId);
+            for (MovimientoInventario movimiento : movimientos) {
+                movimientoInventarioRepository.delete(movimiento);
+            }
+            System.out.println("🗑️ Eliminados " + movimientos.size() + " movimientos de inventario");
+        } catch (Exception e) {
+            System.err.println("❌ Error al eliminar movimientos de inventario: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Crea un movimiento de inventario para registrar la reversión
+     */
+    private void crearMovimientoReversion(Inventario inventario, double stockAnterior, double nuevoStock, 
+                                         ItemFacturaIngrediente item, String facturaId) {
+        try {
+            MovimientoInventario movimiento = new MovimientoInventario();
+            movimiento.setInventarioId(inventario.get_id());
+            movimiento.setProductoId(inventario.getProductoId());
+            movimiento.setProductoNombre(inventario.getProductoNombre());
+            movimiento.setTipoMovimiento("salida");
+            movimiento.setCantidadAnterior(stockAnterior);
+            movimiento.setCantidadMovimiento(item.getCantidad());
+            movimiento.setCantidadNueva(nuevoStock);
+            movimiento.setMotivo("Reversión por eliminación de factura de compra");
+            movimiento.setReferencia("REV-" + facturaId);
+            movimiento.setResponsable("sistema");
+            movimiento.setFecha(LocalDateTime.now());
+            movimiento.setCostoUnitario(item.getPrecioUnitario());
+            movimiento.setCostoTotal(item.getPrecioTotal());
+            movimiento.setObservaciones("Reversión automática - Eliminación de factura de compra");
+
+            movimientoInventarioRepository.save(movimiento);
+        } catch (Exception e) {
+            System.err.println("❌ Error al crear movimiento de reversión: " + e.getMessage());
+        }
     }
 }

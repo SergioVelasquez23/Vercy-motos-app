@@ -33,6 +33,7 @@ import com.prog3.security.Services.InventarioService;
 import com.prog3.security.Services.ResponseService;
 import com.prog3.security.Services.CuadreCajaService;
 import com.prog3.security.Services.WebSocketNotificationService;
+import com.prog3.security.Services.PedidoService;
 // import com.prog3.security.Utils.ApiResponse; // Comentado para evitar conflicto con anotación Swagger
 import com.prog3.security.DTOs.PagarPedidoRequest;
 import com.prog3.security.DTOs.CancelarProductoRequest;
@@ -72,10 +73,10 @@ public class PedidosController {
     @Autowired
     private WebSocketNotificationService webSocketService;
 
-    @Operation(
-            summary = "Obtener todos los pedidos",
-            description = "Retorna la lista completa de pedidos en el sistema"
-    )
+    @Autowired
+    private PedidoService pedidoService;
+
+    @Operation(summary = "Obtener todos los pedidos", description = "Retorna la lista completa de pedidos en el sistema")
     @ApiResponses(value = {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Lista de pedidos obtenida exitosamente"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Error interno del servidor")
@@ -124,7 +125,8 @@ public class PedidosController {
     }
 
     @GetMapping("/cliente/{cliente}")
-    public ResponseEntity<com.prog3.security.Utils.ApiResponse<List<Pedido>>> findByCliente(@PathVariable String cliente) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<List<Pedido>>> findByCliente(
+            @PathVariable String cliente) {
         try {
             List<Pedido> pedidos = this.thePedidoRepository.findByCliente(cliente);
             return responseService.success(pedidos, "Pedidos del cliente obtenidos");
@@ -134,7 +136,8 @@ public class PedidosController {
     }
 
     @GetMapping("/mesero/{mesero}")
-    public ResponseEntity<com.prog3.security.Utils.ApiResponse<List<Pedido>>> findByMesero(@PathVariable String mesero) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<List<Pedido>>> findByMesero(
+            @PathVariable String mesero) {
         try {
             List<Pedido> pedidos = this.thePedidoRepository.findByMesero(mesero);
             return responseService.success(pedidos, "Pedidos del mesero obtenidos");
@@ -144,7 +147,8 @@ public class PedidosController {
     }
 
     @GetMapping("/estado/{estado}")
-    public ResponseEntity<com.prog3.security.Utils.ApiResponse<List<Pedido>>> findByEstado(@PathVariable String estado) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<List<Pedido>>> findByEstado(
+            @PathVariable String estado) {
         try {
             List<Pedido> pedidos = this.thePedidoRepository.findByEstado(estado);
             return responseService.success(pedidos, "Pedidos filtrados por estado obtenidos");
@@ -177,7 +181,8 @@ public class PedidosController {
     }
 
     @GetMapping("/plataforma/{plataforma}")
-    public ResponseEntity<com.prog3.security.Utils.ApiResponse<List<Pedido>>> findByPlataforma(@PathVariable String plataforma) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<List<Pedido>>> findByPlataforma(
+            @PathVariable String plataforma) {
         try {
             List<Pedido> pedidos = this.thePedidoRepository.findByPlataforma(plataforma);
             return responseService.success(pedidos, "Pedidos filtrados por plataforma obtenidos");
@@ -187,7 +192,8 @@ public class PedidosController {
     }
 
     @GetMapping("/cuadre/{cuadreId}")
-    public ResponseEntity<com.prog3.security.Utils.ApiResponse<List<Pedido>>> findByCuadreId(@PathVariable String cuadreId) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<List<Pedido>>> findByCuadreId(
+            @PathVariable String cuadreId) {
         try {
             List<Pedido> pedidos = this.thePedidoRepository.findByCuadreCajaId(cuadreId);
             return responseService.success(pedidos, "Pedidos del cuadre de caja obtenidos");
@@ -197,7 +203,8 @@ public class PedidosController {
     }
 
     @GetMapping("/cuadre/{cuadreId}/pagados")
-    public ResponseEntity<com.prog3.security.Utils.ApiResponse<List<Pedido>>> findByCuadreIdPagados(@PathVariable String cuadreId) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<List<Pedido>>> findByCuadreIdPagados(
+            @PathVariable String cuadreId) {
         try {
             List<Pedido> pedidos = this.thePedidoRepository.findByCuadreCajaIdAndEstado(cuadreId, "pagado");
             return responseService.success(pedidos, "Pedidos pagados del cuadre de caja obtenidos");
@@ -246,8 +253,7 @@ public class PedidosController {
                 List<Pedido> pedidosRecientes = this.thePedidoRepository.findByMesaAndFechaBetween(
                         newPedido.getMesa(),
                         LocalDateTime.now().minusMinutes(1),
-                        LocalDateTime.now().plusMinutes(1)
-                );
+                        LocalDateTime.now().plusMinutes(1));
 
                 if (!pedidosRecientes.isEmpty()) {
                     pedidoCreado = pedidosRecientes.get(pedidosRecientes.size() - 1); // El más reciente
@@ -273,7 +279,8 @@ public class PedidosController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<com.prog3.security.Utils.ApiResponse<Pedido>> update(@PathVariable String id, @RequestBody Pedido newPedido) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<Pedido>> update(@PathVariable String id,
+            @RequestBody Pedido newPedido) {
         try {
             Pedido actualPedido = this.thePedidoRepository.findById(id).orElse(null);
             if (actualPedido == null) {
@@ -311,7 +318,8 @@ public class PedidosController {
     }
 
     @PutMapping("/{id}/estado/{estado}")
-    public ResponseEntity<com.prog3.security.Utils.ApiResponse<Pedido>> cambiarEstado(@PathVariable String id, @PathVariable String estado) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<Pedido>> cambiarEstado(@PathVariable String id,
+            @PathVariable String estado) {
         try {
             Pedido pedido = this.thePedidoRepository.findById(id).orElse(null);
             if (pedido == null) {
@@ -343,6 +351,26 @@ public class PedidosController {
             return responseService.success(null, "Pedido eliminado exitosamente");
         } catch (Exception e) {
             return responseService.internalError("Error al eliminar pedido: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Elimina un pedido pagado y revierte los efectos en ventas y caja
+     */
+    @DeleteMapping("/{id}/pagado")
+    @Operation(summary = "Eliminar pedido pagado", description = "Elimina un pedido que ya fue pagado y revierte los efectos en las ventas y el efectivo de caja")
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<Void>> eliminarPedidoPagado(@PathVariable String id) {
+        try {
+            boolean eliminado = pedidoService.eliminarPedidoPagado(id);
+
+            if (eliminado) {
+                return responseService.success(null,
+                        "Pedido pagado eliminado exitosamente. Se han revertido los cambios en ventas y caja.");
+            } else {
+                return responseService.badRequest("No se pudo eliminar el pedido pagado");
+            }
+        } catch (Exception e) {
+            return responseService.internalError("Error al eliminar pedido pagado: " + e.getMessage());
         }
     }
 
@@ -410,7 +438,8 @@ public class PedidosController {
             System.out.println("Total Otros: " + totalOtros);
             System.out.println("Total General: " + totalGeneral);
 
-            TotalVentasResponse response = new TotalVentasResponse(totalGeneral, totalEfectivo, totalTransferencia, totalTarjeta, totalOtros);
+            TotalVentasResponse response = new TotalVentasResponse(totalGeneral, totalEfectivo, totalTransferencia,
+                    totalTarjeta, totalOtros);
             return responseService.success(response, "Total de ventas calculado exitosamente");
         } catch (Exception e) {
             System.err.println("Error calculando total de ventas: " + e.getMessage());
@@ -423,50 +452,28 @@ public class PedidosController {
         }
     }
 
-    @Operation(
-            summary = "Procesar pago de pedido",
-            description = """
+    @Operation(summary = "Procesar pago de pedido", description = """
             Procesa el pago de un pedido con diferentes tipos:
             - **pagado**: Pago normal con propina opcional
             - **cortesia**: Sin costo (cumpleaños, promociones)
-            - **consumo_interno**: Para empleados/gerencia  
+            - **consumo_interno**: Para empleados/gerencia
             - **cancelado**: Cancelación del pedido
-            
+
             **Validaciones importantes:**
             - Debe haber una caja abierta
             - El pedido no debe estar ya procesado
             - Los campos requeridos según el tipo de pago
-            """
-    )
+            """)
     @ApiResponses(value = {
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                responseCode = "200",
-                description = "Pedido procesado exitosamente",
-                content = @Content(schema = @Schema(implementation = Pedido.class))
-        ),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                responseCode = "400",
-                description = "Datos inválidos o caja no abierta",
-                content = @Content(examples = @ExampleObject(
-                        name = "Caja no abierta",
-                        value = "{\"success\": false, \"message\": \"No se puede procesar el pago sin una caja abierta\"}"
-                ))
-        ),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                responseCode = "404",
-                description = "Pedido no encontrado"
-        ),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                responseCode = "409",
-                description = "El pedido ya está procesado"
-        )
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Pedido procesado exitosamente", content = @Content(schema = @Schema(implementation = Pedido.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Datos inválidos o caja no abierta", content = @Content(examples = @ExampleObject(name = "Caja no abierta", value = "{\"success\": false, \"message\": \"No se puede procesar el pago sin una caja abierta\"}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Pedido no encontrado"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "El pedido ya está procesado")
     })
     @PutMapping("/{id}/pagar")
     public ResponseEntity<com.prog3.security.Utils.ApiResponse<Pedido>> pagarPedido(
-            @Parameter(description = "ID del pedido a procesar", required = true)
-            @PathVariable String id,
-            @Parameter(description = "Datos del pago", required = true)
-            @RequestBody @Valid PagarPedidoRequest pagarRequest) {
+            @Parameter(description = "ID del pedido a procesar", required = true) @PathVariable String id,
+            @Parameter(description = "Datos del pago", required = true) @RequestBody @Valid PagarPedidoRequest pagarRequest) {
         try {
             System.out.println("[PAGAR_PEDIDO] Iniciando pago para pedido ID: " + id);
 
@@ -508,7 +515,9 @@ public class PedidosController {
             String notasAdicionales = pagarRequest.getNotas() != null ? pagarRequest.getNotas() : "";
 
             if (pagarRequest.esPagado()) {
-                System.out.println("[PAGAR_PEDIDO] Procesando pago real. FormaPago: " + pagarRequest.getFormaPago() + ", Propina: " + pagarRequest.getPropina() + ", ProcesadoPor: " + pagarRequest.getProcesadoPor());
+                System.out.println(
+                        "[PAGAR_PEDIDO] Procesando pago real. FormaPago: " + pagarRequest.getFormaPago() + ", Propina: "
+                        + pagarRequest.getPropina() + ", ProcesadoPor: " + pagarRequest.getProcesadoPor());
                 pedido.pagar(pagarRequest.getFormaPago(), pagarRequest.getPropina(), pagarRequest.getProcesadoPor());
                 pedido.setIncluyePropina(pagarRequest.getPropina() > 0);
                 pedido.setNotas(notasAdicionales);
@@ -518,14 +527,16 @@ public class PedidosController {
                 pedido.setFechaCortesia(LocalDateTime.now());
                 pedido.setPropina(0);
                 pedido.setTotalPagado(0);
-                String motivoCortesia = pagarRequest.getMotivoCortesia() != null ? pagarRequest.getMotivoCortesia() : "";
+                String motivoCortesia = pagarRequest.getMotivoCortesia() != null ? pagarRequest.getMotivoCortesia()
+                        : "";
                 pedido.setNotas("CORTESÍA - " + motivoCortesia + " - " + notasAdicionales);
             } else if (pagarRequest.esConsumoInterno()) {
                 System.out.println("[PAGAR_PEDIDO] Procesando consumo interno");
                 pedido.setEstado("consumo_interno");
                 pedido.setPropina(0);
                 pedido.setTotalPagado(0);
-                String tipoConsumo = pagarRequest.getTipoConsumoInterno() != null ? pagarRequest.getTipoConsumoInterno() : "";
+                String tipoConsumo = pagarRequest.getTipoConsumoInterno() != null ? pagarRequest.getTipoConsumoInterno()
+                        : "";
                 pedido.setNotas("CONSUMO INTERNO - " + tipoConsumo + " - " + notasAdicionales);
             } else if (pagarRequest.esCancelado()) {
                 System.out.println("[PAGAR_PEDIDO] Procesando cancelación");
@@ -546,7 +557,8 @@ public class PedidosController {
             if (pedidoProcesado != null) {
                 boolean asignado = cuadreCajaService.asignarPedidoACuadreActivo(pedidoProcesado.get_id());
                 if (!asignado) {
-                    System.out.println("⚠️ Advertencia: Pedido procesado pero no se pudo asignar a ningún cuadre activo");
+                    System.out
+                            .println("⚠️ Advertencia: Pedido procesado pero no se pudo asignar a ningún cuadre activo");
                 } else {
                     System.out.println("[PAGAR_PEDIDO] Pedido asignado a cuadre activo correctamente");
                 }
@@ -556,9 +568,9 @@ public class PedidosController {
                     webSocketService.notificarPedidoPagado(
                             pedidoProcesado.get_id(),
                             pedidoProcesado.getMesa(),
-                            pedidoProcesado.getTotalPagado() > 0 ? pedidoProcesado.getTotalPagado() : pedidoProcesado.getTotal(),
-                            pedidoProcesado.getFormaPago()
-                    );
+                            pedidoProcesado.getTotalPagado() > 0 ? pedidoProcesado.getTotalPagado()
+                            : pedidoProcesado.getTotal(),
+                            pedidoProcesado.getFormaPago());
                 } catch (Exception wsError) {
                     System.err.println("⚠️ Error enviando notificación WebSocket: " + wsError.getMessage());
                 }
@@ -595,7 +607,8 @@ public class PedidosController {
      * Obtener todos los pedidos activos de una mesa especial
      */
     @GetMapping("/mesa/{mesa}/activos")
-    public ResponseEntity<com.prog3.security.Utils.ApiResponse<List<Pedido>>> getPedidosActivosPorMesa(@PathVariable String mesa) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<List<Pedido>>> getPedidosActivosPorMesa(
+            @PathVariable String mesa) {
         try {
             List<Pedido> pedidos = this.thePedidoRepository.findPedidosActivosByMesa(mesa);
             return responseService.success(pedidos, "Pedidos activos obtenidos exitosamente");
@@ -608,7 +621,8 @@ public class PedidosController {
      * Crear un pedido con nombre específico para mesa especial
      */
     @PostMapping("/mesa-especial")
-    public ResponseEntity<com.prog3.security.Utils.ApiResponse<Pedido>> createPedidoMesaEspecial(@RequestBody Pedido pedido) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<Pedido>> createPedidoMesaEspecial(
+            @RequestBody Pedido pedido) {
         try {
             // Validar que se proporcione el nombre del pedido
             if (pedido.getNombrePedido() == null || pedido.getNombrePedido().trim().isEmpty()) {
@@ -619,8 +633,7 @@ public class PedidosController {
             // Verificar si ya existe un pedido activo con ese nombre en esa mesa
             List<Pedido> pedidosExistentes = this.thePedidoRepository.findPedidoActivoByMesaAndNombre(
                     pedido.getMesa(),
-                    pedido.getNombrePedido()
-            );
+                    pedido.getNombrePedido());
 
             if (!pedidosExistentes.isEmpty()) {
                 return responseService.conflict("Ya existe un pedido activo con el nombre '"
@@ -719,10 +732,10 @@ public class PedidosController {
      * Obtener los ingredientes que se pueden devolver al cancelar un producto
      */
     @GetMapping("/{pedidoId}/producto/{productoId}/ingredientes-devolucion")
-    public ResponseEntity<com.prog3.security.Utils.ApiResponse<List<CancelarProductoRequest.IngredienteADevolver>>>
-            getIngredientesParaDevolucion(@PathVariable String pedidoId,
-                    @PathVariable String productoId,
-                    @RequestParam int cantidad) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<List<CancelarProductoRequest.IngredienteADevolver>>> getIngredientesParaDevolucion(
+            @PathVariable String pedidoId,
+            @PathVariable String productoId,
+            @RequestParam int cantidad) {
         try {
             // Buscar el pedido
             Pedido pedido = this.thePedidoRepository.findById(pedidoId).orElse(null);
@@ -731,10 +744,11 @@ public class PedidosController {
             }
 
             // Obtener los ingredientes que fueron descontados
-            List<CancelarProductoRequest.IngredienteADevolver> ingredientesDescontados
-                    = inventarioService.getIngredientesDescontadosParaProducto(pedidoId, productoId, cantidad);
+            List<CancelarProductoRequest.IngredienteADevolver> ingredientesDescontados = inventarioService
+                    .getIngredientesDescontadosParaProducto(pedidoId, productoId, cantidad);
 
-            return responseService.success(ingredientesDescontados, "Ingredientes para devolución obtenidos exitosamente");
+            return responseService.success(ingredientesDescontados,
+                    "Ingredientes para devolución obtenidos exitosamente");
         } catch (Exception e) {
             return responseService.internalError("Error al obtener ingredientes para devolución: " + e.getMessage());
         }
@@ -744,7 +758,8 @@ public class PedidosController {
      * Cancelar un producto del pedido con devolución selectiva de ingredientes
      */
     @PostMapping("/cancelar-producto")
-    public ResponseEntity<com.prog3.security.Utils.ApiResponse<Pedido>> cancelarProducto(@RequestBody CancelarProductoRequest request) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<Pedido>> cancelarProducto(
+            @RequestBody CancelarProductoRequest request) {
         try {
             // Buscar el pedido
             Pedido pedido = this.thePedidoRepository.findById(request.getPedidoId()).orElse(null);
@@ -761,7 +776,8 @@ public class PedidosController {
 
                         // Verificar si hay suficiente cantidad para cancelar
                         if (item.getCantidad() < request.getCantidadACancelar()) {
-                            return responseService.badRequest("No se puede cancelar más cantidad de la que existe en el pedido");
+                            return responseService
+                                    .badRequest("No se puede cancelar más cantidad de la que existe en el pedido");
                         }
 
                         // Reducir la cantidad o eliminar el item
@@ -788,8 +804,7 @@ public class PedidosController {
                         request.getPedidoId(),
                         request.getProductoId(),
                         request.getIngredientesADevolver(),
-                        request.getCanceladoPor()
-                );
+                        request.getCanceladoPor());
             }
 
             // Recalcular total del pedido
@@ -813,14 +828,16 @@ public class PedidosController {
             // Guardar el pedido actualizado
             Pedido pedidoActualizado = this.thePedidoRepository.save(pedido);
 
-            return responseService.success(pedidoActualizado, "Producto cancelado exitosamente con devolución selectiva de ingredientes");
+            return responseService.success(pedidoActualizado,
+                    "Producto cancelado exitosamente con devolución selectiva de ingredientes");
         } catch (Exception e) {
             return responseService.internalError("Error al cancelar producto: " + e.getMessage());
         }
     }
 
     @PostMapping("/{id}/test-inventario")
-    public ResponseEntity<com.prog3.security.Utils.ApiResponse<String>> testProcesarInventario(@PathVariable String id) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<String>> testProcesarInventario(
+            @PathVariable String id) {
         try {
             Pedido pedido = this.thePedidoRepository.findById(id).orElse(null);
             if (pedido == null) {
@@ -855,8 +872,7 @@ public class PedidosController {
 
             return responseService.success(
                     "TODOS_ELIMINADOS",
-                    "Se eliminaron " + cantidadEliminada + " pedidos exitosamente"
-            );
+                    "Se eliminaron " + cantidadEliminada + " pedidos exitosamente");
         } catch (Exception e) {
             System.err.println("❌ Error al eliminar todos los pedidos: " + e.getMessage());
             return responseService.internalError("Error al eliminar todos los pedidos: " + e.getMessage());
@@ -867,7 +883,8 @@ public class PedidosController {
      * Eliminar pedidos por estado específico
      */
     @DeleteMapping("/admin/eliminar-por-estado/{estado}")
-    public ResponseEntity<com.prog3.security.Utils.ApiResponse<String>> eliminarPedidosPorEstado(@PathVariable String estado) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<String>> eliminarPedidosPorEstado(
+            @PathVariable String estado) {
         try {
             List<Pedido> pedidosPorEstado = thePedidoRepository.findByEstado(estado);
             int cantidadEliminada = pedidosPorEstado.size();
@@ -880,8 +897,7 @@ public class PedidosController {
 
             return responseService.success(
                     "PEDIDOS_ELIMINADOS",
-                    "Se eliminaron " + cantidadEliminada + " pedidos con estado '" + estado + "'"
-            );
+                    "Se eliminaron " + cantidadEliminada + " pedidos con estado '" + estado + "'");
         } catch (Exception e) {
             System.err.println("❌ Error al eliminar pedidos por estado: " + e.getMessage());
             return responseService.internalError("Error al eliminar pedidos por estado: " + e.getMessage());
@@ -899,7 +915,8 @@ public class PedidosController {
             List<Pedido> pedidosEnRango = thePedidoRepository.findByFechaBetween(fechaInicio, fechaFin);
             int cantidadEliminada = pedidosEnRango.size();
 
-            System.out.println("⚠️ ELIMINANDO PEDIDOS ENTRE " + fechaInicio + " Y " + fechaFin + ": " + cantidadEliminada + " pedidos");
+            System.out.println("⚠️ ELIMINANDO PEDIDOS ENTRE " + fechaInicio + " Y " + fechaFin + ": "
+                    + cantidadEliminada + " pedidos");
 
             thePedidoRepository.deleteAll(pedidosEnRango);
 
@@ -907,8 +924,7 @@ public class PedidosController {
 
             return responseService.success(
                     "PEDIDOS_ELIMINADOS",
-                    "Se eliminaron " + cantidadEliminada + " pedidos entre " + fechaInicio + " y " + fechaFin
-            );
+                    "Se eliminaron " + cantidadEliminada + " pedidos entre " + fechaInicio + " y " + fechaFin);
         } catch (Exception e) {
             System.err.println("❌ Error al eliminar pedidos por fechas: " + e.getMessage());
             return responseService.internalError("Error al eliminar pedidos por fechas: " + e.getMessage());
@@ -935,7 +951,8 @@ public class PedidosController {
      * Contar pedidos por estado
      */
     @GetMapping("/admin/contar-por-estado/{estado}")
-    public ResponseEntity<com.prog3.security.Utils.ApiResponse<Integer>> contarPedidosPorEstado(@PathVariable String estado) {
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<Integer>> contarPedidosPorEstado(
+            @PathVariable String estado) {
         try {
             List<Pedido> pedidosPorEstado = thePedidoRepository.findByEstado(estado);
             int cantidad = pedidosPorEstado.size();
@@ -1070,8 +1087,9 @@ public class PedidosController {
                         productoNuevo.setNotas(productoOriginal.getNotas());
                         productosNuevoPedido.add(productoNuevo);
 
-                        System.out.println("   🚚 Producto movido completamente: " + productoOriginal.getProductoNombre()
-                                + " (Cantidad: " + productoOriginal.getCantidad() + ")");
+                        System.out
+                                .println("   🚚 Producto movido completamente: " + productoOriginal.getProductoNombre()
+                                        + " (Cantidad: " + productoOriginal.getCantidad() + ")");
                     } else {
                         // ✂️ Dividir producto: parte se queda, parte se va
                         // Crear producto para el nuevo pedido
@@ -1106,20 +1124,20 @@ public class PedidosController {
             // 🔍 Buscar pedido existente en mesa destino o crear nuevo
             Pedido pedidoDestino = null;
             List<Pedido> pedidosActivos = thePedidoRepository.findPedidosActivosByMesa(mesaDestino);
-            
+
             if (!pedidosActivos.isEmpty()) {
                 // Tomar el primer pedido activo encontrado
                 // ➕ Agregar productos al pedido existente
                 pedidoDestino = pedidosActivos.get(0);
                 pedidoDestino.getItems().addAll(productosNuevoPedido);
-                
+
                 // 💰 Recalcular total del pedido existente
                 double totalActualizado = pedidoDestino.getItems().stream()
                         .mapToDouble(ItemPedido::getSubtotal)
                         .sum();
                 pedidoDestino.setTotal(totalActualizado);
                 pedidoDestino.setFecha(LocalDateTime.now());
-                
+
                 System.out.println("➕ Productos agregados al pedido existente - Mesa: " + mesaDestino);
             } else {
                 // 🆕 Crear pedido nuevo solo si no hay uno activo
@@ -1134,13 +1152,14 @@ public class PedidosController {
                         .mapToDouble(ItemPedido::getSubtotal)
                         .sum();
                 pedidoDestino.setTotal(totalNuevo);
-                
+
                 System.out.println("🆕 Nuevo pedido creado - Mesa: " + mesaDestino);
             }
 
             // 💾 Guardar pedido (nuevo o actualizado)
             Pedido pedidoGuardado = thePedidoRepository.save(pedidoDestino);
-            System.out.println("✅ Pedido guardado - ID: " + pedidoGuardado.get_id() + ", Total: $" + pedidoGuardado.getTotal());
+            System.out.println(
+                    "✅ Pedido guardado - ID: " + pedidoGuardado.get_id() + ", Total: $" + pedidoGuardado.getTotal());
 
             // 🔄 Actualizar pedido original
             if (productosOriginalesActualizados.isEmpty()) {
@@ -1179,15 +1198,13 @@ public class PedidosController {
     }
 
     /**
-     * 💰 Procesa pago parcial de productos específicos de un pedido 
-     * - Crea un pedido pagado con los productos seleccionados 
-     * - Crea un documento de pago/factura 
-     * - Mantiene un pedido activo con los productos restantes
-     * - ✅ ACTUALIZADO: Ahora incluye todas las funciones del pago normal:
-     *   • Validación de caja abierta
-     *   • Asignación automática al cuadre de caja activo
-     *   • Notificaciones WebSocket
-     *   • Campos de pago consistentes (totalPagado, pagadoPor, etc.)
+     * 💰 Procesa pago parcial de productos específicos de un pedido - Crea un
+     * pedido pagado con los productos seleccionados - Crea un documento de
+     * pago/factura - Mantiene un pedido activo con los productos restantes - ✅
+     * ACTUALIZADO: Ahora incluye todas las funciones del pago normal: •
+     * Validación de caja abierta • Asignación automática al cuadre de caja
+     * activo • Notificaciones WebSocket • Campos de pago consistentes
+     * (totalPagado, pagadoPor, etc.)
      */
     // 🎯 Endpoint con la ruta que espera el frontend
     @PutMapping("/{id}/pagar-parcial")
@@ -1195,7 +1212,7 @@ public class PedidosController {
         try {
             System.out.println("🔍 DEBUG PAGO PARCIAL - ID del pedido: " + id);
             System.out.println("🔍 DEBUG PAGO PARCIAL - Request recibido: " + request);
-            
+
             // 📋 Extraer datos del request (el ID viene por PathVariable)
             // Manejar formato del frontend Flutter
             @SuppressWarnings("unchecked")
@@ -1206,19 +1223,19 @@ public class PedidosController {
             Object totalCalculado = request.get("totalCalculado");
             String clienteNombre = (String) request.get("clienteNombre");
             String clienteDocumento = (String) request.get("clienteDocumento");
-            
+
             // Para compatibilidad con formato anterior
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> productosAPagar = (List<Map<String, Object>>) request.get("productos");
             if (metodoPago == null) {
                 metodoPago = (String) request.get("metodoPago");
             }
-            
+
             // Si no hay datos de cliente, usar procesadoPor como referencia
             if (clienteNombre == null && procesadoPor != null) {
                 clienteNombre = "Cliente de " + procesadoPor;
             }
-            
+
             System.out.println("🔍 DEBUG - Datos extraídos:");
             System.out.println("   pedidoId: " + id);
             System.out.println("   formaPago: " + metodoPago);
@@ -1234,9 +1251,9 @@ public class PedidosController {
             System.out.println("   📋 Productos (legacy): " + (productosAPagar != null ? productosAPagar.size() : 0));
 
             // ✅ Validaciones básicas - priorizar itemIds del frontend
-            boolean tieneProductos = (itemIds != null && !itemIds.isEmpty()) || 
-                                   (productosAPagar != null && !productosAPagar.isEmpty());
-            
+            boolean tieneProductos = (itemIds != null && !itemIds.isEmpty())
+                    || (productosAPagar != null && !productosAPagar.isEmpty());
+
             if (id == null || !tieneProductos) {
                 return responseService.badRequest("Datos incompletos para el pago parcial");
             }
@@ -1311,8 +1328,9 @@ public class PedidosController {
                         productoPagado.setNotas(productoOriginal.getNotas());
                         productosPagados.add(productoPagado);
 
-                        System.out.println("   💰 Producto pagado completamente: " + productoOriginal.getProductoNombre()
-                                + " (Cantidad: " + productoOriginal.getCantidad() + ")");
+                        System.out
+                                .println("   💰 Producto pagado completamente: " + productoOriginal.getProductoNombre()
+                                        + " (Cantidad: " + productoOriginal.getCantidad() + ")");
                     } else {
                         // ✂️ Dividir producto: parte se paga, parte queda pendiente
                         // Crear producto pagado
@@ -1356,10 +1374,10 @@ public class PedidosController {
             pedidoPagado.setTotal(totalPagado);
             pedidoPagado.setCliente(clienteNombre);
             pedidoPagado.setFecha(pedidoOrigen.getFecha());
-            
+
             // 💰 Usar el método pagar para establecer todos los campos correctamente (igual que pagarPedido)
             pedidoPagado.pagar(metodoPago, 0.0, procesadoPor); // Sin propina en pagos parciales por defecto
-            
+
             // 🏦 Asignar cuadre de caja desde la creación (igual que en pagarPedido)
             if (!cajasAbiertas.isEmpty()) {
                 CuadreCaja cajaActiva = cajasAbiertas.get(0);
@@ -1376,7 +1394,8 @@ public class PedidosController {
             if (pedidoPagadoGuardado != null) {
                 boolean asignado = cuadreCajaService.asignarPedidoACuadreActivo(pedidoPagadoGuardado.get_id());
                 if (!asignado) {
-                    System.out.println("⚠️ Advertencia: Pedido pagado parcialmente pero no se pudo asignar a ningún cuadre activo");
+                    System.out.println(
+                            "⚠️ Advertencia: Pedido pagado parcialmente pero no se pudo asignar a ningún cuadre activo");
                 } else {
                     System.out.println("[PAGO_PARCIAL] Pedido asignado a cuadre activo correctamente");
                 }
@@ -1386,11 +1405,12 @@ public class PedidosController {
                     webSocketService.notificarPedidoPagado(
                             pedidoPagadoGuardado.get_id(),
                             pedidoPagadoGuardado.getMesa(),
-                            pedidoPagadoGuardado.getTotalPagado() > 0 ? pedidoPagadoGuardado.getTotalPagado() : pedidoPagadoGuardado.getTotal(),
-                            pedidoPagadoGuardado.getFormaPago()
-                    );
+                            pedidoPagadoGuardado.getTotalPagado() > 0 ? pedidoPagadoGuardado.getTotalPagado()
+                            : pedidoPagadoGuardado.getTotal(),
+                            pedidoPagadoGuardado.getFormaPago());
                 } catch (Exception wsError) {
-                    System.err.println("⚠️ Error enviando notificación WebSocket en pago parcial: " + wsError.getMessage());
+                    System.err.println(
+                            "⚠️ Error enviando notificación WebSocket en pago parcial: " + wsError.getMessage());
                 }
             }
 
@@ -1427,8 +1447,7 @@ public class PedidosController {
             documentoPago.put("metodoPago", metodoPago);
             documentoPago.put("cliente", Map.of(
                     "nombre", clienteNombre != null ? clienteNombre : "Cliente General",
-                    "documento", clienteDocumento != null ? clienteDocumento : "N/A"
-            ));
+                    "documento", clienteDocumento != null ? clienteDocumento : "N/A"));
             System.out.println("🔍 DEBUG - Antes de setear fechaPago...");
             LocalDateTime fechaPago = LocalDateTime.now();
             System.out.println("🔍 DEBUG - Fecha pago creada: " + fechaPago);
@@ -1451,7 +1470,8 @@ public class PedidosController {
             System.out.println("🎉 Pago parcial completado exitosamente");
             System.out.println("   💰 Total pagado: $" + totalPagado);
             System.out.println("   📄 Documento: " + documentoPago.get("numeroDocumento"));
-            System.out.println("   🏦 Asignado a cuadre: " + (pedidoPagadoGuardado.getCuadreCajaId() != null ? "Sí" : "No"));
+            System.out.println(
+                    "   🏦 Asignado a cuadre: " + (pedidoPagadoGuardado.getCuadreCajaId() != null ? "Sí" : "No"));
 
             return responseService.success(resultado, "Pago parcial procesado exitosamente");
 
@@ -1472,10 +1492,10 @@ public class PedidosController {
             if (pedidoId == null) {
                 return responseService.badRequest("pedidoId es requerido");
             }
-            
+
             // Redirigir al endpoint principal
             return pagarPedidoParcial(pedidoId, request);
-            
+
         } catch (Exception e) {
             return responseService.internalError("Error en pago parcial: " + e.getMessage());
         }

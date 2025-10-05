@@ -30,7 +30,7 @@ public class CuadreCajaService {
 
     @Autowired
     private FacturaRepository facturaRepository;
-    
+
     @Autowired
     private GastoRepository gastoRepository;
 
@@ -45,11 +45,10 @@ public class CuadreCajaService {
     }
 
     /**
-     * Calcula detalles completos de ventas y efectivo esperado
-     * ✅ CORREGIDO: 
-     * - Solo cuenta pedidos pagados de la caja específica (no documentos duplicados)
-     * - No incluye facturas en ventas (facturas = gastos/compras)
-     * - Cada caja maneja solo sus pedidos específicos
+     * Calcula detalles completos de ventas y efectivo esperado ✅ CORREGIDO: -
+     * Solo cuenta pedidos pagados de la caja específica (no documentos
+     * duplicados) - No incluye facturas en ventas (facturas = gastos/compras) -
+     * Cada caja maneja solo sus pedidos específicos
      */
     public Map<String, Object> calcularDetallesVentas() {
         LocalDateTime inicioDia = LocalDateTime.now().withHour(0).withMinute(0).withSecond(0).withNano(0);
@@ -71,22 +70,22 @@ public class CuadreCajaService {
         CuadreCaja cuadreActivo = cuadresActivos.get(0);
         fondoInicial = cuadreActivo.getFondoInicial();
         String cuadreCajaId = cuadreActivo.get_id();
-        
+
         System.out.println("📦 Procesando caja específica: " + cuadreActivo.getNombre() + " (ID: " + cuadreCajaId + ")");
         System.out.println("💰 Fondo inicial: $" + fondoInicial);
 
         // ✅ SOLO pedidos pagados asignados a esta caja específica
         List<Pedido> pedidosPagados = pedidoRepository.findByCuadreCajaIdAndEstado(cuadreCajaId, "pagado");
-        
+
         System.out.println("✅ PEDIDOS PAGADOS DE ESTA CAJA: " + pedidosPagados.size());
-        
+
         // ✅ DEBUG: Mostrar detalles de cada pedido para verificar
         for (Pedido pedido : pedidosPagados) {
-            System.out.println("  📦 Pedido ID: " + pedido.get_id() + 
-                              " | Estado: " + pedido.getEstado() + 
-                              " | Total: $" + pedido.getTotalPagado() + 
-                              " | Forma pago: " + pedido.getFormaPago() +
-                              " | Caja: " + pedido.getCuadreCajaId());
+            System.out.println("  📦 Pedido ID: " + pedido.get_id()
+                    + " | Estado: " + pedido.getEstado()
+                    + " | Total: $" + pedido.getTotalPagado()
+                    + " | Forma pago: " + pedido.getFormaPago()
+                    + " | Caja: " + pedido.getCuadreCajaId());
         }
 
         // Calcular totales por forma de pago (SOLO de pedidos pagados)
@@ -99,7 +98,7 @@ public class CuadreCajaService {
         for (Pedido pedido : pedidosPagados) {
             String formaPago = pedido.getFormaPago();
             double monto = pedido.getTotalPagado();
-            
+
             if (formaPago == null) {
                 totalOtros += monto;
             } else if ("efectivo".equalsIgnoreCase(formaPago.trim())) {
@@ -125,23 +124,23 @@ public class CuadreCajaService {
         // ✅ CORRECCIÓN: Calcular gastos solo del período de esta caja específica
         LocalDateTime fechaInicio = cuadreActivo.getFechaApertura();
         LocalDateTime fechaFin = LocalDateTime.now(); // Caja aún abierta
-        
+
         System.out.println("📅 Período de esta caja: " + fechaInicio + " hasta " + fechaFin);
-        
+
         // Gastos directos del período de esta caja
         List<Gasto> gastos = gastoRepository.findByFechaGastoBetween(fechaInicio, fechaFin);
         double totalGastosDirectos = gastos.stream().mapToDouble(Gasto::getMonto).sum();
-        
+
         // Facturas pagadas desde caja del período de esta caja (también son gastos)
         List<Factura> facturasPagadasDesdeCaja = facturaRepository.findByFechaBetween(fechaInicio, fechaFin)
                 .stream()
                 .filter(f -> "compra".equals(f.getTipoFactura()) && f.isPagadoDesdeCaja())
                 .collect(Collectors.toList());
         double totalFacturasDesdeCaja = facturasPagadasDesdeCaja.stream().mapToDouble(Factura::getTotal).sum();
-        
+
         // ✅ Total de gastos reales (gastos + facturas pagadas desde caja)
         double totalGastosReales = totalGastosDirectos + totalFacturasDesdeCaja;
-        
+
         System.out.println("✅ GASTOS DEL PERÍODO DE ESTA CAJA:");
         System.out.println("  Gastos directos: $" + totalGastosDirectos + " (" + gastos.size() + " registros)");
         System.out.println("  Facturas desde caja: $" + totalFacturasDesdeCaja + " (" + facturasPagadasDesdeCaja.size() + " facturas)");
@@ -149,27 +148,34 @@ public class CuadreCajaService {
 
         // ✅ DEBUG: Vamos a revisar cada gasto individualmente
         System.out.println("=== DEBUG GASTOS INDIVIDUALES ===");
+        System.out.println("Total de gastos encontrados: " + gastos.size());
         for (Gasto g : gastos) {
-            System.out.println("Gasto ID: " + g.get_id() + 
-                             " | Monto: $" + g.getMonto() + 
-                             " | FormaPago: " + g.getFormaPago() + 
-                             " | PagadoDesdeCaja: " + g.isPagadoDesdeCaja() +
-                             " | Concepto: " + g.getConcepto());
+            System.out.println("Gasto ID: " + g.get_id()
+                    + " | Monto: $" + g.getMonto()
+                    + " | FormaPago: " + g.getFormaPago()
+                    + " | PagadoDesdeCaja: " + g.isPagadoDesdeCaja()
+                    + " | Concepto: " + g.getConcepto());
         }
-        
+
         // ✅ Calcular solo gastos que salen de caja (independientemente de la forma de pago)
         List<Gasto> gastosDesdeCaja = gastos.stream()
                 .filter(g -> g.isPagadoDesdeCaja()) // Solo filtrar por pagadoDesdeCaja = true
                 .collect(Collectors.toList());
-        
+
         System.out.println("=== GASTOS QUE SALEN DE CAJA (CUALQUIER FORMA DE PAGO) ===");
+        System.out.println("Cantidad de gastos que salen de caja: " + gastosDesdeCaja.size());
         for (Gasto g : gastosDesdeCaja) {
             System.out.println("Gasto desde caja: " + g.getConcepto() + " - $" + g.getMonto() + " (" + g.getFormaPago() + ")");
         }
-        
+
         double totalGastosDesdeCaja = gastosDesdeCaja.stream()
                 .mapToDouble(Gasto::getMonto)
                 .sum();
+
+        System.out.println("🔍 VERIFICACIÓN DE TOTALES:");
+        System.out.println("Total calculado de gastos desde caja: $" + totalGastosDesdeCaja);
+        System.out.println("Cantidad de gastos desde caja: " + gastosDesdeCaja.size());
+
         double facturasEfectivo = facturasPagadasDesdeCaja.stream()
                 .filter(f -> "efectivo".equalsIgnoreCase(f.getMedioPago()))
                 .mapToDouble(Factura::getTotal)
@@ -193,10 +199,10 @@ public class CuadreCajaService {
         int cantidadTransferencias = 0;
         int cantidadTarjetas = 0;
         int cantidadOtros = 0;
-        
+
         for (Pedido pedido : pedidosPagados) {
             String formaPago = pedido.getFormaPago();
-            
+
             if (formaPago == null) {
                 cantidadOtros++;
             } else if ("efectivo".equalsIgnoreCase(formaPago.trim())) {
@@ -209,9 +215,9 @@ public class CuadreCajaService {
                 cantidadOtros++;
             }
         }
-        
+
         int totalPedidos = pedidosPagados.size();
-        
+
         System.out.println("=== CANTIDADES DE PEDIDOS ===");
         System.out.println("Total pedidos: " + totalPedidos);
         System.out.println("Efectivo: " + cantidadEfectivo + " pedidos");
@@ -228,7 +234,7 @@ public class CuadreCajaService {
                 .filter(g -> g.isPagadoDesdeCaja())
                 .mapToDouble(Gasto::getMonto)
                 .sum();
-        
+
         System.out.println("💰 DESGLOSE DE GASTOS POR ORIGEN:");
         System.out.println("  Gastos DESDE caja: $" + gastosTotalDesdeCaja + " (afectan efectivo)");
         System.out.println("  Gastos NO desde caja: $" + gastosNoDesdeCaja + " (NO afectan efectivo)");
@@ -248,7 +254,8 @@ public class CuadreCajaService {
         resultado.put("cantidadTransferencias", cantidadTransferencias);
         resultado.put("cantidadTarjetas", cantidadTarjetas);
         resultado.put("cantidadOtros", cantidadOtros);
-        resultado.put("totalGastos", totalGastosReales); // ✅ Ahora incluye facturas desde caja
+        // totalGastos ahora solo suma los gastos que salen de caja y facturas pagadas desde caja
+        resultado.put("totalGastos", totalGastosDesdeCaja + totalFacturasDesdeCaja);
         resultado.put("totalGastosDirectos", totalGastosDirectos);
         resultado.put("totalFacturasDesdeCaja", totalFacturasDesdeCaja);
         // ✅ NUEVO: Separar gastos según si salen de caja o no
@@ -384,8 +391,7 @@ public class CuadreCajaService {
         cuadreCaja.setTotalPagosFacturas(request.getTotalPagosFacturas());
 
         // Establecer domicilios
-    // Eliminado: cuadreCaja.setTotalDomicilios(request.getTotalDomicilios());
-
+        // Eliminado: cuadreCaja.setTotalDomicilios(request.getTotalDomicilios());
         // Por defecto, el estado es "pendiente" (configurado en el constructor)
         cuadreCaja.setEstado("pendiente");
 
@@ -514,8 +520,7 @@ public class CuadreCajaService {
         cuadre.setTotalPagosFacturas(request.getTotalPagosFacturas());
 
         // Actualizar domicilios
-    // Eliminado: cuadre.setTotalDomicilios(request.getTotalDomicilios());
-
+        // Eliminado: cuadre.setTotalDomicilios(request.getTotalDomicilios());
         // Recalcular diferencia (efectivo declarado - efectivo esperado)
         double efectivoEsperado = calcularEfectivoEsperado();
         cuadre.setEfectivoEsperado(efectivoEsperado);

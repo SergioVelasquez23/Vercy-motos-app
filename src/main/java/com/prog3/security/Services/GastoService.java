@@ -225,6 +225,17 @@ public class GastoService {
                 throw new RuntimeException("No se pueden eliminar gastos de un cuadre cerrado");
             }
 
+            // Si el gasto fue pagado desde caja, devolver el dinero al cuadre
+            if (gasto.isPagadoDesdeCaja() && cuadreCaja != null) {
+                double fondoActual = cuadreCaja.getFondoInicial();
+                cuadreCaja.setFondoInicial(fondoActual + gasto.getMonto());
+                cuadreCajaRepository.save(cuadreCaja);
+                
+                System.out.println("Revirtiendo gasto de caja: $" + gasto.getMonto() + 
+                                   ". Fondo antes: $" + fondoActual + 
+                                   ", después: $" + (fondoActual + gasto.getMonto()));
+            }
+
             gastoRepository.deleteById(id);
 
             // Actualizar totales en el cuadre
@@ -234,6 +245,7 @@ public class GastoService {
 
             return true;
         } catch (Exception e) {
+            System.err.println("Error al eliminar gasto: " + e.getMessage());
             return false;
         }
     }

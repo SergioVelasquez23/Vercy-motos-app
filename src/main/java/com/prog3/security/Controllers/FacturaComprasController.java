@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.DeleteMapping;
 
 import com.prog3.security.Models.Factura;
 import com.prog3.security.Models.ItemFacturaIngrediente;
@@ -418,6 +419,29 @@ public class FacturaComprasController {
         } catch (Exception e) {
             System.err.println("❌ Error al obtener resumen de pago desde caja: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        }
+    }
+
+    /**
+     * Elimina una factura de compra y revierte los cambios en inventario y caja
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Map<String, String>> eliminarFacturaCompra(@PathVariable String id) {
+        try {
+            boolean eliminada = facturaComprasService.eliminarFacturaCompra(id);
+            
+            Map<String, String> response = new HashMap<>();
+            if (eliminada) {
+                response.put("mensaje", "Factura de compra eliminada exitosamente. Se han revertido los cambios en inventario y caja.");
+                return ResponseEntity.ok(response);
+            } else {
+                response.put("error", "No se pudo eliminar la factura de compra");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            }
+        } catch (Exception e) {
+            Map<String, String> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Error al eliminar factura de compra: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
         }
     }
 }
