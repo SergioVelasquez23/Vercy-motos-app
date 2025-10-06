@@ -129,7 +129,12 @@ public class CierreCajaService {
                 .filter(g -> g.isPagadoDesdeCaja() && g.getFormaPago() != null && g.getFormaPago().trim().toLowerCase().equals("efectivo"))
                 .mapToDouble(Gasto::getMonto).sum();
 
-        cierre.setDebeTener(cierre.getEfectivoInicial() + cierre.getVentasEfectivo() - gastosEfectivoDesdeCaja);
+        // Sumar ingresos de caja si existen (puedes ajustar según tu modelo)
+        // double ingresosCaja = ...
+        // Sumar compras pagadas desde caja si existen (puedes ajustar según tu modelo)
+        // double comprasDesdeCaja = ...
+
+        cierre.setDebeTener(cierre.getEfectivoInicial() + cierre.getVentasEfectivo() /*+ ingresosCaja*/ - gastosEfectivoDesdeCaja /*- comprasDesdeCaja*/);
 
         // Información adicional
         cierre.setCantidadFacturas(facturas.size());
