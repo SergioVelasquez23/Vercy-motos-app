@@ -76,11 +76,10 @@ public class DevolverIngredientesDTO {
         public IngredienteDevueltoDTO() {}
 
         public IngredienteDevueltoDTO(String ingredienteId, String ingredienteNombre, double cantidadDevuelta,
-                                    String unidadId, String unidadNombre, String unidadAbreviatura, double stockAnterior, double stockActual) {
+                                    String unidadNombre, String unidadAbreviatura, double stockAnterior, double stockActual) {
             this.ingredienteId = ingredienteId;
             this.ingredienteNombre = ingredienteNombre;
             this.cantidadDevuelta = cantidadDevuelta;
-            this.unidadId = unidadId;
             this.unidadNombre = unidadNombre;
             this.unidadAbreviatura = unidadAbreviatura;
             this.stockAnterior = stockAnterior;

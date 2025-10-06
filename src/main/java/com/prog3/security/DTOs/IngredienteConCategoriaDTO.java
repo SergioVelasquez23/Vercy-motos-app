@@ -1,3 +1,4 @@
+    // Constructor sin unidadId para compatibilidad con ProductosControlle
 package com.prog3.security.DTOs;
 
 public class IngredienteConCategoriaDTO {
@@ -94,6 +95,17 @@ public class IngredienteConCategoriaDTO {
     }
 
     public void setStockMinimo(Double stockMinimo) {
+        this.stockMinimo = stockMinimo;
+    }
+        public IngredienteConCategoriaDTO(String _id, String categoriaId, String categoriaNombre, String nombre,
+            String unidadNombre, String unidadAbreviatura, Double stockActual, Double stockMinimo) {
+        this._id = _id;
+        this.categoriaId = categoriaId;
+        this.categoriaNombre = categoriaNombre;
+        this.nombre = nombre;
+        this.unidadNombre = unidadNombre;
+        this.unidadAbreviatura = unidadAbreviatura;
+        this.stockActual = stockActual;
         this.stockMinimo = stockMinimo;
     }
 }

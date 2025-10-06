@@ -743,25 +743,13 @@ public class InventarioController {
                     ingrediente.setStockActual(nuevoStock);
                     ingredienteRepository.save(ingrediente);
                     
-                    // Obtener datos de unidad
-                    String unidadId = ingrediente.getUnidadId();
-                    String unidadNombre = null;
-                    String unidadAbreviatura = null;
-                    if (unidadId != null) {
-                        com.prog3.security.Models.Unidad unidad = null;
-                        try {
-                            unidad = unidadRepository.findById(unidadId).orElse(null);
-                        } catch (Exception ex) {}
-                        if (unidad != null) {
-                            unidadNombre = unidad.getNombre();
-                            unidadAbreviatura = unidad.getAbreviatura();
-                        }
-                    }
+                    // Usar directamente el campo unidad del ingrediente
+                    String unidadNombre = ingrediente.getUnidad();
+                    String unidadAbreviatura = ingrediente.getUnidad();
                     IngredienteDevueltoDTO ingredienteDevueltoDTO = new IngredienteDevueltoDTO(
                         ingredienteId,
                         ingrediente.getNombre(),
                         cantidadADevolver,
-                        unidadId,
                         unidadNombre,
                         unidadAbreviatura,
                         stockAnterior,

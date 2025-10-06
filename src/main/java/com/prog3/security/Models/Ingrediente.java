@@ -13,6 +13,7 @@ public class Ingrediente {
     private String unidad;
     private Double stockActual;
     private Double stockMinimo;
+    private boolean descontable = true; // Por defecto true
 
     public Ingrediente() {
         // Constructor vacío - MongoDB generará automáticamente el _id
@@ -77,6 +78,14 @@ public class Ingrediente {
         this.stockMinimo = stockMinimo;
     }
 
+    public boolean isDescontable() {
+        return descontable;
+    }
+
+    public void setDescontable(boolean descontable) {
+        this.descontable = descontable;
+    }
+
     @Override
     public String toString() {
         return "Ingrediente{"
@@ -86,6 +95,7 @@ public class Ingrediente {
                 + ", unidad='" + unidad + '\''
                 + ", stockActual=" + stockActual
                 + ", stockMinimo=" + stockMinimo
+                + ", descontable=" + descontable
                 + '}';
     }
 }
