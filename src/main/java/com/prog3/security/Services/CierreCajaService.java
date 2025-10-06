@@ -126,7 +126,7 @@ public class CierreCajaService {
         // === CALCULAR DEBE TENER ===
         // Solo descontar gastos pagados desde caja
         double gastosEfectivoDesdeCaja = gastos.stream()
-                .filter(g -> g.isPagadoDesdeCaja() && "Efectivo".equalsIgnoreCase(g.getFormaPago()))
+                .filter(g -> g.isPagadoDesdeCaja() && g.getFormaPago() != null && g.getFormaPago().trim().toLowerCase().equals("efectivo"))
                 .mapToDouble(Gasto::getMonto).sum();
 
         cierre.setDebeTener(cierre.getEfectivoInicial() + cierre.getVentasEfectivo() - gastosEfectivoDesdeCaja);
