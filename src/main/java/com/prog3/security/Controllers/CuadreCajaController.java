@@ -55,15 +55,21 @@ public class CuadreCajaController {
     @GetMapping("/cuadre-completo")
     public ResponseEntity<ApiResponse<CierreCaja>> getCuadreCompleto() {
         try {
-            LocalDateTime inicioDia = LocalDateTime.now().withHour(0).withMinute(0).withSecond(0);
-            LocalDateTime finDia = LocalDateTime.now();
+            // Buscar la caja abierta real
+            List<CuadreCaja> cajasAbiertas = cuadreCajaRepository.findByCerradaFalse();
+            if (cajasAbiertas.isEmpty()) {
+                return responseService.notFound("No hay caja abierta en este momento");
+            }
+            CuadreCaja cajaAbierta = cajasAbiertas.get(0); // Tomar la primera caja abierta
 
-            // Montos iniciales por defecto (puedes parametrizar si lo necesitas)
+            LocalDateTime inicioCaja = cajaAbierta.getFechaApertura();
+            LocalDateTime finCaja = LocalDateTime.now();
+
             Map<String, Double> montosIniciales = new HashMap<>();
-            montosIniciales.put("efectivo", 0.0);
-            montosIniciales.put("transferencias", 0.0);
+            montosIniciales.put("efectivo", cajaAbierta.getFondoInicialDesglosado() != null && cajaAbierta.getFondoInicialDesglosado().containsKey("Efectivo") ? cajaAbierta.getFondoInicialDesglosado().get("Efectivo") : cajaAbierta.getFondoInicial());
+            montosIniciales.put("transferencias", cajaAbierta.getFondoInicialDesglosado() != null && cajaAbierta.getFondoInicialDesglosado().containsKey("Transferencia") ? cajaAbierta.getFondoInicialDesglosado().get("Transferencia") : 0.0);
 
-            CierreCaja cierre = cierreCajaService.generarCierreCaja(inicioDia, finDia, "Sistema", montosIniciales);
+            CierreCaja cierre = cierreCajaService.generarCierreCaja(inicioCaja, finCaja, cajaAbierta.getResponsable(), montosIniciales);
             return responseService.success(cierre, "Cuadre de caja generado exitosamente");
         } catch (Exception e) {
             return responseService.internalError("Error al generar cuadre de caja: " + e.getMessage());
