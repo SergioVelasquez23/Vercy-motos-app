@@ -222,10 +222,16 @@ public class ResumenCierreService {
         System.out.println("💰 TOTAL GASTOS + FACTURAS: $" + (totalGastos + totalFacturasDesdeCaja));
 
         // Detalles de gastos
-        List<Map<String, Object>> detallesGastos = gastos.stream()
-                .map(this::convertirGastoADetalle)
-                .collect(Collectors.toList());
-        resumenGastos.put("detallesGastos", detallesGastos);
+    List<Map<String, Object>> detallesGastos = gastos.stream()
+        .map(this::convertirGastoADetalle)
+        .collect(Collectors.toList());
+    resumenGastos.put("detallesGastos", detallesGastos);
+    // Calcular totalGastosDesdeCaja usando detallesGastos
+    double totalGastosDesdeCaja = detallesGastos.stream()
+        .filter(g -> Boolean.TRUE.equals(g.get("pagadoDesdeCaja")))
+        .mapToDouble(g -> g.get("monto") != null ? (Double) g.get("monto") : 0.0)
+        .sum();
+    resumenGastos.put("totalGastosDesdeCaja", totalGastosDesdeCaja);
 
         System.out.println("💰 Resumen gastos generado (cuadre específico) - Total: " + totalGastos + ", Registros: " + gastos.size());
         return resumenGastos;
@@ -357,7 +363,8 @@ public class ResumenCierreService {
         double ingresosEfectivo = ingresosPorFormaPago.getOrDefault("efectivo", 0.0);
 
         // Salidas de efectivo
-        double gastosEfectivo = gastosPorFormaPago != null ? gastosPorFormaPago.getOrDefault("efectivo", 0.0) : 0.0;
+    // Solo descontar gastos pagados desde caja
+    double gastosEfectivo = resumenGastos.get("totalGastosDesdeCaja") != null ? (double) resumenGastos.get("totalGastosDesdeCaja") : 0.0;
         double comprasEfectivo = comprasPorFormaPago != null ? comprasPorFormaPago.getOrDefault("efectivo", 0.0) : 0.0;
 
         // 🔍 DEBUG: Verificar que las facturas pagadas desde caja se están contando correctamente

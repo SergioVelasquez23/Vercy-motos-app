@@ -109,7 +109,7 @@ public class CierreCajaService {
         // === CALCULAR GASTOS ===
         List<Gasto> gastos = gastoRepository.findByFechaGastoBetween(fechaInicio, fechaFin)
                 .stream()
-                .filter(g -> "aprobado".equals(g.getEstado()) || "pendiente".equals(g.getEstado()))
+                .filter(g -> ("aprobado".equals(g.getEstado()) || "pendiente".equals(g.getEstado())))
                 .collect(Collectors.toList());
 
         System.out.println("Gastos encontrados: " + gastos.size());
@@ -124,12 +124,12 @@ public class CierreCajaService {
         cierre.setTotalGastos(gastos.stream().mapToDouble(Gasto::getMonto).sum());
 
         // === CALCULAR DEBE TENER ===
-        // Debe tener = Inicial + Ventas en efectivo - Gastos en efectivo
-        double gastosEfectivo = gastos.stream()
-                .filter(g -> "Efectivo".equals(g.getFormaPago()))
+        // Solo descontar gastos pagados desde caja
+        double gastosEfectivoDesdeCaja = gastos.stream()
+                .filter(g -> g.isPagadoDesdeCaja() && "Efectivo".equalsIgnoreCase(g.getFormaPago()))
                 .mapToDouble(Gasto::getMonto).sum();
 
-        cierre.setDebeTener(cierre.getEfectivoInicial() + cierre.getVentasEfectivo() - gastosEfectivo);
+        cierre.setDebeTener(cierre.getEfectivoInicial() + cierre.getVentasEfectivo() - gastosEfectivoDesdeCaja);
 
         // Información adicional
         cierre.setCantidadFacturas(facturas.size());
