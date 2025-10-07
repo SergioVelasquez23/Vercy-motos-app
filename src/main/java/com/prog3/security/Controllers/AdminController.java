@@ -391,4 +391,62 @@ public class AdminController {
             return ResponseEntity.status(500).body(response);
         }
     }
+    
+    /**
+     * Elimina todos los pedidos con estado activo o pendiente y reinicia las mesas
+     * 
+     * @return ResponseEntity con resultado de la operación
+     */
+    @DeleteMapping("/eliminar-todos-pedidos-activos")
+    public ResponseEntity<Map<String, Object>> eliminarTodosPedidosActivos() {
+        Map<String, Object> response = new HashMap<>();
+        
+        try {
+            System.out.println("🔄 Iniciando eliminación de pedidos activos...");
+            
+            // Buscar todos los pedidos con estado activo o pendiente
+            List<String> estados = List.of("activo", "pendiente");
+            List<Pedido> pedidosActivos = pedidoRepository.findByEstadoIn(estados);
+            
+            int cantidadPedidos = pedidosActivos.size();
+            System.out.println("🔍 Se encontraron " + cantidadPedidos + " pedidos activos/pendientes para eliminar");
+            
+            if (cantidadPedidos > 0) {
+                // Eliminar todos los pedidos activos
+                pedidoRepository.deleteAll(pedidosActivos);
+                System.out.println("✅ Eliminados " + cantidadPedidos + " pedidos activos/pendientes");
+            } else {
+                System.out.println("ℹ️ No se encontraron pedidos activos para eliminar");
+            }
+            
+            // Resetear estado de todas las mesas
+            try {
+                mongoTemplate.getCollection("mesas").updateMany(
+                    new org.bson.Document(),
+                    new org.bson.Document("$set", new org.bson.Document()
+                        .append("ocupada", false)
+                        .append("total", 0.0)
+                        .append("productos", java.util.Arrays.asList())
+                        .append("pedidoActual", null))
+                );
+                System.out.println("✅ Estado de todas las mesas reseteado");
+            } catch (Exception e) {
+                System.err.println("⚠️ Error reseteando mesas: " + e.getMessage());
+            }
+            
+            // Preparar respuesta
+            response.put("success", true);
+            response.put("message", "Pedidos activos eliminados y mesas reseteadas correctamente");
+            response.put("pedidosEliminados", cantidadPedidos);
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            System.err.println("❌ Error eliminando pedidos activos: " + e.getMessage());
+            e.printStackTrace();
+            response.put("success", false);
+            response.put("message", "Error eliminando pedidos activos: " + e.getMessage());
+            return ResponseEntity.status(500).body(response);
+        }
+    }
 }

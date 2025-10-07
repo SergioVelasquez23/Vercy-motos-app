@@ -99,4 +99,7 @@ public interface PedidoRepository extends MongoRepository<Pedido, String> {
     // Buscar pedidos pagados sin cuadre en un rango de fechas
     @Query("{ 'cuadreCajaId': { $exists: false }, 'estado': 'pagado', 'fechaPago': { $gte: ?0, $lte: ?1 } }")
     List<Pedido> findPedidosPagadosSinCuadreEnRango(LocalDateTime fechaInicio, LocalDateTime fechaFin);
+    
+    // Buscar pedidos por múltiples estados
+    List<Pedido> findByEstadoIn(List<String> estados);
 }
