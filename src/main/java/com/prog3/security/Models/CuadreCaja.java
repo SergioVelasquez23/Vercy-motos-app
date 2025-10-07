@@ -30,6 +30,7 @@ public class CuadreCaja {
 
     // Resumen
     private double efectivoEsperado;
+    private Double efectivoDeclarado;  // Efectivo real contado al cierre
     private double diferencia;
     private boolean cuadrado;
     private boolean cerrada;      // Indica si la caja está cerrada o abierta
@@ -288,5 +289,13 @@ public class CuadreCaja {
 
     public void setTotalDomicilios(double totalDomicilios) {
         this.totalDomicilios = totalDomicilios;
+    }
+    
+    public Double getEfectivoDeclarado() {
+        return efectivoDeclarado;
+    }
+    
+    public void setEfectivoDeclarado(Double efectivoDeclarado) {
+        this.efectivoDeclarado = efectivoDeclarado;
     }
 }

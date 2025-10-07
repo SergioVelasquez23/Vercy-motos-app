@@ -77,15 +77,18 @@ public class CierreCajaService {
         // Ventas por método de pago
         Map<String, Double> ventasPorMetodo = new HashMap<>();
 
-        // Procesar facturas
+        // Procesar facturas - Filtrar solo las que NO son de tipo compra (corregido)
         double ventasEfectivoFacturas = facturas.stream()
-                .filter(f -> f.getMedioPago() != null && f.getMedioPago().equalsIgnoreCase("Efectivo"))
+                .filter(f -> f.getMedioPago() != null && f.getMedioPago().equalsIgnoreCase("Efectivo")
+                      && (f.getTipoFactura() == null || !f.getTipoFactura().equalsIgnoreCase("compra")))
                 .mapToDouble(Factura::getTotal).sum();
         double ventasTransferenciasFacturas = facturas.stream()
-                .filter(f -> f.getMedioPago() != null && f.getMedioPago().equalsIgnoreCase("Transferencia"))
+                .filter(f -> f.getMedioPago() != null && f.getMedioPago().equalsIgnoreCase("Transferencia")
+                      && (f.getTipoFactura() == null || !f.getTipoFactura().equalsIgnoreCase("compra")))
                 .mapToDouble(Factura::getTotal).sum();
         double ventasTarjetasFacturas = facturas.stream()
-                .filter(f -> f.getMedioPago() != null && f.getMedioPago().equalsIgnoreCase("Tarjeta"))
+                .filter(f -> f.getMedioPago() != null && f.getMedioPago().equalsIgnoreCase("Tarjeta")
+                      && (f.getTipoFactura() == null || !f.getTipoFactura().equalsIgnoreCase("compra")))
                 .mapToDouble(Factura::getTotal).sum();
 
         // Procesar pedidos CON SOPORTE PARA PAGOS MIXTOS
@@ -184,6 +187,10 @@ public class CierreCajaService {
                 .stream()
                 .filter(f -> f.getTipoFactura() != null && f.getTipoFactura().equalsIgnoreCase("compra"))
                 .collect(Collectors.toList());
+                
+        System.out.println("Facturas de compras encontradas: " + facturasCompras.size());
+        facturasCompras.forEach(f -> System.out.println("  Factura Compra: " + f.getNumero() + ", Valor: " + f.getTotal() 
+                + ", Medio: " + f.getMedioPago() + ", Pagada desde caja: " + f.isPagadoDesdeCaja()));
 
         System.out.println("Facturas de compras encontradas: " + facturasCompras.size());
 
@@ -217,8 +224,19 @@ public class CierreCajaService {
                 .mapToDouble(Gasto::getMonto).sum();
 
         // Incluir todos los ingresos y egresos de efectivo (incluyendo facturas compras pagadas desde caja)
-        cierre.setDebeTener(cierre.getEfectivoInicial() + cierre.getVentasEfectivo() + cierre.getIngresosEfectivo() 
-                - gastosEfectivoDesdeCaja - facturasComprasPagadasDesdeCaja);
+        // Log para depuración
+        System.out.println("CÁLCULO DE DEBE TENER:");
+        System.out.println("  Efectivo Inicial: " + cierre.getEfectivoInicial());
+        System.out.println("  Ventas Efectivo: " + cierre.getVentasEfectivo());
+        System.out.println("  Ingresos Efectivo: " + cierre.getIngresosEfectivo());
+        System.out.println("  Gastos Efectivo desde Caja: " + gastosEfectivoDesdeCaja);
+        System.out.println("  Facturas Compras pagadas desde Caja: " + facturasComprasPagadasDesdeCaja);
+        
+        double debeTener = cierre.getEfectivoInicial() + cierre.getVentasEfectivo() + cierre.getIngresosEfectivo() 
+                - gastosEfectivoDesdeCaja - facturasComprasPagadasDesdeCaja;
+        System.out.println("  DEBE TENER CALCULADO: " + debeTener);
+        
+        cierre.setDebeTener(debeTener);
 
         // Información adicional
         cierre.setCantidadFacturas(facturas.size());

@@ -13,6 +13,7 @@ public class Ingrediente {
     private String unidad;
     private Double stockActual;
     private Double stockMinimo;
+    private double costo;
     private boolean descontable = true; // Por defecto true
 
     public Ingrediente() {
@@ -20,13 +21,14 @@ public class Ingrediente {
     }
 
     public Ingrediente(String categoriaId, String nombre, String unidad,
-            Double stockActual, Double stockMinimo) {
+            Double stockActual, Double stockMinimo, double costo) {
         // No establecemos _id aquí, MongoDB lo generará automáticamente
         this.categoriaId = categoriaId;
         this.nombre = nombre;
         this.unidad = unidad;
         this.stockActual = stockActual;
         this.stockMinimo = stockMinimo;
+        this.costo = costo;
     }
 
     // Getters y Setters
@@ -85,6 +87,14 @@ public class Ingrediente {
     public void setDescontable(boolean descontable) {
         this.descontable = descontable;
     }
+    
+    public double getCosto() {
+        return costo;
+    }
+
+    public void setCosto(double costo) {
+        this.costo = costo;
+    }
 
     @Override
     public String toString() {
@@ -95,6 +105,7 @@ public class Ingrediente {
                 + ", unidad='" + unidad + '\''
                 + ", stockActual=" + stockActual
                 + ", stockMinimo=" + stockMinimo
+                + ", costo=" + costo
                 + ", descontable=" + descontable
                 + '}';
     }

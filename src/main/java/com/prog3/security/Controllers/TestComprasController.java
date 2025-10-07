@@ -45,6 +45,7 @@ public class TestComprasController {
             ingrediente.setUnidad("kg");
             ingrediente.setStockActual(0.0);
             ingrediente.setStockMinimo(5.0);
+            ingrediente.setCosto(10000.0); // Agregar costo
             ingrediente.setDescontable(true); // Se puede descontar del stock
 
             Ingrediente ingredienteGuardado = ingredienteRepository.save(ingrediente);
@@ -80,6 +81,7 @@ public class TestComprasController {
                 ingrediente.setUnidad("kg");
                 ingrediente.setStockActual(0.0);
                 ingrediente.setStockMinimo(5.0);
+                ingrediente.setCosto(10000.0); // Agregar costo
                 ingrediente.setDescontable(true);
                 ingredientes.add(ingredienteRepository.save(ingrediente));
             }

@@ -103,13 +103,19 @@ public class IngredienteController {
 
             // Asegurar que el ID sea null antes de guardar (MongoDB lo generará automáticamente)
             ingrediente.set_id(null);
-
+            
+            System.out.println("⚠️ Creando ingrediente: " + ingrediente.getNombre());
+            System.out.println("⚠️ Costo antes de guardar: " + ingrediente.getCosto());
+            
             Ingrediente nuevoIngrediente = this.ingredienteRepository.save(ingrediente);
 
             // Verificar que el ID se haya generado
             if (nuevoIngrediente.get_id() == null) {
                 return responseService.internalError("Error: No se pudo generar el ID del ingrediente");
             }
+            
+            System.out.println("⚠️ Costo después de guardar: " + nuevoIngrediente.getCosto());
+            System.out.println("⚠️ Ingrediente creado: " + nuevoIngrediente.toString());
 
             return responseService.created(nuevoIngrediente, "Ingrediente creado exitosamente con ID: " + nuevoIngrediente.get_id());
         } catch (Exception e) {
@@ -205,8 +211,14 @@ public class IngredienteController {
             actualIngrediente.setUnidad(ingrediente.getUnidad());
             actualIngrediente.setStockActual(ingrediente.getStockActual());
             actualIngrediente.setStockMinimo(ingrediente.getStockMinimo());
+            actualIngrediente.setCosto(ingrediente.getCosto());
+            actualIngrediente.setDescontable(ingrediente.isDescontable());
 
+            System.out.println("⚠️ Actualizando ingrediente: " + id);
+            System.out.println("⚠️ Costo antes de guardar: " + actualIngrediente.getCosto());
             Ingrediente ingredienteActualizado = this.ingredienteRepository.save(actualIngrediente);
+            System.out.println("⚠️ Costo después de guardar: " + ingredienteActualizado.getCosto());
+            System.out.println("⚠️ Ingrediente actualizado: " + ingredienteActualizado.toString());
             return responseService.success(ingredienteActualizado, "Ingrediente actualizado exitosamente");
         } catch (Exception e) {
             return responseService.internalError("Error al actualizar ingrediente: " + e.getMessage());

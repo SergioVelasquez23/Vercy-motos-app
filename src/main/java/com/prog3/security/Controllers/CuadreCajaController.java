@@ -31,6 +31,7 @@ import com.prog3.security.Repositories.PedidoRepository;
 import com.prog3.security.Services.CuadreCajaService;
 import com.prog3.security.Services.ResponseService;
 import com.prog3.security.Services.ResumenCierreService;
+import com.prog3.security.Services.ResumenCierreServiceUnificado;
 
 import com.prog3.security.Utils.ApiResponse;
 
@@ -44,6 +45,9 @@ public class CuadreCajaController {
 
     @Autowired
     private ResumenCierreService resumenCierreService;
+    
+    @Autowired
+    private ResumenCierreServiceUnificado resumenUnificadoService;
 
     @Autowired
     private CuadreCajaRepository cuadreCajaRepository;
@@ -150,13 +154,17 @@ public class CuadreCajaController {
     }
 
     /**
-     * Endpoint para obtener el resumen completo de cierre de caja Incluye
-     * ventas, gastos, compras, movimientos de efectivo y resumen final
+     * Endpoint unificado para obtener el resumen completo de cierre de caja.
+     * Incluye ventas, gastos, compras, movimientos de efectivo y resumen final.
+     * Aplica correctamente la lógica de:
+     * - Gastos y compras que salen de caja (se descuentan del efectivo esperado)
+     * - Facturas de compra pagadas en efectivo (reducen el efectivo esperado)
+     * - Pedidos eliminados (se restan de las ventas)
      */
     @GetMapping("/{id}/resumen-cierre")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getResumenCierre(@PathVariable String id) {
         try {
-            System.out.println("🧾 Solicitando resumen de cierre para cuadre: " + id);
+            System.out.println("🧾 Solicitando resumen de cierre unificado para cuadre: " + id);
 
             // Verificar que el cuadre existe
             CuadreCaja cuadre = cuadreCajaService.obtenerCuadrePorId(id);
@@ -164,10 +172,29 @@ public class CuadreCajaController {
                 return responseService.notFound("Cuadre de caja no encontrado con ID: " + id);
             }
 
-            // Generar el resumen completo
-            Map<String, Object> resumen = resumenCierreService.generarResumenCuadre(id);
+            // Generar el resumen completo usando el servicio unificado
+            Map<String, Object> resumen = resumenUnificadoService.generarResumenCuadre(id);
 
-            return responseService.success(resumen, "Resumen de cierre generado exitosamente");
+            // Información de debug para validar los cálculos
+            System.out.println("✅ Resumen de cierre unificado generado exitosamente");
+            System.out.println("📊 Detalles del balance de efectivo:");
+            if (resumen.containsKey("resumenFinal")) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> resumenFinal = (Map<String, Object>) resumen.get("resumenFinal");
+                System.out.println("  - Efectivo inicial: " + resumenFinal.getOrDefault("efectivoInicial", 0.0));
+                System.out.println("  - Ventas en efectivo: " + resumenFinal.getOrDefault("ventasEfectivo", 0.0));
+                System.out.println("  - Ingresos en efectivo: " + resumenFinal.getOrDefault("ingresosEfectivo", 0.0));
+                System.out.println("  - Gastos en efectivo: " + resumenFinal.getOrDefault("gastosEfectivo", 0.0));
+                System.out.println("  - Compras en efectivo: " + resumenFinal.getOrDefault("comprasEfectivo", 0.0));
+                System.out.println("  - Efectivo esperado: " + resumenFinal.getOrDefault("efectivoEsperado", 0.0));
+                System.out.println("  - Efectivo real: " + resumenFinal.getOrDefault("efectivoReal", 0.0));
+                System.out.println("  - Diferencia: " + resumenFinal.getOrDefault("diferencia", 0.0));
+                // Información sobre pedidos eliminados
+                System.out.println("  - Ventas eliminadas: " + resumenFinal.getOrDefault("ventasEliminadas", 0.0));
+                System.out.println("  - Pedidos eliminados: " + resumenFinal.getOrDefault("totalPedidosEliminados", 0));
+            }
+
+            return responseService.success(resumen, "Resumen de cierre unificado generado exitosamente");
 
         } catch (Exception e) {
             System.err.println("❌ Error al generar resumen de cierre: " + e.getMessage());
@@ -464,6 +491,21 @@ public class CuadreCajaController {
             e.printStackTrace();
             return responseService.internalError("Error al crear cuadre de caja: " + e.getMessage());
         }
+    }
+
+    /**
+     * Endpoint para generar el cuadre completo de una caja.
+     * Este es un alias del endpoint unificado /{id}/resumen-cierre para mantener compatibilidad con el frontend.
+     * Incluye el mismo cálculo unificado que maneja correctamente:
+     * - Las facturas de compras pagadas desde caja (se descuentan del efectivo esperado)
+     * - Los gastos que salen de caja (se descuentan del efectivo esperado)
+     * - Los pedidos eliminados (se restan de las ventas)
+     */
+    @GetMapping("/{id}/generar-cuadre")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> generarCuadre(@PathVariable String id) {
+        System.out.println("🧾 Usando endpoint unificado para generar-cuadre: " + id);
+        // Simplemente redirigimos al endpoint unificado
+        return getResumenCierre(id);
     }
 
     @PutMapping("/{id}/aprobar")
