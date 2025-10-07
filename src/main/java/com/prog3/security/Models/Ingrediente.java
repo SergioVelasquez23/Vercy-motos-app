@@ -2,6 +2,7 @@ package com.prog3.security.Models;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 @Document(collection = "ingredientes")
 public class Ingrediente {
@@ -13,6 +14,7 @@ public class Ingrediente {
     private String unidad;
     private Double stockActual;
     private Double stockMinimo;
+    @JsonProperty("costo")
     private double costo;
     private boolean descontable = true; // Por defecto true
 
@@ -88,10 +90,12 @@ public class Ingrediente {
         this.descontable = descontable;
     }
     
+    @JsonProperty("costo")
     public double getCosto() {
         return costo;
     }
 
+    @JsonProperty("costo")
     public void setCosto(double costo) {
         this.costo = costo;
     }

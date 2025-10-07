@@ -205,21 +205,55 @@ public class IngredienteController {
                 return responseService.badRequest("La categoría con ID '" + ingrediente.getCategoriaId() + "' no existe");
             }
 
+            // Log de valores originales para depuración
+            System.out.println("📝 VALORES ORIGINALES:");
+            System.out.println("  - Nombre: " + actualIngrediente.getNombre());
+            System.out.println("  - Costo Original: " + actualIngrediente.getCosto());
+            System.out.println("  - Costo a Actualizar: " + ingrediente.getCosto());
+            System.out.println("  - Stock Actual: " + actualIngrediente.getStockActual());
+            
             // Actualizar campos
             actualIngrediente.setCategoriaId(ingrediente.getCategoriaId());
             actualIngrediente.setNombre(ingrediente.getNombre());
             actualIngrediente.setUnidad(ingrediente.getUnidad());
             actualIngrediente.setStockActual(ingrediente.getStockActual());
             actualIngrediente.setStockMinimo(ingrediente.getStockMinimo());
-            actualIngrediente.setCosto(ingrediente.getCosto());
+            
+            // Asegurarnos que el costo se actualiza explícitamente
+            double nuevoCosto = ingrediente.getCosto();
+            actualIngrediente.setCosto(nuevoCosto);
             actualIngrediente.setDescontable(ingrediente.isDescontable());
 
             System.out.println("⚠️ Actualizando ingrediente: " + id);
             System.out.println("⚠️ Costo antes de guardar: " + actualIngrediente.getCosto());
+            
+            // Guardar el ingrediente actualizado
             Ingrediente ingredienteActualizado = this.ingredienteRepository.save(actualIngrediente);
+            
+            // Verificar que el costo se haya actualizado correctamente
             System.out.println("⚠️ Costo después de guardar: " + ingredienteActualizado.getCosto());
-            System.out.println("⚠️ Ingrediente actualizado: " + ingredienteActualizado.toString());
-            return responseService.success(ingredienteActualizado, "Ingrediente actualizado exitosamente");
+            System.out.println("⚠️ Ingrediente actualizado completo: " + ingredienteActualizado.toString());
+            
+            // Log del objeto que se va a devolver como respuesta
+            System.out.println("🔄 RESPUESTA JSON que se enviará:");
+            System.out.println("  - _id: " + ingredienteActualizado.get_id());
+            System.out.println("  - nombre: " + ingredienteActualizado.getNombre());
+            System.out.println("  - costo: " + ingredienteActualizado.getCosto());
+            System.out.println("  - descontable: " + ingredienteActualizado.isDescontable());
+            // Asegurar que todos los campos sean correctamente serializados en la respuesta
+            ApiResponse<Ingrediente> response = ApiResponse.<Ingrediente>builder()
+                .success(true)
+                .message("Ingrediente actualizado exitosamente")
+                .data(ingredienteActualizado)
+                .build();
+                
+            // Verificamos que el campo costo esté correctamente incluido en la respuesta
+            System.out.println("🧪 DEBUG - Verificando ApiResponse.data:");
+            System.out.println("  - ID: " + response.getData().get_id());
+            System.out.println("  - Nombre: " + response.getData().getNombre());
+            System.out.println("  - Costo en respuesta: " + response.getData().getCosto());
+            
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
             return responseService.internalError("Error al actualizar ingrediente: " + e.getMessage());
         }
