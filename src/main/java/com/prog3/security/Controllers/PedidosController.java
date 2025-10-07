@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.Date;
@@ -454,9 +455,12 @@ public class PedidosController {
             actualPedido.setItems(newPedido.getItems());
 
             // Registrar edición general si cambió información básica
-            if (!actualPedido.getNotas().equals(newPedido.getNotas()) || 
-                !actualPedido.getMesa().equals(newPedido.getMesa()) ||
-                !actualPedido.getCliente().equals(newPedido.getCliente())) {
+            boolean cambioMesa = !Objects.equals(actualPedido.getMesa(), newPedido.getMesa());
+            boolean cambioCliente = !Objects.equals(actualPedido.getCliente(), newPedido.getCliente());
+            // Las notas pueden ser nulas, así que usamos Objects.equals para la comparación segura
+            boolean cambioNotas = !Objects.equals(actualPedido.getNotas(), newPedido.getNotas());
+            
+            if (cambioMesa || cambioCliente || cambioNotas) {
                 actualPedido.agregarEdicion("pedido_editado", usuarioActual, "Editó información del pedido");
             }
 
