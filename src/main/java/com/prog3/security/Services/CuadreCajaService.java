@@ -47,6 +47,53 @@ public class CuadreCajaService {
         System.out.println("✅ Pago parcial registrado en caja: " + monto + " por " + formaPago);
     }
 
+    /**
+     * Resta un pago del cuadre de caja activo según la forma de pago
+     * Se usa al eliminar pedidos ya pagados
+     */
+    public void restarPagoDelCuadreActivo(double monto, String formaPago) {
+        List<CuadreCaja> cuadresActivos = cuadreCajaRepository.findByCerradaFalse();
+        if (cuadresActivos.isEmpty()) {
+            System.out.println("❌ No hay cajas activas para restar pago");
+            return;
+        }
+        CuadreCaja cuadre = cuadresActivos.get(0);
+        
+        // Restar del total de ventas
+        cuadre.setTotalVentas(Math.max(0, cuadre.getTotalVentas() - monto));
+        
+        // Restar del desglose por forma de pago
+        Map<String, Double> ventasDesglosadas = cuadre.getVentasDesglosadas();
+        if (ventasDesglosadas == null) {
+            ventasDesglosadas = new HashMap<>();
+        }
+        double actual = ventasDesglosadas.getOrDefault(formaPago, 0.0);
+        ventasDesglosadas.put(formaPago, Math.max(0, actual - monto));
+        cuadre.setVentasDesglosadas(ventasDesglosadas);
+        
+        // Restar del efectivo esperado si es efectivo
+        if ("efectivo".equalsIgnoreCase(formaPago)) {
+            cuadre.setEfectivoEsperado(Math.max(0, cuadre.getEfectivoEsperado() - monto));
+        }
+        
+        cuadreCajaRepository.save(cuadre);
+        System.out.println("✅ Pago restado de caja: " + monto + " por " + formaPago);
+    }
+
+    /**
+     * Resta múltiples pagos del cuadre activo (para pagos mixtos)
+     */
+    public void restarPagosDelCuadreActivo(List<Pedido.PagoParcial> pagos) {
+        if (pagos == null || pagos.isEmpty()) {
+            return;
+        }
+        
+        System.out.println("🔄 Restando pagos mixtos del cuadre activo...");
+        for (Pedido.PagoParcial pago : pagos) {
+            restarPagoDelCuadreActivo(pago.getMonto(), pago.getFormaPago());
+        }
+    }
+
     @Autowired
     private CuadreCajaRepository cuadreCajaRepository;
 
@@ -119,21 +166,47 @@ public class CuadreCajaService {
         double totalTarjetas = 0.0;
         double totalOtros = 0.0;
 
-        // ✅ SOLO procesar pedidos pagados (NO facturas en ventas)
+        // ✅ PROCESAR PEDIDOS PAGADOS CON SOPORTE PARA PAGOS MIXTOS
         for (Pedido pedido : pedidosPagados) {
-            String formaPago = pedido.getFormaPago();
-            double monto = pedido.getTotalPagado();
-
-            if (formaPago == null) {
-                totalOtros += monto;
-            } else if ("efectivo".equalsIgnoreCase(formaPago.trim())) {
-                totalEfectivo += monto;
-            } else if ("transferencia".equalsIgnoreCase(formaPago.trim())) {
-                totalTransferencias += monto;
-            } else if ("tarjeta".equalsIgnoreCase(formaPago.trim())) {
-                totalTarjetas += monto;
+            // Si tiene pagos parciales, procesarlos individualmente
+            if (pedido.getPagosParciales() != null && !pedido.getPagosParciales().isEmpty()) {
+                System.out.println("🔄 Procesando pagos mixtos para pedido: " + pedido.get_id());
+                for (Pedido.PagoParcial pago : pedido.getPagosParciales()) {
+                    String formaPago = pago.getFormaPago();
+                    double monto = pago.getMonto();
+                    
+                    System.out.println("  💰 Pago parcial: $" + monto + " por " + formaPago);
+                    
+                    if (formaPago == null) {
+                        totalOtros += monto;
+                    } else if ("efectivo".equalsIgnoreCase(formaPago.trim())) {
+                        totalEfectivo += monto;
+                    } else if ("transferencia".equalsIgnoreCase(formaPago.trim())) {
+                        totalTransferencias += monto;
+                    } else if ("tarjeta".equalsIgnoreCase(formaPago.trim())) {
+                        totalTarjetas += monto;
+                    } else {
+                        totalOtros += monto;
+                    }
+                }
             } else {
-                totalOtros += monto;
+                // Fallback: usar forma de pago principal (para compatibilidad con pedidos antiguos)
+                String formaPago = pedido.getFormaPago();
+                double monto = pedido.getTotalPagado();
+                
+                System.out.println("📦 Pago tradicional: $" + monto + " por " + formaPago);
+
+                if (formaPago == null) {
+                    totalOtros += monto;
+                } else if ("efectivo".equalsIgnoreCase(formaPago.trim())) {
+                    totalEfectivo += monto;
+                } else if ("transferencia".equalsIgnoreCase(formaPago.trim())) {
+                    totalTransferencias += monto;
+                } else if ("tarjeta".equalsIgnoreCase(formaPago.trim())) {
+                    totalTarjetas += monto;
+                } else {
+                    totalOtros += monto;
+                }
             }
         }
 
@@ -205,25 +278,57 @@ public class CuadreCajaService {
         System.out.println("NOTA: El fondo inicial (" + fondoInicial + ") se maneja por separado");
         System.out.println("Total que debería haber en caja: " + (fondoInicial + efectivoEsperadoPorVentas));
 
-        // ✅ AGREGAR: Contar pedidos por forma de pago para el frontend
+        // ✅ CONTAR PEDIDOS POR FORMA DE PAGO CON SOPORTE PARA PAGOS MIXTOS
         int cantidadEfectivo = 0;
         int cantidadTransferencias = 0;
         int cantidadTarjetas = 0;
         int cantidadOtros = 0;
 
         for (Pedido pedido : pedidosPagados) {
-            String formaPago = pedido.getFormaPago();
-
-            if (formaPago == null) {
-                cantidadOtros++;
-            } else if ("efectivo".equalsIgnoreCase(formaPago.trim())) {
-                cantidadEfectivo++;
-            } else if ("transferencia".equalsIgnoreCase(formaPago.trim())) {
-                cantidadTransferencias++;
-            } else if ("tarjeta".equalsIgnoreCase(formaPago.trim())) {
-                cantidadTarjetas++;
+            // Si tiene pagos parciales, contar según los tipos de pago usados
+            if (pedido.getPagosParciales() != null && !pedido.getPagosParciales().isEmpty()) {
+                boolean tieneEfectivo = false;
+                boolean tieneTransferencia = false;
+                boolean tieneTarjeta = false;
+                boolean tieneOtros = false;
+                
+                for (Pedido.PagoParcial pago : pedido.getPagosParciales()) {
+                    String formaPago = pago.getFormaPago();
+                    
+                    if (formaPago == null) {
+                        tieneOtros = true;
+                    } else if ("efectivo".equalsIgnoreCase(formaPago.trim())) {
+                        tieneEfectivo = true;
+                    } else if ("transferencia".equalsIgnoreCase(formaPago.trim())) {
+                        tieneTransferencia = true;
+                    } else if ("tarjeta".equalsIgnoreCase(formaPago.trim())) {
+                        tieneTarjeta = true;
+                    } else {
+                        tieneOtros = true;
+                    }
+                }
+                
+                // Contar el pedido en cada forma de pago que se usó
+                if (tieneEfectivo) cantidadEfectivo++;
+                if (tieneTransferencia) cantidadTransferencias++;
+                if (tieneTarjeta) cantidadTarjetas++;
+                if (tieneOtros) cantidadOtros++;
+                
             } else {
-                cantidadOtros++;
+                // Fallback: contar según forma de pago principal
+                String formaPago = pedido.getFormaPago();
+
+                if (formaPago == null) {
+                    cantidadOtros++;
+                } else if ("efectivo".equalsIgnoreCase(formaPago.trim())) {
+                    cantidadEfectivo++;
+                } else if ("transferencia".equalsIgnoreCase(formaPago.trim())) {
+                    cantidadTransferencias++;
+                } else if ("tarjeta".equalsIgnoreCase(formaPago.trim())) {
+                    cantidadTarjetas++;
+                } else {
+                    cantidadOtros++;
+                }
             }
         }
 
@@ -414,6 +519,9 @@ public class CuadreCajaService {
             System.out.println("Creando caja cerrada con ID: " + cuadreCaja.get_id());
             System.out.println("Fecha de cierre: " + cuadreCaja.getFechaCierre());
             System.out.println("Estado: " + cuadreCaja.getEstado());
+            
+            // Limpiar cache al cerrar la caja
+            limpiarCacheAlCerrarCaja();
         }
 
         // Guardar en la base de datos
@@ -650,5 +758,33 @@ public class CuadreCajaService {
         }
 
         return migrados;
+    }
+
+    /**
+     * Limpia el cache cuando se cierra la caja
+     * Incluye cache de caja y pedidos
+     */
+    private void limpiarCacheAlCerrarCaja() {
+        try {
+            System.out.println("🧹 Limpiando cache al cerrar caja...");
+            
+            // Si tienes un servicio de cache específico, úsalo aquí
+            // Por ejemplo: cacheService.clearAll();
+            
+            // También puedes limpiar caches específicos
+            // cacheService.evict("pedidos");
+            // cacheService.evict("cuadre-caja");
+            
+            // Si usas Spring Cache, puedes usar CacheManager para limpiar
+            // cacheManager.getCacheNames().forEach(cacheName -> {
+            //     Cache cache = cacheManager.getCache(cacheName);
+            //     if (cache != null) cache.clear();
+            // });
+            
+            System.out.println("✅ Cache limpiado exitosamente");
+            
+        } catch (Exception e) {
+            System.err.println("❌ Error al limpiar cache: " + e.getMessage());
+        }
     }
 }

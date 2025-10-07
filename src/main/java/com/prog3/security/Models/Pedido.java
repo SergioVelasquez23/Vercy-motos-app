@@ -10,6 +10,39 @@ import java.util.ArrayList;
 @Document
 public class Pedido {
 
+    // Historial de ediciones
+    public static class HistorialEdicion {
+        private String accion; // "creado", "producto_agregado", "producto_editado", "producto_eliminado", "total_actualizado"
+        private String usuario;
+        private LocalDateTime fecha;
+        private String detalles; // Descripción de la edición
+        private String productoAfectado; // ID o nombre del producto si aplica
+
+        public HistorialEdicion(String accion, String usuario, String detalles) {
+            this.accion = accion;
+            this.usuario = usuario;
+            this.fecha = LocalDateTime.now();
+            this.detalles = detalles;
+        }
+
+        public HistorialEdicion(String accion, String usuario, String detalles, String productoAfectado) {
+            this(accion, usuario, detalles);
+            this.productoAfectado = productoAfectado;
+        }
+
+        // Getters y setters
+        public String getAccion() { return accion; }
+        public void setAccion(String accion) { this.accion = accion; }
+        public String getUsuario() { return usuario; }
+        public void setUsuario(String usuario) { this.usuario = usuario; }
+        public LocalDateTime getFecha() { return fecha; }
+        public void setFecha(LocalDateTime fecha) { this.fecha = fecha; }
+        public String getDetalles() { return detalles; }
+        public void setDetalles(String detalles) { this.detalles = detalles; }
+        public String getProductoAfectado() { return productoAfectado; }
+        public void setProductoAfectado(String productoAfectado) { this.productoAfectado = productoAfectado; }
+    }
+
     // Pagos parciales: cada pago tiene monto y forma
     public static class PagoParcial {
 
@@ -59,9 +92,22 @@ public class Pedido {
     }
 
     private List<PagoParcial> pagosParciales = new ArrayList<>();
+    private List<HistorialEdicion> historialEdiciones = new ArrayList<>();
 
     public List<PagoParcial> getPagosParciales() {
         return pagosParciales;
+    }
+
+    public List<HistorialEdicion> getHistorialEdiciones() {
+        return historialEdiciones;
+    }
+
+    public void agregarEdicion(String accion, String usuario, String detalles) {
+        historialEdiciones.add(new HistorialEdicion(accion, usuario, detalles));
+    }
+
+    public void agregarEdicion(String accion, String usuario, String detalles, String productoAfectado) {
+        historialEdiciones.add(new HistorialEdicion(accion, usuario, detalles, productoAfectado));
     }
 
     public void agregarPagoParcial(double monto, String formaPago, String procesadoPor) {

@@ -4,10 +4,12 @@ import com.prog3.security.Models.CierreCaja;
 import com.prog3.security.Models.Factura;
 import com.prog3.security.Models.Pedido;
 import com.prog3.security.Models.Gasto;
+import com.prog3.security.Models.IngresoCaja;
 import com.prog3.security.Repositories.CierreCajaRepository;
 import com.prog3.security.Repositories.FacturaRepository;
 import com.prog3.security.Repositories.PedidoRepository;
 import com.prog3.security.Repositories.GastoRepository;
+import com.prog3.security.Repositories.IngresoCajaRepository;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
@@ -33,6 +35,9 @@ public class CierreCajaService {
 
     @Autowired
     private GastoRepository gastoRepository;
+
+    @Autowired
+    private IngresoCajaRepository ingresoCajaRepository;
 
     public CierreCaja generarCierreCaja(LocalDateTime fechaInicio, LocalDateTime fechaFin,
             String responsable, Map<String, Double> montosIniciales) {
@@ -83,16 +88,40 @@ public class CierreCajaService {
                 .filter(f -> f.getMedioPago() != null && f.getMedioPago().equalsIgnoreCase("Tarjeta"))
                 .mapToDouble(Factura::getTotal).sum();
 
-        // Procesar pedidos
-        double ventasEfectivoPedidos = pedidosPagados.stream()
-                .filter(p -> p.getFormaPago() != null && p.getFormaPago().equalsIgnoreCase("Efectivo"))
-                .mapToDouble(Pedido::getTotalPagado).sum();
-        double ventasTransferenciasPedidos = pedidosPagados.stream()
-                .filter(p -> p.getFormaPago() != null && p.getFormaPago().equalsIgnoreCase("Transferencia"))
-                .mapToDouble(Pedido::getTotalPagado).sum();
-        double ventasTarjetasPedidos = pedidosPagados.stream()
-                .filter(p -> p.getFormaPago() != null && p.getFormaPago().equalsIgnoreCase("Tarjeta"))
-                .mapToDouble(Pedido::getTotalPagado).sum();
+        // Procesar pedidos CON SOPORTE PARA PAGOS MIXTOS
+        double ventasEfectivoPedidos = 0.0;
+        double ventasTransferenciasPedidos = 0.0;
+        double ventasTarjetasPedidos = 0.0;
+        
+        for (Pedido pedido : pedidosPagados) {
+            // Si tiene pagos parciales, procesarlos individualmente
+            if (pedido.getPagosParciales() != null && !pedido.getPagosParciales().isEmpty()) {
+                for (Pedido.PagoParcial pago : pedido.getPagosParciales()) {
+                    String formaPago = pago.getFormaPago();
+                    double monto = pago.getMonto();
+                    
+                    if ("efectivo".equalsIgnoreCase(formaPago)) {
+                        ventasEfectivoPedidos += monto;
+                    } else if ("transferencia".equalsIgnoreCase(formaPago)) {
+                        ventasTransferenciasPedidos += monto;
+                    } else if ("tarjeta".equalsIgnoreCase(formaPago)) {
+                        ventasTarjetasPedidos += monto;
+                    }
+                }
+            } else {
+                // Fallback: usar forma de pago principal
+                String formaPago = pedido.getFormaPago();
+                double monto = pedido.getTotalPagado();
+                
+                if ("efectivo".equalsIgnoreCase(formaPago)) {
+                    ventasEfectivoPedidos += monto;
+                } else if ("transferencia".equalsIgnoreCase(formaPago)) {
+                    ventasTransferenciasPedidos += monto;
+                } else if ("tarjeta".equalsIgnoreCase(formaPago)) {
+                    ventasTarjetasPedidos += monto;
+                }
+            }
+        }
 
         // Totales por método
         cierre.setVentasEfectivo(ventasEfectivoFacturas + ventasEfectivoPedidos);
@@ -123,18 +152,73 @@ public class CierreCajaService {
         cierre.setGastosPorTipo(gastosPorTipo);
         cierre.setTotalGastos(gastos.stream().mapToDouble(Gasto::getMonto).sum());
 
+        // === CALCULAR INGRESOS DE CAJA ===
+        List<IngresoCaja> ingresos = ingresoCajaRepository.findByFechaIngresoBetween(fechaInicio, fechaFin);
+        System.out.println("Ingresos de caja encontrados: " + ingresos.size());
+
+        Map<String, Double> ingresosPorTipo = ingresos.stream()
+                .collect(Collectors.groupingBy(
+                        IngresoCaja::getConcepto,
+                        Collectors.summingDouble(IngresoCaja::getMonto)
+                ));
+
+        // Ingresos por forma de pago
+        double ingresosEfectivo = ingresos.stream()
+                .filter(i -> i.getFormaPago() != null && i.getFormaPago().equalsIgnoreCase("Efectivo"))
+                .mapToDouble(IngresoCaja::getMonto).sum();
+        double ingresosTransferencias = ingresos.stream()
+                .filter(i -> i.getFormaPago() != null && i.getFormaPago().equalsIgnoreCase("Transferencia"))
+                .mapToDouble(IngresoCaja::getMonto).sum();
+        double ingresosTarjetas = ingresos.stream()
+                .filter(i -> i.getFormaPago() != null && i.getFormaPago().equalsIgnoreCase("Tarjeta"))
+                .mapToDouble(IngresoCaja::getMonto).sum();
+
+        cierre.setIngresosPorTipo(ingresosPorTipo);
+        cierre.setTotalIngresos(ingresos.stream().mapToDouble(IngresoCaja::getMonto).sum());
+        cierre.setIngresosEfectivo(ingresosEfectivo);
+        cierre.setIngresosTransferencias(ingresosTransferencias);
+        cierre.setIngresosTarjetas(ingresosTarjetas);
+
+        // === CALCULAR FACTURAS COMPRAS ===
+        List<Factura> facturasCompras = facturaRepository.findByFechaBetween(fechaInicio, fechaFin)
+                .stream()
+                .filter(f -> f.getTipoFactura() != null && f.getTipoFactura().equalsIgnoreCase("compra"))
+                .collect(Collectors.toList());
+
+        System.out.println("Facturas de compras encontradas: " + facturasCompras.size());
+
+        // Totales de facturas compras
+        double totalFacturasCompras = facturasCompras.stream()
+                .mapToDouble(Factura::getTotal).sum();
+        int cantidadFacturasCompras = facturasCompras.size();
+
+        // Facturas compras por método de pago
+        double facturasComprasEfectivo = facturasCompras.stream()
+                .filter(f -> f.getMedioPago() != null && f.getMedioPago().equalsIgnoreCase("Efectivo"))
+                .mapToDouble(Factura::getTotal).sum();
+        double facturasComprasTransferencias = facturasCompras.stream()
+                .filter(f -> f.getMedioPago() != null && f.getMedioPago().equalsIgnoreCase("Transferencia"))
+                .mapToDouble(Factura::getTotal).sum();
+
+        // Facturas compras pagadas desde caja (solo efectivo)
+        double facturasComprasPagadasDesdeCaja = facturasComprasEfectivo; // Solo las de efectivo se consideran pagadas desde caja
+
+        // Establecer valores en el cierre
+        cierre.setTotalFacturasCompras(totalFacturasCompras);
+        cierre.setCantidadFacturasCompras(cantidadFacturasCompras);
+        cierre.setFacturasComprasEfectivo(facturasComprasEfectivo);
+        cierre.setFacturasComprasTransferencias(facturasComprasTransferencias);
+        cierre.setFacturasComprasPagadasDesdeCaja(facturasComprasPagadasDesdeCaja);
+
         // === CALCULAR DEBE TENER ===
         // Solo descontar gastos pagados desde caja
         double gastosEfectivoDesdeCaja = gastos.stream()
                 .filter(g -> g.isPagadoDesdeCaja() && g.getFormaPago() != null && g.getFormaPago().trim().toLowerCase().equals("efectivo"))
                 .mapToDouble(Gasto::getMonto).sum();
 
-        // Sumar ingresos de caja si existen (puedes ajustar según tu modelo)
-        // double ingresosCaja = ...
-        // Sumar compras pagadas desde caja si existen (puedes ajustar según tu modelo)
-        // double comprasDesdeCaja = ...
-
-        cierre.setDebeTener(cierre.getEfectivoInicial() + cierre.getVentasEfectivo() /*+ ingresosCaja*/ - gastosEfectivoDesdeCaja /*- comprasDesdeCaja*/);
+        // Incluir todos los ingresos y egresos de efectivo (incluyendo facturas compras pagadas desde caja)
+        cierre.setDebeTener(cierre.getEfectivoInicial() + cierre.getVentasEfectivo() + cierre.getIngresosEfectivo() 
+                - gastosEfectivoDesdeCaja - facturasComprasPagadasDesdeCaja);
 
         // Información adicional
         cierre.setCantidadFacturas(facturas.size());
@@ -145,6 +229,9 @@ public class CierreCajaService {
 
         System.out.println("Cierre generado - Ventas totales: " + cierre.getTotalVentas());
         System.out.println("Total gastos: " + cierre.getTotalGastos());
+        System.out.println("Total ingresos: " + cierre.getTotalIngresos());
+        System.out.println("Total facturas compras: " + cierre.getTotalFacturasCompras());
+        System.out.println("Facturas compras pagadas desde caja: " + facturasComprasPagadasDesdeCaja);
         System.out.println("Debe tener en efectivo: " + cierre.getDebeTener());
 
         return cierre;

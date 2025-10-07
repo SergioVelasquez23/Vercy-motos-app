@@ -34,6 +34,20 @@ public class CierreCaja {
     private Map<String, Double> gastosPorTipo; // {"Compras": 194200, "Administrativos": 44500}
     private double totalGastos;
 
+    // Ingresos de caja
+    private Map<String, Double> ingresosPorTipo; // {"Venta productos": 50000, "Devolución": 10000}
+    private double totalIngresos;
+    private double ingresosEfectivo;
+    private double ingresosTransferencias;
+    private double ingresosTarjetas;
+
+    // Facturas de compras
+    private double totalFacturasCompras;
+    private int cantidadFacturasCompras;
+    private double facturasComprasEfectivo;
+    private double facturasComprasTransferencias;
+    private double facturasComprasPagadasDesdeCaja;
+
     // Cálculos finales
     private double debeTener; // Lo que debería tener en efectivo
     // Eliminados: efectivoDeclarado, diferencia, cuadreOk
@@ -51,6 +65,12 @@ public class CierreCaja {
     public CierreCaja() {
         this.gastosPorTipo = new HashMap<>();
         this.detalleVentas = new HashMap<>();
+        this.ingresosPorTipo = new HashMap<>();
+        this.totalFacturasCompras = 0.0;
+        this.cantidadFacturasCompras = 0;
+        this.facturasComprasEfectivo = 0.0;
+        this.facturasComprasTransferencias = 0.0;
+        this.facturasComprasPagadasDesdeCaja = 0.0;
     }
 
     public CierreCaja(LocalDateTime fechaInicio, LocalDateTime fechaFin, String responsable) {
@@ -231,5 +251,87 @@ public class CierreCaja {
 
     public void setDetalleVentas(Map<String, Double> detalleVentas) {
         this.detalleVentas = detalleVentas;
+    }
+
+    // Getters y setters para ingresos de caja
+    public Map<String, Double> getIngresosPorTipo() {
+        return ingresosPorTipo;
+    }
+
+    public void setIngresosPorTipo(Map<String, Double> ingresosPorTipo) {
+        this.ingresosPorTipo = ingresosPorTipo;
+    }
+
+    public double getTotalIngresos() {
+        return totalIngresos;
+    }
+
+    public void setTotalIngresos(double totalIngresos) {
+        this.totalIngresos = totalIngresos;
+    }
+
+    public double getIngresosEfectivo() {
+        return ingresosEfectivo;
+    }
+
+    public void setIngresosEfectivo(double ingresosEfectivo) {
+        this.ingresosEfectivo = ingresosEfectivo;
+    }
+
+    public double getIngresosTransferencias() {
+        return ingresosTransferencias;
+    }
+
+    public void setIngresosTransferencias(double ingresosTransferencias) {
+        this.ingresosTransferencias = ingresosTransferencias;
+    }
+
+    public double getIngresosTarjetas() {
+        return ingresosTarjetas;
+    }
+
+    public void setIngresosTarjetas(double ingresosTarjetas) {
+        this.ingresosTarjetas = ingresosTarjetas;
+    }
+
+    // Getters y setters para facturas compras
+    public double getTotalFacturasCompras() {
+        return totalFacturasCompras;
+    }
+
+    public void setTotalFacturasCompras(double totalFacturasCompras) {
+        this.totalFacturasCompras = totalFacturasCompras;
+    }
+
+    public int getCantidadFacturasCompras() {
+        return cantidadFacturasCompras;
+    }
+
+    public void setCantidadFacturasCompras(int cantidadFacturasCompras) {
+        this.cantidadFacturasCompras = cantidadFacturasCompras;
+    }
+
+    public double getFacturasComprasEfectivo() {
+        return facturasComprasEfectivo;
+    }
+
+    public void setFacturasComprasEfectivo(double facturasComprasEfectivo) {
+        this.facturasComprasEfectivo = facturasComprasEfectivo;
+    }
+
+    public double getFacturasComprasTransferencias() {
+        return facturasComprasTransferencias;
+    }
+
+    public void setFacturasComprasTransferencias(double facturasComprasTransferencias) {
+        this.facturasComprasTransferencias = facturasComprasTransferencias;
+    }
+
+    public double getFacturasComprasPagadasDesdeCaja() {
+        return facturasComprasPagadasDesdeCaja;
+    }
+
+    public void setFacturasComprasPagadasDesdeCaja(double facturasComprasPagadasDesdeCaja) {
+        this.facturasComprasPagadasDesdeCaja = facturasComprasPagadasDesdeCaja;
     }
 }

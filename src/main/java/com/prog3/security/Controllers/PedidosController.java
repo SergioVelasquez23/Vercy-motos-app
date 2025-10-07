@@ -401,18 +401,64 @@ public class PedidosController {
             actualPedido.setFechaCortesia(newPedido.getFechaCortesia());
             actualPedido.setEstado(newPedido.getEstado());
 
-            // Asignar el usuario que edita/agrega cada producto
+            // Determinar el usuario que realiza la edición
             String usuarioActual = newPedido.getMesero() != null ? newPedido.getMesero() : newPedido.getPedidoPor();
             if (usuarioActual == null) {
                 usuarioActual = "sistema";
             }
+
+            // Registrar historial de ediciones
             if (newPedido.getItems() != null) {
-                for (ItemPedido item : newPedido.getItems()) {
-                    item.setAgregadoPor(usuarioActual);
-                    item.setFechaAgregado(LocalDateTime.now());
+                // Comparar items anteriores con nuevos para detectar cambios
+                List<ItemPedido> itemsAnteriores = actualPedido.getItems() != null ? actualPedido.getItems() : new ArrayList<>();
+                List<ItemPedido> itemsNuevos = newPedido.getItems();
+
+                // Productos agregados (nuevos IDs)
+                for (ItemPedido itemNuevo : itemsNuevos) {
+                    boolean esNuevo = itemsAnteriores.stream()
+                            .noneMatch(item -> item.getProductoId().equals(itemNuevo.getProductoId()));
+                    if (esNuevo) {
+                        actualPedido.agregarEdicion("producto_agregado", usuarioActual, 
+                            "Agregó: " + itemNuevo.getProductoNombre() + " (Cant: " + itemNuevo.getCantidad() + ")",
+                            itemNuevo.getProductoId());
+                    } else {
+                        // Verificar si cambió la cantidad
+                        ItemPedido itemAnterior = itemsAnteriores.stream()
+                                .filter(item -> item.getProductoId().equals(itemNuevo.getProductoId()))
+                                .findFirst().orElse(null);
+                        if (itemAnterior != null && itemAnterior.getCantidad() != itemNuevo.getCantidad()) {
+                            actualPedido.agregarEdicion("producto_editado", usuarioActual,
+                                "Editó cantidad: " + itemNuevo.getProductoNombre() + 
+                                " (de " + itemAnterior.getCantidad() + " a " + itemNuevo.getCantidad() + ")",
+                                itemNuevo.getProductoId());
+                        }
+                    }
+                    
+                    // Asignar usuario y fecha a cada item
+                    itemNuevo.setAgregadoPor(usuarioActual);
+                    itemNuevo.setFechaAgregado(LocalDateTime.now());
+                }
+
+                // Productos eliminados (IDs que ya no están)
+                for (ItemPedido itemAnterior : itemsAnteriores) {
+                    boolean fueEliminado = itemsNuevos.stream()
+                            .noneMatch(item -> item.getProductoId().equals(itemAnterior.getProductoId()));
+                    if (fueEliminado) {
+                        actualPedido.agregarEdicion("producto_eliminado", usuarioActual,
+                            "Eliminó: " + itemAnterior.getProductoNombre() + " (Cant: " + itemAnterior.getCantidad() + ")",
+                            itemAnterior.getProductoId());
+                    }
                 }
             }
+
             actualPedido.setItems(newPedido.getItems());
+
+            // Registrar edición general si cambió información básica
+            if (!actualPedido.getNotas().equals(newPedido.getNotas()) || 
+                !actualPedido.getMesa().equals(newPedido.getMesa()) ||
+                !actualPedido.getCliente().equals(newPedido.getCliente())) {
+                actualPedido.agregarEdicion("pedido_editado", usuarioActual, "Editó información del pedido");
+            }
 
             Pedido pedidoActualizado = this.thePedidoRepository.save(actualPedido);
 
@@ -457,13 +503,19 @@ public class PedidosController {
                 return responseService.notFound("Pedido no encontrado con ID: " + id);
             }
 
-            // Verificar que el pedido se pueda eliminar (ej: no esté en proceso)
-            if ("enProceso".equals(pedido.getEstado()) || "completado".equals(pedido.getEstado())) {
-                return responseService.conflict("No se puede eliminar un pedido que está en proceso o completado");
+            // Restar todos los pagos asociados del cuadre de caja
+            if (pedido.getPagosParciales() != null && !pedido.getPagosParciales().isEmpty()) {
+                System.out.println("🔄 Restando pagos del pedido eliminado de la caja...");
+                for (Pedido.PagoParcial pago : pedido.getPagosParciales()) {
+                    cuadreCajaService.restarPagoDelCuadreActivo(pago.getMonto(), pago.getFormaPago());
+                    System.out.println("   - Restado: $" + pago.getMonto() + " (" + pago.getFormaPago() + ")");
+                }
             }
 
+            // Eliminar el pedido
             this.thePedidoRepository.delete(pedido);
-            return responseService.success(null, "Pedido eliminado exitosamente");
+            
+            return responseService.success(null, "Pedido eliminado exitosamente y dinero descontado de caja");
         } catch (Exception e) {
             return responseService.internalError("Error al eliminar pedido: " + e.getMessage());
         }
