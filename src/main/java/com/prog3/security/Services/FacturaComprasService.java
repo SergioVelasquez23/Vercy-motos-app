@@ -322,15 +322,15 @@ public class FacturaComprasService {
 
             if (!cuadresAbiertos.isEmpty()) {
                 CuadreCaja cuadreActivo = cuadresAbiertos.get(0);
-                double fondoActual = cuadreActivo.getFondoInicial();
-                double nuevoFondo = fondoActual + factura.getTotal();
+                double efectivoActual = cuadreActivo.getEfectivoEsperado();
+                double nuevoEfectivo = efectivoActual + factura.getTotal();
 
-                cuadreActivo.setFondoInicial(nuevoFondo);
+                cuadreActivo.setEfectivoEsperado(nuevoEfectivo);
                 cuadreCajaRepository.save(cuadreActivo);
 
-                System.out.println("💵 Efectivo devuelto a caja: $" + factura.getTotal() + 
-                                  ". Fondo antes: $" + fondoActual + 
-                                  ", después: $" + nuevoFondo);
+                System.out.println("✅ Efectivo devuelto a caja: $" + factura.getTotal() + 
+                                  ". Efectivo esperado antes: $" + efectivoActual + 
+                                  ", después: $" + nuevoEfectivo);
             } else {
                 System.err.println("⚠️ No se encontró un cuadre de caja abierto para devolver el dinero");
             }

@@ -227,13 +227,13 @@ public class GastoService {
 
             // Si el gasto fue pagado desde caja, devolver el dinero al cuadre
             if (gasto.isPagadoDesdeCaja() && cuadreCaja != null) {
-                double fondoActual = cuadreCaja.getFondoInicial();
-                cuadreCaja.setFondoInicial(fondoActual + gasto.getMonto());
+                double efectivoActual = cuadreCaja.getEfectivoEsperado();
+                cuadreCaja.setEfectivoEsperado(efectivoActual + gasto.getMonto());
                 cuadreCajaRepository.save(cuadreCaja);
                 
-                System.out.println("Revirtiendo gasto de caja: $" + gasto.getMonto() + 
-                                   ". Fondo antes: $" + fondoActual + 
-                                   ", después: $" + (fondoActual + gasto.getMonto()));
+                System.out.println("✅ Revirtiendo gasto de caja: $" + gasto.getMonto() + 
+                                   ". Efectivo esperado antes: $" + efectivoActual + 
+                                   ", después: $" + (efectivoActual + gasto.getMonto()));
             }
 
             gastoRepository.deleteById(id);
