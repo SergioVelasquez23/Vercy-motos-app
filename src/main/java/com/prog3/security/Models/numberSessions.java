@@ -21,6 +21,10 @@ public class numberSessions {
     @DBRef
     private String userId;
 
+    // Constructor sin argumentos (requerido para serialización/deserialización)
+    public numberSessions() {
+    }
+
     public numberSessions(int numberSession, String userId) {
         this.numberSessions = numberSession;
         this.userId = userId;

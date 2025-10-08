@@ -11,6 +11,10 @@ public class Role {
     private String name;
     private String description;
 
+    // Constructor sin argumentos (requerido para serialización/deserialización)
+    public Role() {
+    }
+
     public Role(String name, String description) {
         this.name = name;
         this.description = description;

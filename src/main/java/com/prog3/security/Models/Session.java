@@ -18,6 +18,10 @@ public class Session {
     @DBRef
     private User user;
 
+    // Constructor sin argumentos (requerido para serialización/deserialización)
+    public Session() {
+    }
+
     public String get_id() {
         return _id;
     }

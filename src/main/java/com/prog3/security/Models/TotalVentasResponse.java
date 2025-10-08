@@ -8,6 +8,15 @@ public class TotalVentasResponse {
     private double totalTarjeta;
     private double totalOtros;
 
+    // Constructor sin argumentos (requerido para serialización/deserialización)
+    public TotalVentasResponse() {
+        this.total = 0.0;
+        this.totalEfectivo = 0.0;
+        this.totalTransferencia = 0.0;
+        this.totalTarjeta = 0.0;
+        this.totalOtros = 0.0;
+    }
+
     public TotalVentasResponse(double total) {
         this.total = total;
         this.totalEfectivo = 0.0;

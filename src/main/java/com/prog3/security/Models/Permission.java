@@ -11,6 +11,10 @@ public class Permission {
     private String url;
     private String method;
 
+    // Constructor sin argumentos (requerido para serialización/deserialización)
+    public Permission() {
+    }
+
     public Permission(String url, String method) {
         this.url = url;
         this.method = method;

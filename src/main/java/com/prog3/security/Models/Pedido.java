@@ -18,6 +18,11 @@ public class Pedido {
         private String detalles; // Descripción de la edición
         private String productoAfectado; // ID o nombre del producto si aplica
 
+        // Constructor sin argumentos (requerido para serialización/deserialización)
+        public HistorialEdicion() {
+            this.fecha = LocalDateTime.now();
+        }
+
         public HistorialEdicion(String accion, String usuario, String detalles) {
             this.accion = accion;
             this.usuario = usuario;
@@ -50,6 +55,11 @@ public class Pedido {
         private String formaPago;
         private LocalDateTime fecha;
         private String procesadoPor;
+
+        // Constructor sin argumentos (requerido para serialización/deserialización)
+        public PagoParcial() {
+            this.fecha = LocalDateTime.now();
+        }
 
         public PagoParcial(double monto, String formaPago, String procesadoPor) {
             this.monto = monto;

@@ -9,6 +9,10 @@ public class UserRole {
 
     @Id
     private String _id;
+    
+    // Constructor por defecto requerido por MongoDB/Jackson
+    public UserRole() {
+    }
 
     @DBRef
     private User user;
