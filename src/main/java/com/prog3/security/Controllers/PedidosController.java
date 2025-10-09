@@ -694,22 +694,34 @@ public class PedidosController {
                 if (pagarRequest.getPropina() > 0) {
                     pedido.setPropina(pedido.getPropina() + pagarRequest.getPropina());
                 }
-                // Registrar el pago parcial (requiere campo monto en el DTO)
-                double montoPago = pagarRequest.getPropina(); // Debe venir un campo montoPago en el DTO
-                if (pagarRequest.getFormaPago() != null && montoPago > 0) {
-                    pedido.agregarPagoParcial(montoPago, pagarRequest.getFormaPago(), pagarRequest.getProcesadoPor());
-                    // Sumar a caja según forma de pago
-                    cuadreCajaService.sumarPagoACuadreActivo(montoPago, pagarRequest.getFormaPago());
+                
+                // Procesar el pago del pedido
+                if (pagarRequest.getFormaPago() != null) {
+                    // Establecer la forma de pago y datos del pago usando el método pagar
+                    // Este método configura correctamente todos los campos necesarios
+                    pedido.pagar(pagarRequest.getFormaPago(), pagarRequest.getPropina(), pagarRequest.getProcesadoPor());
+                    
+                    // Log para debugging
+                    System.out.println("💰 Pedido procesado como pagado:");
+                    System.out.println("   - Total: $" + pedido.getTotal());
+                    System.out.println("   - Propina: $" + pedido.getPropina());
+                    System.out.println("   - Total pagado: $" + pedido.getTotalPagado());
+                    System.out.println("   - Forma de pago: " + pedido.getFormaPago());
+                    
+                    // Sumar el total del pedido a la caja
+                    System.out.println("💰 Sumando venta a caja: $" + pedido.getTotal() + " por " + pagarRequest.getFormaPago());
+                    cuadreCajaService.sumarPagoACuadreActivo(pedido.getTotal(), pagarRequest.getFormaPago());
+                    
+                    // Sumar la propina a la caja si hay
+                    if (pagarRequest.getPropina() > 0) {
+                        System.out.println("💰 Sumando propina a caja: $" + pagarRequest.getPropina() + " por " + pagarRequest.getFormaPago());
+                        cuadreCajaService.sumarPagoACuadreActivo(pagarRequest.getPropina(), pagarRequest.getFormaPago());
+                    }
                 }
-                pedido.setPagadoPor(pagarRequest.getProcesadoPor());
                 pedido.setNotas(notasAdicionales);
-                // Estado: pagado si cubre el total, pendiente si no
-                if (pedido.getTotalPagado() >= pedido.getTotal() + pedido.getPropina()) {
-                    pedido.setEstado("pagado");
-                    pedido.setFechaPago(LocalDateTime.now());
-                } else {
-                    pedido.setEstado("pendiente");
-                }
+                
+                // No es necesario configurar el estado o fecha porque 
+                // el método pagar() ya lo hace correctamente
             } else if (pagarRequest.esCortesia()) {
                 System.out.println("[PAGAR_PEDIDO] Procesando cortesía");
                 pedido.setEstado("cortesia");
