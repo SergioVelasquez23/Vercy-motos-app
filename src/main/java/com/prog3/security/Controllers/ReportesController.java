@@ -618,4 +618,73 @@ public class ReportesController {
             return responseService.internalError("Error interno al actualizar objetivo: " + e.getMessage());
         }
     }
+
+    /**
+     * Exportar estadísticas mensuales completas para trazabilidad
+     * Incluye todas las tablas del dashboard y reportes de un mes específico
+     */
+    @GetMapping("/exportar-mes")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> exportarEstadisticasMensuales(
+            @RequestParam int año,
+            @RequestParam int mes,
+            HttpServletRequest request) {
+        try {
+            // Validar permisos usando el mismo patrón del dashboard
+            String authHeader = request.getHeader("Authorization");
+            if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                String token = authHeader.substring(7);
+                List<String> roles = jwtService.getRolesFromToken(token);
+
+                // Verificar si el usuario tiene alguno de los roles requeridos
+                if (!(roles.contains("SUPERADMIN") || roles.contains("ADMIN"))) {
+                    return responseService.forbidden("No tienes permisos para exportar estadísticas mensuales. Requiere rol ADMIN o SUPERADMIN.");
+                }
+                
+                Map<String, Object> estadisticasMensuales = reporteService.exportarEstadisticasMensuales(año, mes);
+                return responseService.success(estadisticasMensuales, 
+                    String.format("Estadísticas de %02d/%d exportadas exitosamente", mes, año));
+            } else {
+                return responseService.unauthorized("No se proporcionó token de autenticación");
+            }
+        } catch (Exception e) {
+            return responseService.internalError("Error al exportar estadísticas mensuales: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Limpiar datos del mes después de exportar
+     * Elimina pedidos, gastos, facturas, etc. del mes especificado
+     */
+    @DeleteMapping("/limpiar-mes")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> limpiarDatosMensuales(
+            @RequestParam int año,
+            @RequestParam int mes,
+            @RequestParam(defaultValue = "false") boolean confirmar,
+            HttpServletRequest request) {
+        try {
+            // Validar permisos (solo SUPERADMIN puede eliminar datos)
+            String authHeader = request.getHeader("Authorization");
+            if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                String token = authHeader.substring(7);
+                List<String> roles = jwtService.getRolesFromToken(token);
+
+                // Solo SUPERADMIN puede eliminar datos
+                if (!roles.contains("SUPERADMIN")) {
+                    return responseService.forbidden("No tienes permisos para limpiar datos mensuales. Requiere rol SUPERADMIN.");
+                }
+                
+                if (!confirmar) {
+                    return responseService.badRequest("Debe confirmar la limpieza con el parámetro confirmar=true");
+                }
+                
+                Map<String, Object> resultadoLimpieza = reporteService.limpiarDatosMensuales(año, mes);
+                return responseService.success(resultadoLimpieza, 
+                    String.format("Datos de %02d/%d eliminados exitosamente", mes, año));
+            } else {
+                return responseService.unauthorized("No se proporcionó token de autenticación");
+            }
+        } catch (Exception e) {
+            return responseService.internalError("Error al limpiar datos mensuales: " + e.getMessage());
+        }
+    }
 }

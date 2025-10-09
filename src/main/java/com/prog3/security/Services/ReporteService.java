@@ -24,6 +24,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -977,5 +978,546 @@ public class ReporteService {
             e.printStackTrace();
             return new HashMap<>();
         }
+    }
+
+    /**
+     * Exportar todas las estadísticas de un mes específico para trazabilidad
+     * Incluye todas las tablas del dashboard y reportes mensuales
+     */
+    public Map<String, Object> exportarEstadisticasMensuales(int año, int mes) {
+        try {
+            LocalDateTime fechaInicio = LocalDateTime.of(año, mes, 1, 0, 0);
+            LocalDateTime fechaFin = fechaInicio.plusMonths(1).minusSeconds(1);
+            
+            System.out.println("=== EXPORTANDO ESTADÍSTICAS MENSUALES DETALLADAS ===");
+            System.out.println("Período: " + fechaInicio + " a " + fechaFin);
+            
+            Map<String, Object> estadisticasMensuales = new LinkedHashMap<>();
+            
+            // 📋 INFORMACIÓN GENERAL DEL PERÍODO
+            Map<String, Object> periodoInfo = new LinkedHashMap<>();
+            periodoInfo.put("año", año);
+            periodoInfo.put("mes", mes);
+            periodoInfo.put("nombreMes", obtenerNombreMes(mes));
+            periodoInfo.put("fechaInicio", fechaInicio);
+            periodoInfo.put("fechaFin", fechaFin);
+            periodoInfo.put("fechaExportacion", LocalDateTime.now());
+            periodoInfo.put("diasDelMes", fechaFin.getDayOfMonth());
+            periodoInfo.put("responsableExportacion", "Sistema");
+            estadisticasMensuales.put("periodoInfo", periodoInfo);
+            
+            // 💰 RESUMEN DETALLADO DE VENTAS (Pedidos)
+            List<Pedido> pedidosDelMes = pedidoRepository.findByFechaBetween(fechaInicio, fechaFin);
+            Map<String, Object> resumenVentas = new LinkedHashMap<>();
+            
+            // Clasificar pedidos por estado
+            List<Pedido> pedidosPagados = pedidosDelMes.stream()
+                .filter(p -> "pagado".equals(p.getEstado()))
+                .collect(Collectors.toList());
+            List<Pedido> pedidosPendientes = pedidosDelMes.stream()
+                .filter(p -> "pendiente".equals(p.getEstado()))
+                .collect(Collectors.toList());
+            List<Pedido> pedidosCancelados = pedidosDelMes.stream()
+                .filter(p -> "cancelado".equals(p.getEstado()))
+                .collect(Collectors.toList());
+            List<Pedido> pedidosCompletados = pedidosDelMes.stream()
+                .filter(p -> "completado".equals(p.getEstado()))
+                .collect(Collectors.toList());
+                
+            double totalVentasEfectivas = pedidosPagados.stream()
+                .mapToDouble(Pedido::getTotalPagado)
+                .sum();
+            double promedioVentaDiaria = totalVentasEfectivas / fechaFin.getDayOfMonth();
+            double ticketPromedio = pedidosPagados.size() > 0 ? totalVentasEfectivas / pedidosPagados.size() : 0;
+                
+            // Estadísticas básicas
+            resumenVentas.put("totalPedidos", pedidosDelMes.size());
+            resumenVentas.put("pedidosPagados", pedidosPagados.size());
+            resumenVentas.put("pedidosPendientes", pedidosPendientes.size());
+            resumenVentas.put("pedidosCancelados", pedidosCancelados.size());
+            resumenVentas.put("pedidosCompletados", pedidosCompletados.size());
+            resumenVentas.put("totalVentasEfectivas", totalVentasEfectivas);
+            resumenVentas.put("promedioVentaDiaria", promedioVentaDiaria);
+            resumenVentas.put("ticketPromedio", ticketPromedio);
+            
+            // Ventas por forma de pago (detallado)
+            Map<String, Object> ventasPorFormaPago = new LinkedHashMap<>();
+            Map<String, Double> montoPorFormaPago = pedidosPagados.stream()
+                .collect(Collectors.groupingBy(
+                    p -> p.getFormaPago() != null ? p.getFormaPago() : "No especificado",
+                    Collectors.summingDouble(Pedido::getTotalPagado)
+                ));
+            Map<String, Long> cantidadPorFormaPago = pedidosPagados.stream()
+                .collect(Collectors.groupingBy(
+                    p -> p.getFormaPago() != null ? p.getFormaPago() : "No especificado",
+                    Collectors.counting()
+                ));
+            
+            montoPorFormaPago.forEach((forma, monto) -> {
+                Map<String, Object> detalleFormaPago = new LinkedHashMap<>();
+                detalleFormaPago.put("monto", monto);
+                detalleFormaPago.put("cantidad", cantidadPorFormaPago.getOrDefault(forma, 0L));
+                detalleFormaPago.put("porcentaje", (monto / totalVentasEfectivas) * 100);
+                ventasPorFormaPago.put(forma, detalleFormaPago);
+            });
+            resumenVentas.put("ventasPorFormaPago", ventasPorFormaPago);
+            
+            // Ventas por mesero
+            Map<String, Object> ventasPorMesero = pedidosPagados.stream()
+                .filter(p -> p.getMesero() != null)
+                .collect(Collectors.groupingBy(
+                    Pedido::getMesero,
+                    Collectors.collectingAndThen(
+                        Collectors.toList(),
+                        pedidos -> {
+                            Map<String, Object> detalleMesero = new LinkedHashMap<>();
+                            double totalMesero = pedidos.stream().mapToDouble(Pedido::getTotalPagado).sum();
+                            detalleMesero.put("totalVentas", totalMesero);
+                            detalleMesero.put("cantidadPedidos", pedidos.size());
+                            detalleMesero.put("ticketPromedio", pedidos.size() > 0 ? totalMesero / pedidos.size() : 0);
+                            detalleMesero.put("porcentajeVentas", (totalMesero / totalVentasEfectivas) * 100);
+                            return detalleMesero;
+                        }
+                    )
+                ));
+            resumenVentas.put("ventasPorMesero", ventasPorMesero);
+            
+            // Lista completa de pedidos para el Excel
+            resumenVentas.put("detallePedidos", pedidosDelMes);
+            estadisticasMensuales.put("resumenVentas", resumenVentas);
+            
+            // 💸 RESUMEN DETALLADO DE GASTOS
+            List<Gasto> gastosDelMes = gastoRepository.findByFechaGastoBetween(fechaInicio, fechaFin);
+            Map<String, Object> resumenGastos = new LinkedHashMap<>();
+            
+            // Clasificar gastos por estado
+            List<Gasto> gastosAprobados = gastosDelMes.stream()
+                .filter(g -> "aprobado".equals(g.getEstado()))
+                .collect(Collectors.toList());
+            List<Gasto> gastosPendientes = gastosDelMes.stream()
+                .filter(g -> "pendiente".equals(g.getEstado()))
+                .collect(Collectors.toList());
+            List<Gasto> gastosRechazados = gastosDelMes.stream()
+                .filter(g -> "rechazado".equals(g.getEstado()))
+                .collect(Collectors.toList());
+            
+            double totalGastosEfectivos = gastosDelMes.stream()
+                .filter(g -> !"rechazado".equals(g.getEstado()))
+                .mapToDouble(Gasto::getMonto)
+                .sum();
+            double promedioGastoDiario = totalGastosEfectivos / fechaFin.getDayOfMonth();
+            double gastoPromedio = gastosAprobados.size() > 0 ? totalGastosEfectivos / gastosAprobados.size() : 0;
+            
+            // Clasificar por si se pagaron desde caja o no
+            List<Gasto> gastosDesdeCaja = gastosDelMes.stream()
+                .filter(g -> g.isPagadoDesdeCaja())
+                .collect(Collectors.toList());
+            double totalGastosDesdeCaja = gastosDesdeCaja.stream()
+                .mapToDouble(Gasto::getMonto)
+                .sum();
+                
+            // Estadísticas básicas
+            resumenGastos.put("totalGastos", gastosDelMes.size());
+            resumenGastos.put("gastosAprobados", gastosAprobados.size());
+            resumenGastos.put("gastosPendientes", gastosPendientes.size());
+            resumenGastos.put("gastosRechazados", gastosRechazados.size());
+            resumenGastos.put("totalMontoEfectivo", totalGastosEfectivos);
+            resumenGastos.put("promedioGastoDiario", promedioGastoDiario);
+            resumenGastos.put("gastoPromedio", gastoPromedio);
+            resumenGastos.put("totalGastosDesdeCaja", totalGastosDesdeCaja);
+            resumenGastos.put("porcentajeGastosDesdeCaja", totalGastosEfectivos > 0 ? (totalGastosDesdeCaja / totalGastosEfectivos) * 100 : 0);
+            
+            // Gastos por tipo (detallado)
+            Map<String, Object> gastosPorTipo = gastosDelMes.stream()
+                .filter(g -> !"rechazado".equals(g.getEstado()))
+                .collect(Collectors.groupingBy(
+                    g -> g.getTipoGastoNombre() != null ? g.getTipoGastoNombre() : "Sin categoría",
+                    Collectors.collectingAndThen(
+                        Collectors.toList(),
+                        gastos -> {
+                            Map<String, Object> detalleTipo = new LinkedHashMap<>();
+                            double totalTipo = gastos.stream().mapToDouble(Gasto::getMonto).sum();
+                            detalleTipo.put("monto", totalTipo);
+                            detalleTipo.put("cantidad", gastos.size());
+                            detalleTipo.put("promedio", gastos.size() > 0 ? totalTipo / gastos.size() : 0);
+                            detalleTipo.put("porcentaje", (totalTipo / totalGastosEfectivos) * 100);
+                            return detalleTipo;
+                        }
+                    )
+                ));
+            resumenGastos.put("gastosPorTipo", gastosPorTipo);
+            
+            // Gastos por forma de pago
+            Map<String, Object> gastosPorFormaPago = gastosDelMes.stream()
+                .filter(g -> !"rechazado".equals(g.getEstado()))
+                .collect(Collectors.groupingBy(
+                    g -> g.getFormaPago() != null ? g.getFormaPago() : "No especificado",
+                    Collectors.collectingAndThen(
+                        Collectors.toList(),
+                        gastos -> {
+                            Map<String, Object> detalleFormaPago = new LinkedHashMap<>();
+                            double totalFormaPago = gastos.stream().mapToDouble(Gasto::getMonto).sum();
+                            detalleFormaPago.put("monto", totalFormaPago);
+                            detalleFormaPago.put("cantidad", gastos.size());
+                            detalleFormaPago.put("porcentaje", (totalFormaPago / totalGastosEfectivos) * 100);
+                            return detalleFormaPago;
+                        }
+                    )
+                ));
+            resumenGastos.put("gastosPorFormaPago", gastosPorFormaPago);
+            
+            // Gastos por responsable
+            Map<String, Object> gastosPorResponsable = gastosDelMes.stream()
+                .filter(g -> !"rechazado".equals(g.getEstado()) && g.getResponsable() != null)
+                .collect(Collectors.groupingBy(
+                    Gasto::getResponsable,
+                    Collectors.collectingAndThen(
+                        Collectors.toList(),
+                        gastos -> {
+                            Map<String, Object> detalleResponsable = new LinkedHashMap<>();
+                            double totalResponsable = gastos.stream().mapToDouble(Gasto::getMonto).sum();
+                            detalleResponsable.put("monto", totalResponsable);
+                            detalleResponsable.put("cantidad", gastos.size());
+                            detalleResponsable.put("promedio", gastos.size() > 0 ? totalResponsable / gastos.size() : 0);
+                            detalleResponsable.put("porcentaje", (totalResponsable / totalGastosEfectivos) * 100);
+                            return detalleResponsable;
+                        }
+                    )
+                ));
+            resumenGastos.put("gastosPorResponsable", gastosPorResponsable);
+            
+            // Lista completa de gastos para el Excel
+            resumenGastos.put("detalleGastos", gastosDelMes);
+            estadisticasMensuales.put("resumenGastos", resumenGastos);
+            
+            // 📄 RESUMEN DETALLADO DE FACTURAS
+            List<Factura> facturasDelMes = facturaRepository.findByFechaBetween(fechaInicio, fechaFin);
+            Map<String, Object> resumenFacturas = new LinkedHashMap<>();
+            
+            // Separar facturas por tipo
+            List<Factura> facturasVenta = facturasDelMes.stream()
+                .filter(f -> f.getTipoFactura() == null || !"compra".equals(f.getTipoFactura()))
+                .collect(Collectors.toList());
+            List<Factura> facturasCompra = facturasDelMes.stream()
+                .filter(f -> "compra".equals(f.getTipoFactura()))
+                .collect(Collectors.toList());
+                
+            double totalFacturasVenta = facturasVenta.stream().mapToDouble(Factura::getTotal).sum();
+            double totalFacturasCompra = facturasCompra.stream().mapToDouble(Factura::getTotal).sum();
+            double totalFacturas = facturasDelMes.stream().mapToDouble(Factura::getTotal).sum();
+            double promedioFacturaDiaria = totalFacturas / fechaFin.getDayOfMonth();
+            
+            // Estadísticas básicas
+            resumenFacturas.put("totalFacturas", facturasDelMes.size());
+            resumenFacturas.put("facturasVenta", facturasVenta.size());
+            resumenFacturas.put("facturasCompra", facturasCompra.size());
+            resumenFacturas.put("totalMontoVenta", totalFacturasVenta);
+            resumenFacturas.put("totalMontoCompra", totalFacturasCompra);
+            resumenFacturas.put("totalMontoGeneral", totalFacturas);
+            resumenFacturas.put("promedioFacturaDiaria", promedioFacturaDiaria);
+            resumenFacturas.put("ticketPromedioVenta", facturasVenta.size() > 0 ? totalFacturasVenta / facturasVenta.size() : 0);
+            resumenFacturas.put("ticketPromedioCompra", facturasCompra.size() > 0 ? totalFacturasCompra / facturasCompra.size() : 0);
+            
+            // Facturas por tipo (detallado)
+            Map<String, Object> facturasPorTipo = facturasDelMes.stream()
+                .collect(Collectors.groupingBy(
+                    f -> f.getTipoFactura() != null ? f.getTipoFactura() : "Venta",
+                    Collectors.collectingAndThen(
+                        Collectors.toList(),
+                        facturas -> {
+                            Map<String, Object> detalleTipo = new LinkedHashMap<>();
+                            double totalTipo = facturas.stream().mapToDouble(Factura::getTotal).sum();
+                            detalleTipo.put("monto", totalTipo);
+                            detalleTipo.put("cantidad", facturas.size());
+                            detalleTipo.put("promedio", facturas.size() > 0 ? totalTipo / facturas.size() : 0);
+                            detalleTipo.put("porcentaje", (totalTipo / totalFacturas) * 100);
+                            return detalleTipo;
+                        }
+                    )
+                ));
+            resumenFacturas.put("facturasPorTipo", facturasPorTipo);
+            
+            // Facturas por medio de pago
+            Map<String, Object> facturasPorMedioPago = facturasDelMes.stream()
+                .collect(Collectors.groupingBy(
+                    f -> f.getMedioPago() != null ? f.getMedioPago() : "No especificado",
+                    Collectors.collectingAndThen(
+                        Collectors.toList(),
+                        facturas -> {
+                            Map<String, Object> detalleMedioPago = new LinkedHashMap<>();
+                            double totalMedioPago = facturas.stream().mapToDouble(Factura::getTotal).sum();
+                            detalleMedioPago.put("monto", totalMedioPago);
+                            detalleMedioPago.put("cantidad", facturas.size());
+                            detalleMedioPago.put("porcentaje", (totalMedioPago / totalFacturas) * 100);
+                            return detalleMedioPago;
+                        }
+                    )
+                ));
+            resumenFacturas.put("facturasPorMedioPago", facturasPorMedioPago);
+            
+            // Facturas por proveedor (solo las de compra)
+            if (!facturasCompra.isEmpty()) {
+                Map<String, Object> facturasPorProveedor = facturasCompra.stream()
+                    .filter(f -> f.getProveedorNombre() != null)
+                    .collect(Collectors.groupingBy(
+                        Factura::getProveedorNombre,
+                        Collectors.collectingAndThen(
+                            Collectors.toList(),
+                            facturas -> {
+                                Map<String, Object> detalleProveedor = new LinkedHashMap<>();
+                                double totalProveedor = facturas.stream().mapToDouble(Factura::getTotal).sum();
+                                detalleProveedor.put("monto", totalProveedor);
+                                detalleProveedor.put("cantidad", facturas.size());
+                                detalleProveedor.put("promedio", facturas.size() > 0 ? totalProveedor / facturas.size() : 0);
+                                detalleProveedor.put("porcentaje", (totalProveedor / totalFacturasCompra) * 100);
+                                return detalleProveedor;
+                            }
+                        )
+                    ));
+                resumenFacturas.put("facturasPorProveedor", facturasPorProveedor);
+            }
+            
+            // Lista completa de facturas para el Excel
+            resumenFacturas.put("detalleFacturas", facturasDelMes);
+            estadisticasMensuales.put("resumenFacturas", resumenFacturas);
+            
+            // 🏆 TOP PRODUCTOS DEL MES (Detallado)
+            List<Map<String, Object>> topProductos = getTopProductosDelMes(fechaInicio, fechaFin);
+            Map<String, Object> resumenProductos = new LinkedHashMap<>();
+            resumenProductos.put("topProductos", topProductos);
+            resumenProductos.put("totalProductosVendidos", topProductos.stream()
+                .mapToInt(p -> (Integer) p.get("cantidad"))
+                .sum());
+            resumenProductos.put("totalVentasProductos", topProductos.stream()
+                .mapToDouble(p -> (Double) p.get("ventas"))
+                .sum());
+            estadisticasMensuales.put("resumenProductos", resumenProductos);
+            
+            // 📊 VENTAS POR DÍA DEL MES (Detallado)
+            List<Map<String, Object>> ventasPorDia = getVentasPorDiaDelMes(fechaInicio, fechaFin);
+            Map<String, Object> resumenVentasDiarias = new LinkedHashMap<>();
+            resumenVentasDiarias.put("ventasPorDia", ventasPorDia);
+            
+            // Estadísticas de ventas diarias
+            double[] ventasDiarias = ventasPorDia.stream()
+                .mapToDouble(v -> (Double) v.get("ventas"))
+                .toArray();
+            if (ventasDiarias.length > 0) {
+                double maxVentaDia = Arrays.stream(ventasDiarias).max().orElse(0);
+                double minVentaDia = Arrays.stream(ventasDiarias).min().orElse(0);
+                double promedioVentasDiarias = Arrays.stream(ventasDiarias).average().orElse(0);
+                
+                resumenVentasDiarias.put("maxVentaDia", maxVentaDia);
+                resumenVentasDiarias.put("minVentaDia", minVentaDia);
+                resumenVentasDiarias.put("promedioVentasDiarias", promedioVentasDiarias);
+                resumenVentasDiarias.put("diasConVentas", (long) Arrays.stream(ventasDiarias).filter(v -> v > 0).count());
+                resumenVentasDiarias.put("diasSinVentas", ventasDiarias.length - Arrays.stream(ventasDiarias).filter(v -> v > 0).count());
+            }
+            estadisticasMensuales.put("resumenVentasDiarias", resumenVentasDiarias);
+            
+            // 💼 RESUMEN FINANCIERO COMPLETO
+            double totalIngresosReales = (Double) resumenVentas.get("totalVentasEfectivas") + 
+                                        (Double) resumenFacturas.get("totalMontoVenta");
+            double totalEgresosReales = (Double) resumenGastos.get("totalMontoEfectivo") + 
+                                       (Double) resumenFacturas.get("totalMontoCompra");
+            
+            Map<String, Object> resumenFinanciero = new LinkedHashMap<>();
+            resumenFinanciero.put("totalIngresosBrutos", totalIngresosReales);
+            resumenFinanciero.put("totalEgresosBrutos", totalEgresosReales);
+            resumenFinanciero.put("utilidadBruta", totalIngresosReales - (Double) resumenFacturas.get("totalMontoCompra"));
+            resumenFinanciero.put("utilidadOperacional", totalIngresosReales - totalEgresosReales);
+            resumenFinanciero.put("margenUtilidad", totalIngresosReales > 0 ? 
+                ((totalIngresosReales - totalEgresosReales) / totalIngresosReales) * 100 : 0);
+            resumenFinanciero.put("puntoEquilibrio", totalEgresosReales);
+            resumenFinanciero.put("rentabilidad", totalEgresosReales > 0 ? 
+                ((totalIngresosReales - totalEgresosReales) / totalEgresosReales) * 100 : 0);
+            
+            // Flujo de caja
+            Map<String, Object> flujoCaja = new LinkedHashMap<>();
+            flujoCaja.put("ingresosPedidos", resumenVentas.get("totalVentasEfectivas"));
+            flujoCaja.put("ingresosFacturas", resumenFacturas.get("totalMontoVenta"));
+            flujoCaja.put("egresoGastos", resumenGastos.get("totalMontoEfectivo"));
+            flujoCaja.put("egresoCompras", resumenFacturas.get("totalMontoCompra"));
+            flujoCaja.put("flujoNeto", totalIngresosReales - totalEgresosReales);
+            resumenFinanciero.put("flujoCaja", flujoCaja);
+            
+            estadisticasMensuales.put("resumenFinanciero", resumenFinanciero);
+            
+            // 🏦 CUADRES DE CAJA DEL MES (Detallado)
+            List<CuadreCaja> cuadresDelMes = cuadreCajaRepository.findByFechaAperturaBetween(fechaInicio, fechaFin);
+            Map<String, Object> resumenCuadres = new LinkedHashMap<>();
+            resumenCuadres.put("totalCuadres", cuadresDelMes.size());
+            resumenCuadres.put("cuadresCerrados", cuadresDelMes.stream().filter(CuadreCaja::isCerrada).count());
+            resumenCuadres.put("cuadresAbiertos", cuadresDelMes.stream().filter(c -> !c.isCerrada()).count());
+            
+            if (!cuadresDelMes.isEmpty()) {
+                double totalFondoInicial = cuadresDelMes.stream()
+                    .mapToDouble(CuadreCaja::getFondoInicial)
+                    .sum();
+                double totalEfectivoEsperado = cuadresDelMes.stream()
+                    .mapToDouble(CuadreCaja::getEfectivoEsperado)
+                    .sum();
+                
+                resumenCuadres.put("totalFondoInicial", totalFondoInicial);
+                resumenCuadres.put("totalEfectivoEsperado", totalEfectivoEsperado);
+                resumenCuadres.put("promedioDiarioFondo", totalFondoInicial / cuadresDelMes.size());
+            }
+            resumenCuadres.put("detalleCuadres", cuadresDelMes);
+            estadisticasMensuales.put("resumenCuadres", resumenCuadres);
+            
+            // 📈 ANÁLISIS DE TENDENCIAS
+            Map<String, Object> analisisTendencias = new LinkedHashMap<>();
+            
+            // Comparar con mes anterior si es posible
+            LocalDateTime mesAnteriorInicio = fechaInicio.minusMonths(1);
+            LocalDateTime mesAnteriorFin = mesAnteriorInicio.plusMonths(1).minusSeconds(1);
+            
+            List<Pedido> pedidosMesAnterior = pedidoRepository.findByFechaBetween(mesAnteriorInicio, mesAnteriorFin)
+                .stream().filter(p -> "pagado".equals(p.getEstado())).collect(Collectors.toList());
+            double ventasMesAnterior = pedidosMesAnterior.stream().mapToDouble(Pedido::getTotalPagado).sum();
+            
+            if (ventasMesAnterior > 0) {
+                double crecimientoVentas = ((totalVentasEfectivas - ventasMesAnterior) / ventasMesAnterior) * 100;
+                analisisTendencias.put("ventasMesAnterior", ventasMesAnterior);
+                analisisTendencias.put("crecimientoVentas", crecimientoVentas);
+                analisisTendencias.put("tendenciaVentas", crecimientoVentas > 0 ? "Creciente" : "Decreciente");
+            }
+            
+            estadisticasMensuales.put("analisisTendencias", analisisTendencias);
+            
+            System.out.println("Estadísticas mensuales generadas exitosamente");
+            return estadisticasMensuales;
+            
+        } catch (Exception e) {
+            System.err.println("Error al exportar estadísticas mensuales: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Error al exportar estadísticas mensuales", e);
+        }
+    }
+    
+    /**
+     * Limpiar todos los datos de un mes específico después de exportar
+     * CUIDADO: Esta operación es irreversible
+     */
+    public Map<String, Object> limpiarDatosMensuales(int año, int mes) {
+        try {
+            LocalDateTime fechaInicio = LocalDateTime.of(año, mes, 1, 0, 0);
+            LocalDateTime fechaFin = fechaInicio.plusMonths(1).minusSeconds(1);
+            
+            System.out.println("=== INICIANDO LIMPIEZA DE DATOS MENSUALES ===");
+            System.out.println("⚠️ OPERACIÓN IRREVERSIBLE - Período: " + fechaInicio + " a " + fechaFin);
+            
+            Map<String, Object> resultadoLimpieza = new LinkedHashMap<>();
+            
+            // Contar registros antes de eliminar
+            int pedidosCount = pedidoRepository.findByFechaBetween(fechaInicio, fechaFin).size();
+            int gastosCount = gastoRepository.findByFechaGastoBetween(fechaInicio, fechaFin).size();
+            int facturasCount = facturaRepository.findByFechaBetween(fechaInicio, fechaFin).size();
+            int cuadresCount = cuadreCajaRepository.findByFechaAperturaBetween(fechaInicio, fechaFin).size();
+            
+            resultadoLimpieza.put("registrosAntesDeEliminar", Map.of(
+                "pedidos", pedidosCount,
+                "gastos", gastosCount, 
+                "facturas", facturasCount,
+                "cuadresCaja", cuadresCount
+            ));
+            
+            // Eliminar pedidos del mes
+            List<Pedido> pedidosAEliminar = pedidoRepository.findByFechaBetween(fechaInicio, fechaFin);
+            pedidoRepository.deleteAll(pedidosAEliminar);
+            System.out.println("✅ Eliminados " + pedidosCount + " pedidos");
+            
+            // Eliminar gastos del mes
+            List<Gasto> gastosAEliminar = gastoRepository.findByFechaGastoBetween(fechaInicio, fechaFin);
+            gastoRepository.deleteAll(gastosAEliminar);
+            System.out.println("✅ Eliminados " + gastosCount + " gastos");
+            
+            // Eliminar facturas del mes
+            List<Factura> facturasAEliminar = facturaRepository.findByFechaBetween(fechaInicio, fechaFin);
+            facturaRepository.deleteAll(facturasAEliminar);
+            System.out.println("✅ Eliminadas " + facturasCount + " facturas");
+            
+            // Eliminar cuadres de caja del mes
+            List<CuadreCaja> cuadresAEliminar = cuadreCajaRepository.findByFechaAperturaBetween(fechaInicio, fechaFin);
+            cuadreCajaRepository.deleteAll(cuadresAEliminar);
+            System.out.println("✅ Eliminados " + cuadresCount + " cuadres de caja");
+            
+            resultadoLimpieza.put("registrosEliminados", Map.of(
+                "pedidos", pedidosCount,
+                "gastos", gastosCount,
+                "facturas", facturasCount, 
+                "cuadresCaja", cuadresCount,
+                "totalEliminados", pedidosCount + gastosCount + facturasCount + cuadresCount
+            ));
+            
+            resultadoLimpieza.put("periodo", Map.of(
+                "año", año,
+                "mes", mes,
+                "fechaLimpieza", LocalDateTime.now()
+            ));
+            
+            System.out.println("=== LIMPIEZA COMPLETADA ===");
+            return resultadoLimpieza;
+            
+        } catch (Exception e) {
+            System.err.println("❌ Error durante la limpieza de datos mensuales: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Error al limpiar datos mensuales", e);
+        }
+    }
+    
+    // Métodos auxiliares para las estadísticas mensuales
+    private List<Map<String, Object>> getTopProductosDelMes(LocalDateTime fechaInicio, LocalDateTime fechaFin) {
+        List<Pedido> pedidosDelMes = pedidoRepository.findByFechaBetween(fechaInicio, fechaFin)
+            .stream()
+            .filter(p -> "pagado".equals(p.getEstado()))
+            .collect(Collectors.toList());
+            
+        Map<String, Integer> conteoProductos = new HashMap<>();
+        Map<String, Double> ventasProductos = new HashMap<>();
+        
+        pedidosDelMes.forEach(pedido -> {
+            if (pedido.getItems() != null) {
+                pedido.getItems().forEach(item -> {
+                    String producto = item.getProductoNombre();
+                    conteoProductos.merge(producto, item.getCantidad(), Integer::sum);
+                    ventasProductos.merge(producto, item.getPrecioUnitario() * item.getCantidad(), Double::sum);
+                });
+            }
+        });
+        
+        return conteoProductos.entrySet().stream()
+            .map(entry -> {
+                Map<String, Object> producto = new HashMap<>();
+                producto.put("producto", entry.getKey());
+                producto.put("cantidad", entry.getValue());
+                producto.put("ventas", ventasProductos.get(entry.getKey()));
+                return producto;
+            })
+            .sorted((a, b) -> Integer.compare((Integer)b.get("cantidad"), (Integer)a.get("cantidad")))
+            .collect(Collectors.toList());
+    }
+    
+    private List<Map<String, Object>> getVentasPorDiaDelMes(LocalDateTime fechaInicio, LocalDateTime fechaFin) {
+        List<Pedido> pedidosDelMes = pedidoRepository.findByFechaBetween(fechaInicio, fechaFin)
+            .stream()
+            .filter(p -> "pagado".equals(p.getEstado()))
+            .collect(Collectors.toList());
+            
+        Map<String, Double> ventasPorDia = pedidosDelMes.stream()
+            .collect(Collectors.groupingBy(
+                p -> p.getFecha().toLocalDate().toString(),
+                Collectors.summingDouble(Pedido::getTotalPagado)
+            ));
+            
+        return ventasPorDia.entrySet().stream()
+            .map(entry -> {
+                Map<String, Object> dia = new HashMap<>();
+                dia.put("fecha", entry.getKey());
+                dia.put("ventas", entry.getValue());
+                return dia;
+            })
+            .sorted((a, b) -> ((String)a.get("fecha")).compareTo((String)b.get("fecha")))
+            .collect(Collectors.toList());
     }
 }
