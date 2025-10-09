@@ -313,6 +313,13 @@ public class FacturaComprasService {
         try {
             System.out.println("💰 Revirtiendo pago en caja para factura: " + factura.getNumero() + " - $" + factura.getTotal());
 
+            // Solo devolver efectivo si fue pagado EN EFECTIVO
+            if (!"efectivo".equalsIgnoreCase(factura.getMedioPago())) {
+                System.out.println("ℹ️ Factura pagada por TRANSFERENCIA: $" + factura.getTotal() + 
+                                 " - No afecta efectivo esperado");
+                return;
+            }
+
             // Buscar el cuadre de caja activo más reciente
             // Nota: Podrías necesitar ajustar esta lógica según cómo manejes los cuadres
             List<CuadreCaja> cuadresAbiertos = cuadreCajaRepository.findAll().stream()
@@ -328,7 +335,7 @@ public class FacturaComprasService {
                 cuadreActivo.setEfectivoEsperado(nuevoEfectivo);
                 cuadreCajaRepository.save(cuadreActivo);
 
-                System.out.println("✅ Efectivo devuelto a caja: $" + factura.getTotal() + 
+                System.out.println("✅ Efectivo EN EFECTIVO devuelto a caja: $" + factura.getTotal() + 
                                   ". Efectivo esperado antes: $" + efectivoActual + 
                                   ", después: $" + nuevoEfectivo);
             } else {

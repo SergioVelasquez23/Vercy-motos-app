@@ -225,15 +225,20 @@ public class GastoService {
                 throw new RuntimeException("No se pueden eliminar gastos de un cuadre cerrado");
             }
 
-            // Si el gasto fue pagado desde caja, devolver el dinero al cuadre
-            if (gasto.isPagadoDesdeCaja() && cuadreCaja != null) {
+            // Si el gasto fue pagado desde caja Y en efectivo, devolver el dinero al cuadre
+            if (gasto.isPagadoDesdeCaja() && cuadreCaja != null && 
+                "efectivo".equalsIgnoreCase(gasto.getFormaPago())) {
+                
                 double efectivoActual = cuadreCaja.getEfectivoEsperado();
                 cuadreCaja.setEfectivoEsperado(efectivoActual + gasto.getMonto());
                 cuadreCajaRepository.save(cuadreCaja);
                 
-                System.out.println("✅ Revirtiendo gasto de caja: $" + gasto.getMonto() + 
+                System.out.println("✅ Revirtiendo gasto EN EFECTIVO de caja: $" + gasto.getMonto() + 
                                    ". Efectivo esperado antes: $" + efectivoActual + 
                                    ", después: $" + (efectivoActual + gasto.getMonto()));
+            } else if (gasto.isPagadoDesdeCaja() && cuadreCaja != null) {
+                System.out.println("ℹ️ Gasto pagado desde caja pero por TRANSFERENCIA: $" + gasto.getMonto() + 
+                                   " - No afecta efectivo esperado");
             }
 
             gastoRepository.deleteById(id);

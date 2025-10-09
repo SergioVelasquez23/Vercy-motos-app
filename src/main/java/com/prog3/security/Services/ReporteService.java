@@ -327,8 +327,11 @@ public class ReporteService {
     }
 
     public Map<String, Object> getVentasPorPeriodo(LocalDateTime fechaInicio, LocalDateTime fechaFin) {
-        // Obtener facturas del período
-        List<Factura> facturas = facturaRepository.findByFechaBetween(fechaInicio, fechaFin);
+        // Obtener SOLO facturas de VENTA del período (excluir compras)
+        List<Factura> todasFacturas = facturaRepository.findByFechaBetween(fechaInicio, fechaFin);
+        List<Factura> facturasVenta = todasFacturas.stream()
+                .filter(f -> f.getTipoFactura() == null || !"compra".equals(f.getTipoFactura()))
+                .collect(Collectors.toList());
 
         // Obtener pedidos pagados del período
         List<Pedido> pedidosPagados = pedidoRepository.findByFechaBetween(fechaInicio, fechaFin)
@@ -336,13 +339,13 @@ public class ReporteService {
                 .filter(p -> "pagado".equals(p.getEstado()))
                 .collect(Collectors.toList());
 
-        // Calcular totales
-        double totalVentasFacturas = facturas.stream().mapToDouble(Factura::getTotal).sum();
+        // Calcular totales SOLO con facturas de venta
+        double totalVentasFacturas = facturasVenta.stream().mapToDouble(Factura::getTotal).sum();
         double totalVentasPedidos = pedidosPagados.stream().mapToDouble(Pedido::getTotalPagado).sum();
         double totalVentas = totalVentasFacturas + totalVentasPedidos;
 
-        // Agrupar por método de pago - facturas
-        Map<String, Double> ventasPorMetodoFacturas = facturas.stream()
+        // Agrupar por método de pago - SOLO facturas de venta
+        Map<String, Double> ventasPorMetodoFacturas = facturasVenta.stream()
                 .collect(Collectors.groupingBy(
                         Factura::getMedioPago,
                         Collectors.summingDouble(Factura::getTotal)
@@ -369,10 +372,10 @@ public class ReporteService {
         reporte.put("totalImpuestos", 0.0); // No hay impuestos separados
         reporte.put("totalDescuentos", 0.0); // No hay descuentos
         reporte.put("ventasPorMetodo", ventasPorMetodo);
-        reporte.put("cantidadFacturas", facturas.size());
+        reporte.put("cantidadFacturas", facturasVenta.size());
         reporte.put("cantidadPedidosPagados", pedidosPagados.size());
-        reporte.put("cantidadTotal", facturas.size() + pedidosPagados.size());
-        reporte.put("promedioVenta", (facturas.size() + pedidosPagados.size()) == 0 ? 0 : totalVentas / (facturas.size() + pedidosPagados.size()));
+        reporte.put("cantidadTotal", facturasVenta.size() + pedidosPagados.size());
+        reporte.put("promedioVenta", (facturasVenta.size() + pedidosPagados.size()) == 0 ? 0 : totalVentas / (facturasVenta.size() + pedidosPagados.size()));
 
         return reporte;
     }
@@ -381,7 +384,11 @@ public class ReporteService {
         LocalDateTime inicioDia = fecha.withHour(0).withMinute(0).withSecond(0);
         LocalDateTime finDia = inicioDia.plusDays(1);
 
-        List<Factura> facturas = facturaRepository.findByFechaBetween(inicioDia, finDia);
+        // Obtener SOLO facturas de VENTA (excluir compras)
+        List<Factura> todasFacturas = facturaRepository.findByFechaBetween(inicioDia, finDia);
+        List<Factura> facturasVenta = todasFacturas.stream()
+                .filter(f -> f.getTipoFactura() == null || !"compra".equals(f.getTipoFactura()))
+                .collect(Collectors.toList());
 
         // Inicializar mapa de ventas por hora
         Map<Integer, Double> ventasPorHora = new HashMap<>();
@@ -389,8 +396,8 @@ public class ReporteService {
             ventasPorHora.put(i, 0.0);
         }
 
-        // Agrupar ventas por hora
-        facturas.forEach(f -> {
+        // Agrupar SOLO ventas por hora (excluir compras)
+        facturasVenta.forEach(f -> {
             int hora = f.getFecha().getHour();
             ventasPorHora.merge(hora, f.getTotal(), Double::sum);
         });
@@ -462,15 +469,29 @@ public class ReporteService {
     public List<Map<String, Object>> getVentasPorDia(int ultimosDias) {
         LocalDateTime fechaInicio = LocalDateTime.now().minusDays(ultimosDias);
 
-        // Obtener facturas y pedidos pagados
-        List<Factura> facturas = facturaRepository.findByFechaBetween(fechaInicio, LocalDateTime.now());
+        System.out.println("=== DEBUG getVentasPorDia ===");
+        System.out.println("Consultando desde: " + fechaInicio + " hasta: " + LocalDateTime.now());
+
+        // Obtener SOLO facturas de VENTA (excluir facturas de compra)
+        List<Factura> todasFacturas = facturaRepository.findByFechaBetween(fechaInicio, LocalDateTime.now());
+        List<Factura> facturasVenta = todasFacturas.stream()
+                .filter(f -> f.getTipoFactura() == null || !"compra".equals(f.getTipoFactura()))
+                .collect(Collectors.toList());
+
+        System.out.println("Total facturas encontradas: " + todasFacturas.size());
+        System.out.println("Facturas de VENTA (excluye compras): " + facturasVenta.size());
+        System.out.println("Facturas de COMPRA (excluidas): " + (todasFacturas.size() - facturasVenta.size()));
+
+        // Obtener pedidos pagados
         List<Pedido> pedidosPagados = pedidoRepository.findByFechaBetween(fechaInicio, LocalDateTime.now())
                 .stream()
                 .filter(p -> "pagado".equals(p.getEstado()))
                 .collect(Collectors.toList());
 
-        // Agrupar facturas por día
-        Map<String, Double> ventasPorDiaFacturas = facturas.stream()
+        System.out.println("Pedidos pagados encontrados: " + pedidosPagados.size());
+
+        // Agrupar SOLO facturas de VENTA por día (excluir compras)
+        Map<String, Double> ventasPorDiaFacturas = facturasVenta.stream()
                 .collect(Collectors.groupingBy(
                         f -> f.getFecha().toLocalDate().toString(),
                         Collectors.summingDouble(Factura::getTotal)
@@ -509,8 +530,13 @@ public class ReporteService {
         System.out.println("=== DEBUG getIngresosVsEgresos ===");
         System.out.println("Consultando desde: " + fechaInicio + " hasta: " + fechaFin);
 
-        // Obtener facturas y pedidos pagados (ingresos)
-        List<Factura> facturas = facturaRepository.findByFechaBetween(fechaInicio, fechaFin);
+        // Obtener SOLO facturas de VENTA (ingresos) - EXCLUIR facturas de compra
+        List<Factura> todasFacturas = facturaRepository.findByFechaBetween(fechaInicio, fechaFin);
+        List<Factura> facturasVenta = todasFacturas.stream()
+                .filter(f -> f.getTipoFactura() == null || !"compra".equals(f.getTipoFactura()))
+                .collect(Collectors.toList());
+
+        // Obtener pedidos pagados (ingresos)
         List<Pedido> pedidosPagados = pedidoRepository.findByFechaBetween(fechaInicio, fechaFin)
                 .stream()
                 .filter(p -> "pagado".equals(p.getEstado()))
@@ -522,15 +548,17 @@ public class ReporteService {
                 .filter(g -> "aprobado".equals(g.getEstado()) || "pendiente".equals(g.getEstado())) // Solo gastos válidos
                 .collect(Collectors.toList());
 
-        System.out.println("Facturas encontradas: " + facturas.size());
+        System.out.println("Total facturas encontradas: " + todasFacturas.size());
+        System.out.println("Facturas de VENTA (ingresos): " + facturasVenta.size());
+        System.out.println("Facturas de COMPRA (excluidas): " + (todasFacturas.size() - facturasVenta.size()));
         System.out.println("Pedidos pagados encontrados: " + pedidosPagados.size());
         System.out.println("Gastos encontrados: " + gastos.size());
 
         // Agrupar ingresos por mes
         Map<String, Double> ingresosPorMes = new HashMap<>();
 
-        // Procesar facturas
-        facturas.forEach(f -> {
+        // Procesar SOLO facturas de VENTA (no compras)
+        facturasVenta.forEach(f -> {
             String mesKey = f.getFecha().getYear() + "-" + String.format("%02d", f.getFecha().getMonthValue());
             ingresosPorMes.merge(mesKey, f.getTotal(), Double::sum);
         });
