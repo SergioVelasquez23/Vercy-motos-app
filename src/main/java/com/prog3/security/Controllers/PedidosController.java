@@ -42,6 +42,7 @@ import com.prog3.security.Exception.BusinessException;
 import com.prog3.security.Exception.ResourceNotFoundException;
 import com.prog3.security.Models.Mesa;
 import com.prog3.security.Repositories.MesaRepository;
+import com.prog3.security.DTOs.PagoMixto;
 
 import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
@@ -697,25 +698,88 @@ public class PedidosController {
                 
                 // Procesar el pago del pedido
                 if (pagarRequest.getFormaPago() != null) {
-                    // Establecer la forma de pago y datos del pago usando el método pagar
-                    // Este método configura correctamente todos los campos necesarios
-                    pedido.pagar(pagarRequest.getFormaPago(), pagarRequest.getPropina(), pagarRequest.getProcesadoPor());
+                    // Verificar si es un pago mixto
+                    boolean esPagoMixto = pagarRequest.getPagosMixtos() != null && !pagarRequest.getPagosMixtos().isEmpty();
                     
-                    // Log para debugging
-                    System.out.println("💰 Pedido procesado como pagado:");
-                    System.out.println("   - Total: $" + pedido.getTotal());
-                    System.out.println("   - Propina: $" + pedido.getPropina());
-                    System.out.println("   - Total pagado: $" + pedido.getTotalPagado());
-                    System.out.println("   - Forma de pago: " + pedido.getFormaPago());
-                    
-                    // Sumar el total del pedido a la caja
-                    System.out.println("💰 Sumando venta a caja: $" + pedido.getTotal() + " por " + pagarRequest.getFormaPago());
-                    cuadreCajaService.sumarPagoACuadreActivo(pedido.getTotal(), pagarRequest.getFormaPago());
-                    
-                    // Sumar la propina a la caja si hay
-                    if (pagarRequest.getPropina() > 0) {
-                        System.out.println("💰 Sumando propina a caja: $" + pagarRequest.getPropina() + " por " + pagarRequest.getFormaPago());
-                        cuadreCajaService.sumarPagoACuadreActivo(pagarRequest.getPropina(), pagarRequest.getFormaPago());
+                    if (esPagoMixto) {
+                        // Si es un pago mixto, configuramos el estado y otros campos básicos
+                        pedido.setEstado("pagado");
+                        pedido.setFormaPago("mixto"); // Marcar específicamente como pago mixto
+                        pedido.setPropina(pagarRequest.getPropina());
+                        pedido.setTotalPagado(pedido.getTotal() + pagarRequest.getPropina());
+                        pedido.setFechaPago(LocalDateTime.now());
+                        pedido.setPagadoPor(pagarRequest.getProcesadoPor());
+                        
+                        // Procesar cada forma de pago individual
+                        System.out.println("💰 Procesando pago mixto:");
+                        double totalRegistrado = 0.0;
+                        
+                        // Iterar sobre los pagos mixtos
+                        for (PagoMixto pagoMixto : pagarRequest.getPagosMixtos()) {
+                            String formaPago = pagoMixto.getFormaPago();
+                            double monto = pagoMixto.getMonto();
+                            
+                            // Registrar pago parcial
+                            pedido.agregarPagoParcial(monto, formaPago, pagarRequest.getProcesadoPor());
+                            
+                            // Sumar a la caja según forma de pago
+                            // Esto asegura que cada monto se suma a la categoría correcta (efectivo, transferencia, etc.)
+                            System.out.println("   - $" + monto + " por " + formaPago);
+                            cuadreCajaService.sumarPagoACuadreActivo(monto, formaPago);
+                            
+                            totalRegistrado += monto;
+                        }
+                        
+                        // Distribuir propina proporcionalmente según el monto de cada forma de pago
+                        if (pagarRequest.getPropina() > 0 && !pagarRequest.getPagosMixtos().isEmpty()) {
+                            // Calcular el porcentaje que representa cada forma de pago del total
+                            double totalMixto = 0.0;
+                            for (PagoMixto pago : pagarRequest.getPagosMixtos()) {
+                                totalMixto += pago.getMonto();
+                            }
+                            
+                            // Distribuir propina proporcionalmente
+                            for (PagoMixto pagoMixto : pagarRequest.getPagosMixtos()) {
+                                // Calcular propina proporcional al monto del pago
+                                double porcentajePago = pagoMixto.getMonto() / totalMixto;
+                                double propinaPorFormaPago = pagarRequest.getPropina() * porcentajePago;
+                                
+                                // Sumar la propina a la caja correspondiente
+                                System.out.println("   - Propina: $" + propinaPorFormaPago + " por " + pagoMixto.getFormaPago() + 
+                                                   " (" + (porcentajePago * 100) + "% del pago)");
+                                cuadreCajaService.sumarPagoACuadreActivo(propinaPorFormaPago, pagoMixto.getFormaPago());
+                            }
+                        }
+                        
+                        System.out.println("💰 Total registrado en pagos mixtos: $" + totalRegistrado);
+                        System.out.println("💰 Total del pedido: $" + pedido.getTotal());
+                        
+                        // Verificar que los montos son correctos
+                        if (Math.abs(totalRegistrado - pedido.getTotal()) > 0.01) {
+                            System.out.println("⚠️ ADVERTENCIA: El total de pagos mixtos ($" + totalRegistrado + 
+                                              ") no coincide con el total del pedido ($" + pedido.getTotal() + ")");
+                        }
+                    } else {
+                        // Pago regular con una sola forma de pago
+                        // Establecer la forma de pago y datos del pago usando el método pagar
+                        pedido.pagar(pagarRequest.getFormaPago(), pagarRequest.getPropina(), pagarRequest.getProcesadoPor());
+                        
+                        // Log para debugging
+                        System.out.println("💰 Pedido procesado como pagado simple:");
+                        System.out.println("   - Total: $" + pedido.getTotal());
+                        System.out.println("   - Propina: $" + pedido.getPropina());
+                        System.out.println("   - Total pagado: $" + pedido.getTotalPagado());
+                        System.out.println("   - Forma de pago: " + pedido.getFormaPago());
+                        
+                        // Sumar el total del pedido a la caja
+                        System.out.println("💰 Sumando venta a caja: $" + pedido.getTotal() + " por " + pagarRequest.getFormaPago());
+                        cuadreCajaService.sumarPagoACuadreActivo(pedido.getTotal(), pagarRequest.getFormaPago());
+                        
+                        // Sumar la propina a la caja si hay
+                        if (pagarRequest.getPropina() > 0) {
+                            System.out.println("💰 Sumando propina a caja: $" + pagarRequest.getPropina() + " por " + pagarRequest.getFormaPago());
+                            cuadreCajaService.sumarPagoACuadreActivo(pagarRequest.getPropina(), pagarRequest.getFormaPago());
+                        }
                     }
                 }
                 pedido.setNotas(notasAdicionales);

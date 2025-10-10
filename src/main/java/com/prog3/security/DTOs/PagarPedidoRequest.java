@@ -1,11 +1,14 @@
 package com.prog3.security.DTOs;
 
+import java.util.ArrayList;
+import java.util.List;
 import jakarta.validation.constraints.*;
 import jakarta.validation.groups.Default;
 
 /**
  * DTO para procesar pagos de pedidos con validaciones robustas.
  * Soporta diferentes tipos de pago: pagado, cortesía, consumo interno y cancelación.
+ * También soporta pagos mixtos con múltiples formas de pago.
  */
 public class PagarPedidoRequest {
 
@@ -14,8 +17,8 @@ public class PagarPedidoRequest {
              message = "El tipo de pago debe ser: pagado, cortesia, consumo_interno o cancelado")
     private String tipoPago;
 
-    @Pattern(regexp = "^(efectivo|transferencia|tarjeta|otro)?$", 
-             message = "La forma de pago debe ser: efectivo, transferencia, tarjeta u otro")
+    @Pattern(regexp = "^(efectivo|transferencia|tarjeta|otro|mixto)?$", 
+             message = "La forma de pago debe ser: efectivo, transferencia, tarjeta, otro o mixto")
     private String formaPago;
 
     @PositiveOrZero(message = "La propina no puede ser negativa")
@@ -34,6 +37,9 @@ public class PagarPedidoRequest {
 
     @Size(max = 100, message = "El tipo de consumo interno no puede exceder 100 caracteres")
     private String tipoConsumoInterno;
+    
+    // Lista de pagos mixtos para cuando se utilizan múltiples formas de pago
+    private List<PagoMixto> pagosMixtos = new ArrayList<>();
 
     public PagarPedidoRequest() {
     }
@@ -102,6 +108,18 @@ public class PagarPedidoRequest {
     public void setTipoConsumoInterno(String tipoConsumoInterno) {
         this.tipoConsumoInterno = tipoConsumoInterno;
     }
+    
+    public List<PagoMixto> getPagosMixtos() {
+        return pagosMixtos;
+    }
+
+    public void setPagosMixtos(List<PagoMixto> pagosMixtos) {
+        this.pagosMixtos = pagosMixtos;
+    }
+    
+    public boolean esPagoMixto() {
+        return this.pagosMixtos != null && !this.pagosMixtos.isEmpty();
+    }
 
     // Métodos de utilidad para validar el tipo
     public boolean esPagado() {
@@ -129,7 +147,28 @@ public class PagarPedidoRequest {
      */
     public boolean isValid() {
         if (esPagado()) {
-            return formaPago != null && !formaPago.trim().isEmpty();
+            // Caso especial para pagos mixtos
+            if (esPagoMixto()) {
+                // Verificar que hay al menos un pago mixto configurado
+                if (pagosMixtos.isEmpty()) {
+                    return false;
+                }
+                
+                // Verificar que cada pago mixto tiene forma de pago y monto válido
+                double totalMonto = 0;
+                for (PagoMixto pago : pagosMixtos) {
+                    if (pago.getFormaPago() == null || pago.getFormaPago().trim().isEmpty() || pago.getMonto() <= 0) {
+                        return false;
+                    }
+                    totalMonto += pago.getMonto();
+                }
+                
+                // El total debe ser mayor a cero
+                return totalMonto > 0;
+            } else {
+                // Para pagos normales no mixtos, verificar que hay forma de pago
+                return formaPago != null && !formaPago.trim().isEmpty();
+            }
         }
         if (esCortesia()) {
             return motivoCortesia != null && !motivoCortesia.trim().isEmpty();
@@ -145,8 +184,25 @@ public class PagarPedidoRequest {
      * Obtiene el mensaje de error si la validación falla
      */
     public String getValidationError() {
-        if (esPagado() && (formaPago == null || formaPago.trim().isEmpty())) {
-            return "La forma de pago es obligatoria para pagos";
+        if (esPagado()) {
+            if (esPagoMixto()) {
+                if (pagosMixtos.isEmpty()) {
+                    return "Debe especificar al menos un pago para pagos mixtos";
+                }
+                
+                // Verificar cada pago mixto
+                for (int i = 0; i < pagosMixtos.size(); i++) {
+                    PagoMixto pago = pagosMixtos.get(i);
+                    if (pago.getFormaPago() == null || pago.getFormaPago().trim().isEmpty()) {
+                        return "La forma de pago es obligatoria para el pago mixto #" + (i+1);
+                    }
+                    if (pago.getMonto() <= 0) {
+                        return "El monto debe ser mayor que cero para el pago mixto #" + (i+1);
+                    }
+                }
+            } else if (formaPago == null || formaPago.trim().isEmpty()) {
+                return "La forma de pago es obligatoria para pagos";
+            }
         }
         if (esCortesia() && (motivoCortesia == null || motivoCortesia.trim().isEmpty())) {
             return "El motivo de cortesía es obligatorio";
@@ -166,6 +222,7 @@ public class PagarPedidoRequest {
                 ", procesadoPor='" + procesadoPor + '\'' +
                 ", motivoCortesia='" + motivoCortesia + '\'' +
                 ", tipoConsumoInterno='" + tipoConsumoInterno + '\'' +
+                ", pagosMixtos=" + pagosMixtos +
                 '}';
     }
 }

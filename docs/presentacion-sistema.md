@@ -2,22 +2,22 @@
 
 ## Descripción General
 
-**Sopa y Carbón** es un sistema completo de gestión para restaurantes, diseñado específicamente para optimizar cada aspecto de la operación diaria del negocio. Con una interfaz intuitiva y accesible desde cualquier dispositivo con conexión a internet, permite administrar pedidos, ventas, inventario y finanzas en tiempo real.
+**Kronos restapp** es un sistema completo de gestión para restaurantes, diseñado específicamente para optimizar cada aspecto de la operación diaria del negocio. Con una interfaz intuitiva y accesible desde cualquier dispositivo con conexión a internet, permite administrar pedidos, ventas, inventario y finanzas en tiempo real.
 
 ## Funcionalidades Principales
 
 ### 🍽️ Gestión de Pedidos
 
-- **Toma de pedidos en tiempo real** desde tablets o celulares
+- **Toma de pedidos en tiempo real** creación desde tablets o celulares
 - **Control por mesas** con visibilidad inmediata del estado de cada una
 - **Pedidos especiales** con notas personalizadas para cada cliente
 - **Historial de ediciones** para rastrear quién modificó cada pedido y qué cambios realizó
 - **Organización por tipo**: pedidos normales, para llevar, consumo interno o cortesías
-- **Control de estados**: pendiente, en preparación, listo, pagado o cancelado
+- **Control de estados**: pendiente, pagado o cancelado
 
 ### 💰 Sistema de Pagos
 
-- **Múltiples formas de pago**: efectivo, tarjeta, transferencia y otros métodos
+- **Múltiples formas de pago**: efectivo, transferencia y otros métodos
 - **Pagos parciales o mixtos** (dividir la cuenta entre varias personas)
 - **Gestión de propinas** con registro individualizado
 - **Historial completo de pagos** por pedido
@@ -45,17 +45,11 @@
 - **Registro detallado de uso de insumos** por producto y pedido
 - **Devolución de ingredientes** en caso de cancelación de productos
 
-### 🔄 Integración con Plataformas Externas
-
-- **Compatibilidad con plataformas de domicilio** (pedidos a domicilio)
-- **Gestión unificada** de pedidos externos e internos
-- **Notificaciones en tiempo real** sobre nuevos pedidos
-
 ### 📱 Acceso Multiplataforma
 
 - **Aplicación web responsive** accesible desde cualquier dispositivo
 - **Sincronización en tiempo real** entre todos los dispositivos
-- **Notificaciones push** para alertar sobre pedidos y cambios importantes
+- **Notificaciones** para alertar sobre pedidos y cambios importantes
 
 ### 👥 Gestión de Usuarios
 
@@ -82,9 +76,7 @@
 - **Interfaz intuitiva**: Mínima curva de aprendizaje para el personal
 - **Actualizaciones automáticas**: Siempre con las últimas funcionalidades y mejoras
 - **Soporte técnico dedicado**: Ayuda disponible para resolver cualquier incidencia
-- **Personalizable**: Adaptable a las necesidades específicas de cada restaurante
 - **Seguridad avanzada**: Protección de datos y transacciones
-- **Escalable**: Crece con tu negocio sin perder rendimiento
 
 ## Requisitos Técnicos
 
