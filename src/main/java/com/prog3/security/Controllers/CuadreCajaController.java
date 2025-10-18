@@ -52,6 +52,15 @@ public class CuadreCajaController {
     @Autowired
     private CuadreCajaRepository cuadreCajaRepository;
 
+    @Autowired
+    private PedidoRepository pedidoRepository;
+
+    @Autowired
+    private CuadreCajaService cuadreCajaService;
+
+    @Autowired
+    private ResponseService responseService;
+
     /**
      * Endpoint para obtener el cuadre/cierre de caja del día (igual que
      * /api/reportes/cuadre-caja)
@@ -79,16 +88,6 @@ public class CuadreCajaController {
             return responseService.internalError("Error al generar cuadre de caja: " + e.getMessage());
         }
     }
-
-    @Autowired
-    private CuadreCajaService cuadreCajaService;
-
-    @Autowired
-    private ResponseService responseService;
-
-    @Autowired
-    private PedidoRepository pedidoRepository;
-
     @GetMapping("")
     public ResponseEntity<ApiResponse<List<CuadreCaja>>> getAllCuadres() {
         try {
@@ -797,6 +796,183 @@ public class CuadreCajaController {
         } catch (Exception e) {
             System.err.println("❌ Error al migrar pedidos: " + e.getMessage());
             return responseService.internalError("Error al migrar pedidos: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Endpoint para obtener estadísticas consolidadas del panel de administración
+     * por rango de fechas. Incluye totales de ventas, gastos, compras, ingresos
+     * y otras métricas agregadas de múltiples cuadres de caja.
+     */
+    @GetMapping("/admin/estadisticas-consolidadas")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getEstadisticasConsolidadas(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaInicio,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaFin) {
+        try {
+            System.out.println("📊 Generando estadísticas consolidadas del " + fechaInicio + " al " + fechaFin);
+
+            Map<String, Object> estadisticas = new HashMap<>();
+            
+            // Obtener todos los cuadres de caja en el rango de fechas
+            List<CuadreCaja> cuadresEnRango = cuadreCajaRepository.findByFechaAperturaBetween(fechaInicio, fechaFin);
+            
+            if (cuadresEnRango.isEmpty()) {
+                estadisticas.put("mensaje", "No se encontraron cuadres de caja en el rango de fechas especificado");
+                estadisticas.put("totalCuadres", 0);
+                return responseService.success(estadisticas, "No hay datos en el rango especificado");
+            }
+
+            // Variables para acumular totales
+            double totalVentas = 0.0;
+            double totalVentasEfectivo = 0.0;
+            double totalVentasTransferencia = 0.0;
+            double totalVentasTarjeta = 0.0;
+            double totalVentasOtro = 0.0;
+            
+            double totalGastos = 0.0;
+            double totalGastosEfectivo = 0.0;
+            double totalCompras = 0.0;
+            double totalComprasEfectivo = 0.0;
+            
+            int totalPedidos = 0;
+            int totalPedidosEfectivo = 0;
+            int totalPedidosTransferencia = 0;
+            int totalPedidosTarjeta = 0;
+            int totalPedidosOtro = 0;
+            
+            double totalPropinas = 0.0;
+            
+            Map<String, Double> resumenPorFormaPago = new HashMap<>();
+            Map<String, Integer> cantidadPorFormaPago = new HashMap<>();
+            
+            // Procesar cada cuadre en el rango
+            for (CuadreCaja cuadre : cuadresEnRango) {
+                try {
+                    Map<String, Object> resumenCuadre = resumenUnificadoService.generarResumenCuadre(cuadre.get_id());
+                    
+                    // Extraer datos del resumen de ventas
+                    if (resumenCuadre.containsKey("resumenVentas")) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> ventas = (Map<String, Object>) resumenCuadre.get("resumenVentas");
+                        
+                        totalVentas += (Double) ventas.getOrDefault("totalVentas", 0.0);
+                        totalPedidos += (Integer) ventas.getOrDefault("totalPedidos", 0);
+                        
+                        // Ventas por forma de pago
+                        @SuppressWarnings("unchecked")
+                        Map<String, Double> ventasPorFormaPago = (Map<String, Double>) ventas.getOrDefault("ventasPorFormaPago", new HashMap<>());
+                        
+                        totalVentasEfectivo += ventasPorFormaPago.getOrDefault("efectivo", 0.0);
+                        totalVentasTransferencia += ventasPorFormaPago.getOrDefault("transferencia", 0.0);
+                        totalVentasTarjeta += ventasPorFormaPago.getOrDefault("tarjeta", 0.0);
+                        totalVentasOtro += ventasPorFormaPago.getOrDefault("otro", 0.0);
+                        
+                        // Cantidad de pedidos por forma de pago
+                        @SuppressWarnings("unchecked")
+                        Map<String, Integer> cantidadPorForma = (Map<String, Integer>) ventas.getOrDefault("cantidadPorFormaPago", new HashMap<>());
+                        
+                        totalPedidosEfectivo += cantidadPorForma.getOrDefault("efectivo", 0);
+                        totalPedidosTransferencia += cantidadPorForma.getOrDefault("transferencia", 0);
+                        totalPedidosTarjeta += cantidadPorForma.getOrDefault("tarjeta", 0);
+                        totalPedidosOtro += cantidadPorForma.getOrDefault("otro", 0);
+                        
+                        // Acumular en el resumen general
+                        ventasPorFormaPago.forEach((forma, monto) -> {
+                            resumenPorFormaPago.merge(forma, monto, Double::sum);
+                        });
+                        cantidadPorForma.forEach((forma, cantidad) -> {
+                            cantidadPorFormaPago.merge(forma, cantidad, Integer::sum);
+                        });
+                    }
+                    
+                    // Extraer datos de gastos
+                    if (resumenCuadre.containsKey("resumenGastos")) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> gastos = (Map<String, Object>) resumenCuadre.get("resumenGastos");
+                        
+                        totalGastos += (Double) gastos.getOrDefault("totalGastosIncluyendoFacturas", 0.0);
+                        
+                        @SuppressWarnings("unchecked")
+                        Map<String, Double> gastosPorFormaPago = (Map<String, Double>) gastos.getOrDefault("gastosPorFormaPago", new HashMap<>());
+                        totalGastosEfectivo += gastosPorFormaPago.getOrDefault("efectivo", 0.0);
+                    }
+                    
+                    // Extraer datos de compras
+                    if (resumenCuadre.containsKey("resumenCompras")) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> compras = (Map<String, Object>) resumenCuadre.get("resumenCompras");
+                        
+                        totalCompras += (Double) compras.getOrDefault("totalComprasGenerales", 0.0);
+                        totalComprasEfectivo += (Double) compras.getOrDefault("totalComprasDesdeCaja", 0.0);
+                    }
+                    
+                    // Calcular propinas de los pedidos del cuadre
+                    List<Pedido> pedidosCuadre = pedidoRepository.findByCuadreCajaIdAndEstado(cuadre.get_id(), "pagado");
+                    for (Pedido pedido : pedidosCuadre) {
+                        totalPropinas += pedido.getPropina();
+                    }
+                    
+                } catch (Exception e) {
+                    System.err.println("⚠️ Error procesando cuadre " + cuadre.get_id() + ": " + e.getMessage());
+                    // Continuar con el siguiente cuadre
+                }
+            }
+            
+            // Construir respuesta consolidada
+            estadisticas.put("rangoFechas", Map.of(
+                "fechaInicio", fechaInicio,
+                "fechaFin", fechaFin
+            ));
+            
+            estadisticas.put("totalCuadres", cuadresEnRango.size());
+            
+            // Totales de ventas
+            Map<String, Object> resumenVentas = new HashMap<>();
+            resumenVentas.put("totalVentas", totalVentas);
+            resumenVentas.put("totalPedidos", totalPedidos);
+            resumenVentas.put("totalPropinas", totalPropinas);
+            
+            Map<String, Object> ventasPorFormaPago = new HashMap<>();
+            ventasPorFormaPago.put("efectivo", totalVentasEfectivo);
+            ventasPorFormaPago.put("transferencia", totalVentasTransferencia);
+            ventasPorFormaPago.put("tarjeta", totalVentasTarjeta);
+            ventasPorFormaPago.put("otro", totalVentasOtro);
+            resumenVentas.put("ventasPorFormaPago", ventasPorFormaPago);
+            
+            Map<String, Object> pedidosPorFormaPago = new HashMap<>();
+            pedidosPorFormaPago.put("efectivo", totalPedidosEfectivo);
+            pedidosPorFormaPago.put("transferencia", totalPedidosTransferencia);
+            pedidosPorFormaPago.put("tarjeta", totalPedidosTarjeta);
+            pedidosPorFormaPago.put("otro", totalPedidosOtro);
+            resumenVentas.put("pedidosPorFormaPago", pedidosPorFormaPago);
+            
+            estadisticas.put("resumenVentas", resumenVentas);
+            
+            // Totales de gastos y compras
+            Map<String, Object> resumenGastosCompras = new HashMap<>();
+            resumenGastosCompras.put("totalGastos", totalGastos);
+            resumenGastosCompras.put("totalGastosEfectivo", totalGastosEfectivo);
+            resumenGastosCompras.put("totalCompras", totalCompras);
+            resumenGastosCompras.put("totalComprasEfectivo", totalComprasEfectivo);
+            estadisticas.put("resumenGastosCompras", resumenGastosCompras);
+            
+            // Métricas generales
+            Map<String, Object> metricas = new HashMap<>();
+            metricas.put("utilidadBrutaTotal", totalVentas - totalCompras);
+            metricas.put("promedioVentasPorCuadre", totalVentas / cuadresEnRango.size());
+            metricas.put("promedioVentasPorPedido", totalPedidos > 0 ? totalVentas / totalPedidos : 0.0);
+            metricas.put("porcentajeVentasEfectivo", totalVentas > 0 ? (totalVentasEfectivo / totalVentas) * 100 : 0.0);
+            metricas.put("porcentajeVentasTransferencia", totalVentas > 0 ? (totalVentasTransferencia / totalVentas) * 100 : 0.0);
+            estadisticas.put("metricas", metricas);
+            
+            System.out.println("✅ Estadísticas consolidadas generadas: " + cuadresEnRango.size() + " cuadres, $" + totalVentas + " en ventas totales");
+            
+            return responseService.success(estadisticas, "Estadísticas consolidadas generadas exitosamente");
+            
+        } catch (Exception e) {
+            System.err.println("❌ Error al generar estadísticas consolidadas: " + e.getMessage());
+            e.printStackTrace();
+            return responseService.internalError("Error al generar estadísticas consolidadas: " + e.getMessage());
         }
     }
 }

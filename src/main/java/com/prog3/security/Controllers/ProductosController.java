@@ -1,6 +1,9 @@
 package com.prog3.security.Controllers;
 
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.ArrayList;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.repository.MongoRepository;
@@ -642,6 +645,49 @@ public class ProductosController extends BaseController<Producto, String> {
             }
         } catch (Exception e) {
             return responseService.internalError("Error al crear productos en lote: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Endpoint que devuelve solo los nombres de los productos con sus complementos
+     * obligatorios y opcionales (solo nombres)
+     */
+    @GetMapping("/nombres-completos")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getProductosNombresCompletos() {
+        try {
+            List<Producto> productos = theProductoRepository.findAll();
+            List<Map<String, Object>> productosSimplificados = new ArrayList<>();
+            
+            for (Producto producto : productos) {
+                Map<String, Object> productoInfo = new HashMap<>();
+                productoInfo.put("nombre", producto.getNombre());
+                
+                // Obtener nombres de ingredientes obligatorios (requeridos)
+                List<String> nombresObligatorios = new ArrayList<>();
+                if (producto.getIngredientesRequeridos() != null) {
+                    for (IngredienteProducto ingrediente : producto.getIngredientesRequeridos()) {
+                        nombresObligatorios.add(ingrediente.getNombre());
+                    }
+                }
+                productoInfo.put("obligatorios", nombresObligatorios);
+                
+                // Obtener nombres de ingredientes opcionales
+                List<String> nombresOpcionales = new ArrayList<>();
+                if (producto.getIngredientesOpcionales() != null) {
+                    for (IngredienteProducto ingrediente : producto.getIngredientesOpcionales()) {
+                        nombresOpcionales.add(ingrediente.getNombre());
+                    }
+                }
+                productoInfo.put("opcionales", nombresOpcionales);
+                
+                productosSimplificados.add(productoInfo);
+            }
+            
+            return responseService.success(productosSimplificados, 
+                "Nombres de productos con complementos obtenidos exitosamente");
+                
+        } catch (Exception e) {
+            return responseService.internalError("Error al obtener nombres de productos: " + e.getMessage());
         }
     }
 }
