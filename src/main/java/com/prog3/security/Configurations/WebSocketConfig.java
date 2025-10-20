@@ -20,11 +20,18 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // Un solo endpoint WebSocket principal con configuración optimizada para Render
+        // Endpoint principal para compatibilidad con SockJS
         registry.addEndpoint("/ws")
                 .setAllowedOriginPatterns("*")
                 .withSockJS()
                 .setSessionCookieNeeded(false)  // Importante para Render
                 .setHeartbeatTime(25000);       // Keep-alive para evitar timeouts
+        
+        // Endpoint que el frontend Flutter usa actualmente (restaurado para compatibilidad)
+        registry.addEndpoint("/ws/updates")
+                .setAllowedOriginPatterns("*")
+                .withSockJS()
+                .setSessionCookieNeeded(false)
+                .setHeartbeatTime(25000);
     }
 }
