@@ -14,6 +14,14 @@ public class WebConfig implements WebMvcConfigurer {
         // Configurar manejo de archivos estáticos para imágenes
         registry.addResourceHandler("/images/platos/**")
                 .addResourceLocations("file:src/main/resources/static/images/platos/");
+        
+        // Servir archivos estáticos (incluyendo nuestra página de test)
+        registry.addResourceHandler("/static/**")
+                .addResourceLocations("classpath:/static/");
+                
+        // Permitir acceso directo a la página de test
+        registry.addResourceHandler("/websocket-test.html")
+                .addResourceLocations("classpath:/static/");
     }
     
     @Override

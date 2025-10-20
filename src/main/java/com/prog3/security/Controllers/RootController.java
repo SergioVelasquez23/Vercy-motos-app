@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import com.prog3.security.Utils.ApiResponse;
 import com.prog3.security.Services.ResponseService;
+import com.prog3.security.Services.WebSocketNotificationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import java.time.Instant;
 import java.util.Map;
@@ -21,6 +22,9 @@ public class RootController {
     @Autowired
     private ResponseService responseService;
 
+    @Autowired
+    private WebSocketNotificationService webSocketService;
+
     @GetMapping("/")
     public ResponseEntity<ApiResponse<Map<String, Object>>> root() {
         Map<String, Object> body = new HashMap<>();
@@ -35,5 +39,25 @@ public class RootController {
         body.put("status", "ok");
         body.put("timestamp", Instant.now().toString());
         return responseService.success(body, "Status OK");
+    }
+
+    @GetMapping("/api/test-websocket")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> testWebSocket() {
+        try {
+            // Enviar una notificación de prueba a través de WebSocket
+            webSocketService.notificarActualizacionPedido("test-id", "test-mesa", "prueba");
+            
+            Map<String, Object> body = new HashMap<>();
+            body.put("status", "ok");
+            body.put("message", "Notificación WebSocket enviada a /topic/pedidos");
+            body.put("timestamp", Instant.now().toString());
+            return responseService.success(body, "WebSocket test enviado");
+        } catch (Exception e) {
+            Map<String, Object> body = new HashMap<>();
+            body.put("status", "error");
+            body.put("error", e.getMessage());
+            body.put("timestamp", Instant.now().toString());
+            return responseService.internalError("Error en WebSocket: " + e.getMessage());
+        }
     }
 }
