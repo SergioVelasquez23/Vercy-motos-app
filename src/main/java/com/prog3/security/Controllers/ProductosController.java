@@ -93,12 +93,25 @@ public class ProductosController extends BaseController<Producto, String> {
 
     @GetMapping("")
     public ResponseEntity<ApiResponse<List<Producto>>> find() {
-        return super.findAllEntities();
+        try {
+            List<Producto> productos = this.theProductoRepository.findAll();
+            return responseService.success(productos, "Productos obtenidos exitosamente");
+        } catch (Exception e) {
+            return responseService.internalError("Error al obtener productos: " + e.getMessage());
+        }
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<Producto>> findById(@PathVariable String id) {
-        return super.findEntityById(id);
+        try {
+            Producto producto = this.theProductoRepository.findById(id).orElse(null);
+            if (producto == null) {
+                return responseService.notFound("Producto no encontrado con ID: " + id);
+            }
+            return responseService.success(producto, "Producto encontrado exitosamente");
+        } catch (Exception e) {
+            return responseService.internalError("Error al buscar producto: " + e.getMessage());
+        }
     }
 
     @PostMapping
@@ -189,7 +202,16 @@ public class ProductosController extends BaseController<Producto, String> {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable String id) {
-        return super.deleteEntity(id);
+        try {
+            Producto producto = this.theProductoRepository.findById(id).orElse(null);
+            if (producto == null) {
+                return responseService.notFound("Producto no encontrado con ID: " + id);
+            }
+            this.theProductoRepository.deleteById(id);
+            return responseService.success(null, "Producto eliminado exitosamente");
+        } catch (Exception e) {
+            return responseService.internalError("Error al eliminar producto: " + e.getMessage());
+        }
     }
 
     @GetMapping("/categoria/{categoriaId}")
