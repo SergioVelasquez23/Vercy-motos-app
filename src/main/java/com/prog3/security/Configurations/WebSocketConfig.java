@@ -28,6 +28,11 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                 .setAllowedOriginPatterns("*") // Permitir todas las conexiones para desarrollo
                 .withSockJS(); // Habilita SockJS para compatibilidad con navegadores que no soportan WebSocket
         
+        // Endpoint que el frontend espera: /ws/updates
+        registry.addEndpoint("/ws/updates")
+                .setAllowedOriginPatterns("*")
+                .withSockJS();
+        
         // Endpoint WebSocket nativo para clientes que soportan WebSocket directamente
         registry.addEndpoint("/ws-native")
                 .setAllowedOriginPatterns("*"); // Sin SockJS, WebSocket puro
