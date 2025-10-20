@@ -23,6 +23,9 @@ import com.prog3.security.Models.Producto;
 import com.prog3.security.Models.Ingrediente;
 import com.prog3.security.Models.Categoria;
 import com.prog3.security.Models.IngredienteProducto;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import com.prog3.security.DTOs.CrearProductoRequest;
 import com.prog3.security.DTOs.IngredienteConCategoriaDTO;
 import com.prog3.security.Repositories.ProductoRepository;
@@ -666,7 +669,13 @@ public class ProductosController extends BaseController<Producto, String> {
                 List<String> nombresObligatorios = new ArrayList<>();
                 if (producto.getIngredientesRequeridos() != null) {
                     for (IngredienteProducto ingrediente : producto.getIngredientesRequeridos()) {
-                        nombresObligatorios.add(ingrediente.getNombre());
+                        String nombreIng = ingrediente.getNombre();
+                        if (nombreIng == null || nombreIng.isEmpty()) {
+                            Ingrediente ing = this.theIngredienteRepository.findById(ingrediente.getIngredienteId()).orElse(null);
+                            if (ing != null) nombreIng = ing.getNombre();
+                            else nombreIng = "Ingrediente no encontrado";
+                        }
+                        nombresObligatorios.add(nombreIng);
                     }
                 }
                 productoInfo.put("obligatorios", nombresObligatorios);
@@ -675,7 +684,13 @@ public class ProductosController extends BaseController<Producto, String> {
                 List<String> nombresOpcionales = new ArrayList<>();
                 if (producto.getIngredientesOpcionales() != null) {
                     for (IngredienteProducto ingrediente : producto.getIngredientesOpcionales()) {
-                        nombresOpcionales.add(ingrediente.getNombre());
+                        String nombreIng = ingrediente.getNombre();
+                        if (nombreIng == null || nombreIng.isEmpty()) {
+                            Ingrediente ing = this.theIngredienteRepository.findById(ingrediente.getIngredienteId()).orElse(null);
+                            if (ing != null) nombreIng = ing.getNombre();
+                            else nombreIng = "Ingrediente no encontrado";
+                        }
+                        nombresOpcionales.add(nombreIng);
                     }
                 }
                 productoInfo.put("opcionales", nombresOpcionales);
@@ -688,6 +703,30 @@ public class ProductosController extends BaseController<Producto, String> {
                 
         } catch (Exception e) {
             return responseService.internalError("Error al obtener nombres de productos: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Endpoint paginado para productos. Frontend expects /api/productos/paginados?page=0&size=50
+     */
+    @GetMapping("/paginados")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getProductosPaginados(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        try {
+            Pageable pageable = PageRequest.of(Math.max(0, page), Math.max(1, size));
+            Page<Producto> pageRes = this.theProductoRepository.findAll(pageable);
+
+            Map<String, Object> result = new HashMap<>();
+            result.put("content", pageRes.getContent());
+            result.put("page", pageRes.getNumber());
+            result.put("size", pageRes.getSize());
+            result.put("totalPages", pageRes.getTotalPages());
+            result.put("totalElements", pageRes.getTotalElements());
+
+            return responseService.success(result, "Productos paginados obtenidos exitosamente");
+        } catch (Exception e) {
+            return responseService.internalError("Error al obtener productos paginados: " + e.getMessage());
         }
     }
 }
