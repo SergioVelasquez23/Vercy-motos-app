@@ -210,6 +210,10 @@ public class PedidosController {
     @GetMapping("/mesa/{mesa}")
     public ResponseEntity<com.prog3.security.Utils.ApiResponse<List<Pedido>>> findByMesa(@PathVariable String mesa) {
         try {
+            // Validar que mesa no esté vacía
+            if (mesa == null || mesa.trim().isEmpty()) {
+                return responseService.badRequest("El nombre de la mesa es requerido");
+            }
             List<Pedido> pedidos = this.thePedidoRepository.findByMesa(mesa);
             return responseService.success(pedidos, "Pedidos de la mesa obtenidos");
         } catch (Exception e) {

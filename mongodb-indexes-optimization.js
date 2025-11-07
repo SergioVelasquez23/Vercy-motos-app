@@ -1,3 +1,17 @@
+// ÍNDICES DE OPTIMIZACIÓN PARA LA BASE DE DATOS
+
+// Índices para la colección de productos
+db.producto.createIndex({ "categoriaId": 1 });
+db.producto.createIndex({ "nombre": "text" });
+db.producto.createIndex({ "estado": 1 });
+db.producto.createIndex({ "precio": 1 });
+db.producto.createIndex({ "categoriaId": 1, "estado": 1 });
+
+// Índices compuestos para búsquedas frecuentes
+db.producto.createIndex({ "categoriaId": 1, "nombre": "text" });
+
+print("✅ Índices de productos creados/actualizados exitosamente");
+
 // ==================================================
 // CONFIGURACIÓN DE ÍNDICES MONGODB PARA OPTIMIZACIÓN
 // Sistema de Restaurante "Sopa y Carbón"
