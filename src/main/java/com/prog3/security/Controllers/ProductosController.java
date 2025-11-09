@@ -751,4 +751,78 @@ public class ProductosController extends BaseController<Producto, String> {
             return responseService.internalError("Error al obtener productos paginados: " + e.getMessage());
         }
     }
+
+    /**
+     * Endpoint LAZY LOADING optimizado para productos
+     * Retorna solo campos esenciales para carga inicial rápida
+     * Los detalles completos se cargan solo cuando se necesitan
+     * 
+     * @param page número de página (default: 0)
+     * @param size cantidad de productos por página (default: 20)
+     * @param categoriaId filtro opcional por categoría
+     * @param search búsqueda opcional por nombre
+     * @return productos ligeros con solo info esencial
+     */
+    @GetMapping("/lazy")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getProductosLazy(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String categoriaId,
+            @RequestParam(required = false) String search) {
+        try {
+            List<Producto> productos;
+            
+            // Filtrar según parámetros
+            if (search != null && !search.trim().isEmpty()) {
+                // Búsqueda por nombre
+                productos = this.theProductoRepository.findByNombreContainingIgnoreCase(search);
+            } else if (categoriaId != null && !categoriaId.trim().isEmpty()) {
+                // Filtro por categoría
+                productos = this.theProductoRepository.findByCategoriaId(categoriaId);
+            } else {
+                // Todos los productos activos
+                productos = this.theProductoRepository.findByEstado("Activo");
+            }
+
+            // Convertir a DTO ligero (sin ingredientes, sin detalles pesados)
+            List<com.prog3.security.DTOs.ProductoLazyDTO> productosLigeros = new ArrayList<>();
+            for (Producto p : productos) {
+                com.prog3.security.DTOs.ProductoLazyDTO dto = new com.prog3.security.DTOs.ProductoLazyDTO(
+                    p.get_id(),
+                    p.getNombre(),
+                    p.getPrecio(),
+                    p.getCategoriaId(),
+                    p.getImagenUrl(),
+                    p.getEstado(),
+                    p.isTieneVariantes(),
+                    p.isTieneIngredientes(),
+                    p.getTipoProducto()
+                );
+                productosLigeros.add(dto);
+            }
+
+            // Aplicar paginación manual
+            int totalElements = productosLigeros.size();
+            int startIndex = page * size;
+            int endIndex = Math.min(startIndex + size, totalElements);
+            
+            List<com.prog3.security.DTOs.ProductoLazyDTO> paginaActual = startIndex < totalElements 
+                ? productosLigeros.subList(startIndex, endIndex)
+                : new ArrayList<>();
+
+            // Respuesta paginada
+            Map<String, Object> result = new HashMap<>();
+            result.put("content", paginaActual);
+            result.put("page", page);
+            result.put("size", size);
+            result.put("totalPages", (int) Math.ceil((double) totalElements / size));
+            result.put("totalElements", totalElements);
+            result.put("hasMore", endIndex < totalElements);
+
+            return responseService.success(result, 
+                "Productos lazy obtenidos: " + paginaActual.size() + " de " + totalElements);
+        } catch (Exception e) {
+            return responseService.internalError("Error al obtener productos lazy: " + e.getMessage());
+        }
+    }
 }
