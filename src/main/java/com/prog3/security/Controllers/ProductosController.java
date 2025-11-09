@@ -770,23 +770,55 @@ public class ProductosController extends BaseController<Producto, String> {
             @RequestParam(required = false) String categoriaId,
             @RequestParam(required = false) String search) {
         try {
-            List<Producto> productos;
+            // Limitar size máximo a 50 para prevenir OutOfMemory
+            size = Math.min(size, 50);
+            page = Math.max(page, 0);
             
-            // Filtrar según parámetros
+            Pageable pageable = PageRequest.of(page, size);
+            Page<Producto> pageRes;
+            
+            // Filtrar según parámetros usando paginación en DB
             if (search != null && !search.trim().isEmpty()) {
-                // Búsqueda por nombre
-                productos = this.theProductoRepository.findByNombreContainingIgnoreCase(search);
+                // Búsqueda por nombre - solo obtiene page size elementos
+                List<Producto> searchResults = this.theProductoRepository.findByNombreContainingIgnoreCase(search);
+                int totalElements = searchResults.size();
+                int startIndex = page * size;
+                int endIndex = Math.min(startIndex + size, totalElements);
+                
+                List<Producto> paginatedResults = startIndex < totalElements 
+                    ? searchResults.subList(startIndex, endIndex)
+                    : new ArrayList<>();
+                    
+                pageRes = new org.springframework.data.domain.PageImpl<>(paginatedResults, pageable, totalElements);
             } else if (categoriaId != null && !categoriaId.trim().isEmpty()) {
-                // Filtro por categoría
-                productos = this.theProductoRepository.findByCategoriaId(categoriaId);
+                // Filtro por categoría - solo obtiene page size elementos
+                List<Producto> categoryResults = this.theProductoRepository.findByCategoriaId(categoriaId);
+                int totalElements = categoryResults.size();
+                int startIndex = page * size;
+                int endIndex = Math.min(startIndex + size, totalElements);
+                
+                List<Producto> paginatedResults = startIndex < totalElements 
+                    ? categoryResults.subList(startIndex, endIndex)
+                    : new ArrayList<>();
+                    
+                pageRes = new org.springframework.data.domain.PageImpl<>(paginatedResults, pageable, totalElements);
             } else {
-                // Todos los productos activos
-                productos = this.theProductoRepository.findByEstado("Activo");
+                // Todos los productos activos - solo obtiene page size elementos
+                List<Producto> allActive = this.theProductoRepository.findByEstado("Activo");
+                int totalElements = allActive.size();
+                int startIndex = page * size;
+                int endIndex = Math.min(startIndex + size, totalElements);
+                
+                List<Producto> paginatedResults = startIndex < totalElements 
+                    ? allActive.subList(startIndex, endIndex)
+                    : new ArrayList<>();
+                    
+                pageRes = new org.springframework.data.domain.PageImpl<>(paginatedResults, pageable, totalElements);
             }
 
-            // Convertir a DTO ligero (sin ingredientes, sin detalles pesados)
+            // Convertir SOLO la página actual a DTO ligero (sin ingredientes)
             List<com.prog3.security.DTOs.ProductoLazyDTO> productosLigeros = new ArrayList<>();
-            for (Producto p : productos) {
+            for (Producto p : pageRes.getContent()) {
                 com.prog3.security.DTOs.ProductoLazyDTO dto = new com.prog3.security.DTOs.ProductoLazyDTO(
                     p.get_id(),
                     p.getNombre(),
@@ -801,26 +833,17 @@ public class ProductosController extends BaseController<Producto, String> {
                 productosLigeros.add(dto);
             }
 
-            // Aplicar paginación manual
-            int totalElements = productosLigeros.size();
-            int startIndex = page * size;
-            int endIndex = Math.min(startIndex + size, totalElements);
-            
-            List<com.prog3.security.DTOs.ProductoLazyDTO> paginaActual = startIndex < totalElements 
-                ? productosLigeros.subList(startIndex, endIndex)
-                : new ArrayList<>();
-
             // Respuesta paginada
             Map<String, Object> result = new HashMap<>();
-            result.put("content", paginaActual);
-            result.put("page", page);
-            result.put("size", size);
-            result.put("totalPages", (int) Math.ceil((double) totalElements / size));
-            result.put("totalElements", totalElements);
-            result.put("hasMore", endIndex < totalElements);
+            result.put("content", productosLigeros);
+            result.put("page", pageRes.getNumber());
+            result.put("size", pageRes.getSize());
+            result.put("totalPages", pageRes.getTotalPages());
+            result.put("totalElements", pageRes.getTotalElements());
+            result.put("hasMore", !pageRes.isLast());
 
             return responseService.success(result, 
-                "Productos lazy obtenidos: " + paginaActual.size() + " de " + totalElements);
+                "Productos lazy obtenidos: " + productosLigeros.size() + " de " + pageRes.getTotalElements());
         } catch (Exception e) {
             return responseService.internalError("Error al obtener productos lazy: " + e.getMessage());
         }
