@@ -1,5 +1,6 @@
 package com.prog3.security.Controllers;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -274,6 +275,20 @@ public class PedidosController {
             return responseService.success(pedidos, "Pedidos de hoy obtenidos");
         } catch (Exception e) {
             return responseService.internalError("Error al obtener pedidos de hoy: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/por-fecha")
+    public ResponseEntity<com.prog3.security.Utils.ApiResponse<List<Pedido>>> getPedidosPorFecha(@RequestParam String fecha) {
+        try {
+            LocalDate fechaDate = LocalDate.parse(fecha);
+            LocalDateTime startOfDay = fechaDate.atStartOfDay();
+            LocalDateTime endOfDay = fechaDate.atTime(23, 59, 59, 999999999);
+            
+            List<Pedido> pedidos = thePedidoRepository.findByFechaBetween(startOfDay, endOfDay);
+            return responseService.success(pedidos, "Pedidos obtenidos exitosamente para la fecha: " + fecha);
+        } catch (Exception e) {
+            return responseService.error("Formato de fecha inválido. Use formato: YYYY-MM-DD");
         }
     }
 
