@@ -288,7 +288,7 @@ public class PedidosController {
             List<Pedido> pedidos = thePedidoRepository.findByFechaBetween(startOfDay, endOfDay);
             return responseService.success(pedidos, "Pedidos obtenidos exitosamente para la fecha: " + fecha);
         } catch (Exception e) {
-            return responseService.error("Formato de fecha inválido. Use formato: YYYY-MM-DD");
+            return responseService.internalError("Formato de fecha inválido. Use formato: YYYY-MM-DD");
         }
     }
 
