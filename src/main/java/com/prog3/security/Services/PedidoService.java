@@ -26,6 +26,9 @@ public class PedidoService {
     @Autowired
     private CuadreCajaRepository cuadreCajaRepository;
 
+    @Autowired
+    private MesaService mesaService;
+
     /**
      * Elimina un pedido y revierte los efectos en ventas y caja
      */
@@ -57,6 +60,8 @@ public class PedidoService {
 
             // 3. Eliminar el pedido
             pedidoRepository.deleteById(pedidoId);
+            // Limpieza automática de la mesa
+            mesaService.limpiarMesaSiNoTienePedidos(pedido.getMesa());
 
             System.out.println("✅ Pedido eliminado exitosamente: " + pedidoId);
             return true;

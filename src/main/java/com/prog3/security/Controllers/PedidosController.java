@@ -36,6 +36,7 @@ import com.prog3.security.Services.ResponseService;
 import com.prog3.security.Services.CuadreCajaService;
 import com.prog3.security.Services.WebSocketNotificationService;
 import com.prog3.security.Services.PedidoService;
+import com.prog3.security.Services.MesaService; // Import agregado
 // import com.prog3.security.Utils.ApiResponse; // Comentado para evitar conflicto con anotación Swagger
 import com.prog3.security.DTOs.PagarPedidoRequest;
 import com.prog3.security.DTOs.CancelarProductoRequest;
@@ -169,6 +170,9 @@ public class PedidosController {
 
     @Autowired
     private PedidoService pedidoService;
+
+    @Autowired
+    private MesaService mesaService;
 
     @Operation(summary = "Obtener todos los pedidos", description = "Retorna la lista completa de pedidos en el sistema")
     @ApiResponses(value = {
@@ -474,6 +478,13 @@ public class PedidosController {
 
             actualPedido.setItems(newPedido.getItems());
 
+            // 💰 ACTUALIZAR DESCUENTOS Y PROPINAS del frontend
+            actualPedido.setDescuento(newPedido.getDescuento());
+            actualPedido.setIncluyePropina(newPedido.isIncluyePropina());
+
+            // 💰 RECALCULAR TOTAL DEL PEDIDO con descuentos aplicados
+            recalcularTotalConDescuentos(actualPedido);
+
             // Registrar edición general si cambió información básica
             boolean cambioMesa = !Objects.equals(actualPedido.getMesa(), newPedido.getMesa());
             boolean cambioCliente = !Objects.equals(actualPedido.getCliente(), newPedido.getCliente());
@@ -538,6 +549,8 @@ public class PedidosController {
 
             // Eliminar el pedido
             this.thePedidoRepository.delete(pedido);
+            // Limpieza automática de la mesa
+            mesaService.limpiarMesaSiNoTienePedidos(pedido.getMesa());
             
             return responseService.success(null, "Pedido eliminado exitosamente y dinero descontado de caja");
         } catch (Exception e) {
@@ -1139,14 +1152,8 @@ public class PedidosController {
                 }
             }
 
-            // Recalcular total del pedido
-            double nuevoTotal = 0;
-            if (pedido.getItems() != null) {
-                for (ItemPedido item : pedido.getItems()) {
-                    nuevoTotal += item.getTotal();
-                }
-            }
-            pedido.setTotal(nuevoTotal);
+            // Recalcular total del pedido con descuentos aplicados
+            recalcularTotalConDescuentos(pedido);
 
             // Agregar nota de cancelación con detalle de ingredientes devueltos y no devueltos
             StringBuilder detalleIngredientes = new StringBuilder();
@@ -1480,11 +1487,8 @@ public class PedidosController {
                 pedidoDestino = pedidosActivos.get(0);
                 pedidoDestino.getItems().addAll(productosNuevoPedido);
 
-                // 💰 Recalcular total del pedido existente
-                double totalActualizado = pedidoDestino.getItems().stream()
-                        .mapToDouble(ItemPedido::getSubtotal)
-                        .sum();
-                pedidoDestino.setTotal(totalActualizado);
+                // 💰 Recalcular total del pedido existente con descuentos
+                recalcularTotalConDescuentos(pedidoDestino);
                 pedidoDestino.setFecha(LocalDateTime.now());
 
                 System.out.println("➕ Productos agregados al pedido existente - Mesa: " + mesaDestino);
@@ -1518,13 +1522,11 @@ public class PedidosController {
             } else {
                 // ✏️ Actualizar pedido original con productos restantes
                 pedidoOrigen.setItems(productosOriginalesActualizados);
-                double totalOriginalActualizado = productosOriginalesActualizados.stream()
-                        .mapToDouble(ItemPedido::getSubtotal)
-                        .sum();
-                pedidoOrigen.setTotal(totalOriginalActualizado);
+                recalcularTotalConDescuentos(pedidoOrigen);
                 pedidoOrigen.setFecha(LocalDateTime.now());
                 thePedidoRepository.save(pedidoOrigen);
-                System.out.println("✏️ Pedido original actualizado - Total: $" + totalOriginalActualizado);
+                System.out.println(
+                        "✏️ Pedido original actualizado - Total: $" + pedidoOrigen.getTotal());
             }
 
             // 📊 Preparar respuesta
@@ -1848,5 +1850,48 @@ public class PedidosController {
         } catch (Exception e) {
             return responseService.internalError("Error en pago parcial: " + e.getMessage());
         }
+    }
+
+    // 💰 MÉTODOS UTILITARIOS PARA CÁLCULO DE TOTALES
+
+    /**
+     * 💰 Recalcula el total final de un pedido aplicando descuentos Este método asegura que todos
+     * los cálculos de totales sean consistentes
+     * 
+     * @param pedido El pedido a recalcular
+     */
+    private void recalcularTotalConDescuentos(Pedido pedido) {
+        // Calcular total de items
+        double totalItems = 0;
+        if (pedido.getItems() != null && !pedido.getItems().isEmpty()) {
+            totalItems = pedido.getItems().stream().mapToDouble(ItemPedido::getSubtotal).sum();
+        }
+
+        // Aplicar descuentos
+        double totalConDescuento = totalItems - pedido.getDescuento();
+
+        // Asegurar que el total no sea negativo después del descuento
+        if (totalConDescuento < 0) {
+            totalConDescuento = 0;
+        }
+
+        pedido.setTotal(totalConDescuento);
+
+        System.out.println("💰 Total recalculado para pedido " + pedido.get_id() + ":");
+        System.out.println("   - Total items: $" + totalItems);
+        System.out.println("   - Descuento aplicado: $" + pedido.getDescuento());
+        System.out.println("   - Total final: $" + totalConDescuento);
+    }
+
+    /**
+     * 💰 Calcula el total final que se debe pagar incluyendo propinas
+     * 
+     * @param pedido El pedido
+     * @return Total final a pagar (total + propina)
+     */
+    private double calcularTotalAPagar(Pedido pedido) {
+        double totalBase = pedido.getTotal(); // Ya incluye descuentos aplicados
+        double propina = pedido.isIncluyePropina() ? pedido.getPropina() : 0.0;
+        return totalBase + propina;
     }
 }

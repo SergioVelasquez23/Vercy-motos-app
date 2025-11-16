@@ -1,0 +1,25 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "name": "Launch Application",
+      "request": "launch",
+      "mainClass": "com.prog3.sopaycarbon.SopaycarBonApplication",
+      "projectName": "security",
+      "args": "",
+      "vmArgs": "",
+      "console": "internalConsole"
+    },
+    {
+      "type": "java",
+      "name": "Spring Boot-SopaycarBonApplication",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "mainClass": "com.prog3.sopaycarbon.SopaycarBonApplication",
+      "projectName": "security",
+      "args": "",
+      "envFile": "${workspaceFolder}/.env"
+    }
+  ]
+}

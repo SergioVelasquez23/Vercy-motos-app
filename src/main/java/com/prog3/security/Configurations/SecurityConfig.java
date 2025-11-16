@@ -32,14 +32,9 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
         // ✅ CORREGIDO: Usar orígenes específicos en lugar de "*" para permitir credenciales
-        config.addAllowedOrigin("http://localhost:3000");
-        config.addAllowedOrigin("http://localhost:8080");
-        config.addAllowedOrigin("http://127.0.0.1:3000");
         config.addAllowedOrigin("http://10.112.216.36:5300");
         config.addAllowedOrigin("http://192.168.20.24:5300");
         config.addAllowedOrigin("http://192.168.20.24:8081");
-        config.addAllowedOrigin("https://sopa-y-carbon.netlify.app");
-        config.addAllowedOrigin("https://zingy-kitsune-66762f.netlify.app");
         config.addAllowedOrigin("https://sopa-y-carbon-app.web.app"); // 🔥 Firebase frontend
         config.addAllowedMethod("*");
         config.addAllowedHeader("*");
