@@ -158,8 +158,8 @@ public class ResumenCierreServiceUnificado {
         for (Pedido pedido : pedidosPagados) {
             // ✅ CALCULAR MONTO CORRECTO: Total con descuentos y propinas aplicados
             double totalItems = pedido.getTotal();
-            double descuento = pedido.getDescuento() != null ? pedido.getDescuento() : 0.0;
-            double propina = pedido.getPropina() != null ? pedido.getPropina() : 0.0;
+            double descuento = pedido.getDescuento(); // Ya es primitivo, no puede ser null
+            double propina = pedido.getPropina(); // Ya es primitivo, no puede ser null
             double totalConDescuento = Math.max(totalItems - descuento, 0.0);
             double montoFinalPedido = totalConDescuento + propina;
 
@@ -189,10 +189,8 @@ public class ResumenCierreServiceUnificado {
         for (Pedido pedidoEliminado : pedidosEliminados) {
             // ✅ CALCULAR MONTO CORRECTO: Total con descuentos y propinas aplicados
             double totalItems = pedidoEliminado.getTotal();
-            double descuento =
-                    pedidoEliminado.getDescuento() != null ? pedidoEliminado.getDescuento() : 0.0;
-            double propina =
-                    pedidoEliminado.getPropina() != null ? pedidoEliminado.getPropina() : 0.0;
+            double descuento = pedidoEliminado.getDescuento(); // Ya es primitivo, no puede ser null
+            double propina = pedidoEliminado.getPropina(); // Ya es primitivo, no puede ser null
             double totalConDescuento = Math.max(totalItems - descuento, 0.0);
             double montoFinalEliminado = totalConDescuento + propina;
 
@@ -606,13 +604,13 @@ public class ResumenCierreServiceUnificado {
         detalle.put("pagadoPor", pedido.getPagadoPor());
 
         // ✅ CRÍTICO: Incluir descuento y propina para el frontend
-        detalle.put("descuento", pedido.getDescuento() != null ? pedido.getDescuento() : 0.0);
-        detalle.put("propina", pedido.getPropina() != null ? pedido.getPropina() : 0.0);
+        detalle.put("descuento", pedido.getDescuento()); // Ya es primitivo, no puede ser null
+        detalle.put("propina", pedido.getPropina()); // Ya es primitivo, no puede ser null
 
         // ✅ Calcular totales aplicando descuentos y propinas
         double totalItems = pedido.getTotal(); // Total base de items
-        double descuento = pedido.getDescuento() != null ? pedido.getDescuento() : 0.0;
-        double propina = pedido.getPropina() != null ? pedido.getPropina() : 0.0;
+        double descuento = pedido.getDescuento(); // Ya es primitivo, no puede ser null
+        double propina = pedido.getPropina(); // Ya es primitivo, no puede ser null
         double totalConDescuento = Math.max(totalItems - descuento, 0.0);
         double totalFinal = totalConDescuento + propina;
 
