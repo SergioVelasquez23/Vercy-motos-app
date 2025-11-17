@@ -156,6 +156,13 @@ public class ResumenCierreServiceUnificado {
         
         // Primero procesar pedidos pagados normales
         for (Pedido pedido : pedidosPagados) {
+            // ✅ CALCULAR MONTO CORRECTO: Total con descuentos y propinas aplicados
+            double totalItems = pedido.getTotal();
+            double descuento = pedido.getDescuento() != null ? pedido.getDescuento() : 0.0;
+            double propina = pedido.getPropina() != null ? pedido.getPropina() : 0.0;
+            double totalConDescuento = Math.max(totalItems - descuento, 0.0);
+            double montoFinalPedido = totalConDescuento + propina;
+
             // Si tiene pagos parciales, procesar cada pago individualmente
             if (pedido.getPagosParciales() != null && !pedido.getPagosParciales().isEmpty()) {
                 for (Pedido.PagoParcial pago : pedido.getPagosParciales()) {
@@ -167,9 +174,10 @@ public class ResumenCierreServiceUnificado {
                     totalVentas += monto;
                 }
             } else {
-                // Pago único
+                // Pago único - usar el monto final calculado con descuentos y propinas
                 String formaPago = pedido.getFormaPago() != null ? pedido.getFormaPago().toLowerCase() : "efectivo";
-                double monto = pedido.getTotalPagado() > 0 ? pedido.getTotalPagado() : pedido.getTotal();
+                double monto =
+                        pedido.getTotalPagado() > 0 ? pedido.getTotalPagado() : montoFinalPedido;
                 
                 ventasPorFormaPago.merge(formaPago, monto, Double::sum);
                 cantidadPorFormaPago.merge(formaPago, 1, Integer::sum);
@@ -179,6 +187,15 @@ public class ResumenCierreServiceUnificado {
         
         // Ahora restar pedidos eliminados que fueron pagados
         for (Pedido pedidoEliminado : pedidosEliminados) {
+            // ✅ CALCULAR MONTO CORRECTO: Total con descuentos y propinas aplicados
+            double totalItems = pedidoEliminado.getTotal();
+            double descuento =
+                    pedidoEliminado.getDescuento() != null ? pedidoEliminado.getDescuento() : 0.0;
+            double propina =
+                    pedidoEliminado.getPropina() != null ? pedidoEliminado.getPropina() : 0.0;
+            double totalConDescuento = Math.max(totalItems - descuento, 0.0);
+            double montoFinalEliminado = totalConDescuento + propina;
+
             // Si tiene pagos parciales, procesar cada pago individualmente
             if (pedidoEliminado.getPagosParciales() != null && !pedidoEliminado.getPagosParciales().isEmpty()) {
                 for (Pedido.PagoParcial pago : pedidoEliminado.getPagosParciales()) {
@@ -194,11 +211,11 @@ public class ResumenCierreServiceUnificado {
                     totalVentas -= monto;
                 }
             } else {
-                // Pago único
+                // Pago único - usar el monto final calculado con descuentos y propinas
                 String formaPago = pedidoEliminado.getFormaPago() != null ? 
                     pedidoEliminado.getFormaPago().toLowerCase() : "efectivo";
                 double monto = pedidoEliminado.getTotalPagado() > 0 ? 
-                    pedidoEliminado.getTotalPagado() : pedidoEliminado.getTotal();
+                        pedidoEliminado.getTotalPagado() : montoFinalEliminado;
                 
                 ventasEliminadasPorFormaPago.merge(formaPago, monto, Double::sum);
                 totalVentasEliminadas += monto;
@@ -572,7 +589,8 @@ public class ResumenCierreServiceUnificado {
     }
 
     /**
-     * Convierte un pedido a un objeto detalle para el resumen
+     * Convierte un pedido a un objeto detalle para el resumen ✅ INCLUYE descuento y propina en la
+     * respuesta
      */
     private Map<String, Object> convertirPedidoADetalle(Pedido pedido) {
         Map<String, Object> detalle = new HashMap<>();
@@ -586,7 +604,22 @@ public class ResumenCierreServiceUnificado {
         detalle.put("total", pedido.getTotal());
         detalle.put("totalPagado", pedido.getTotalPagado());
         detalle.put("pagadoPor", pedido.getPagadoPor());
-        detalle.put("propina", pedido.getPropina());
+
+        // ✅ CRÍTICO: Incluir descuento y propina para el frontend
+        detalle.put("descuento", pedido.getDescuento() != null ? pedido.getDescuento() : 0.0);
+        detalle.put("propina", pedido.getPropina() != null ? pedido.getPropina() : 0.0);
+
+        // ✅ Calcular totales aplicando descuentos y propinas
+        double totalItems = pedido.getTotal(); // Total base de items
+        double descuento = pedido.getDescuento() != null ? pedido.getDescuento() : 0.0;
+        double propina = pedido.getPropina() != null ? pedido.getPropina() : 0.0;
+        double totalConDescuento = Math.max(totalItems - descuento, 0.0);
+        double totalFinal = totalConDescuento + propina;
+
+        detalle.put("totalItems", totalItems);
+        detalle.put("totalConDescuento", totalConDescuento);
+        detalle.put("totalFinal", totalFinal);
+
         return detalle;
     }
 
