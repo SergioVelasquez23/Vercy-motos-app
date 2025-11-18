@@ -913,11 +913,17 @@ public class PedidosController {
                         // ✅ APLICAR DESCUENTO ANTES DEL PAGO
                         pedido.setDescuento(descuento);
 
-                        // Establecer la forma de pago y datos del pago usando el método pagar
-                        pedido.pagar(pagarRequest.getFormaPago(), pagarRequest.getPropina(), pagarRequest.getProcesadoPor());
-                        
-                        // ✅ ACTUALIZAR TOTAL PAGADO CON DESCUENTO APLICADO
-                        pedido.setTotalPagado(totalFinal);
+                        // ✅ CONFIGURAR PAGO MANUALMENTE (no usar pedido.pagar() que sobrescribe
+                        // totalPagado)
+                        // NOTA: pedido.pagar() usa this.total + propina ignorando descuentos
+                        // Por eso configuramos cada campo manualmente para mantener el descuento
+                        pedido.setEstado("pagado");
+                        pedido.setFormaPago(pagarRequest.getFormaPago());
+                        pedido.setPropina(pagarRequest.getPropina()); // Ya se había sumado arriba
+                        pedido.setTotalPagado(totalFinal); // ✅ MANTENER EL TOTAL CORRECTO CON
+                                                           // DESCUENTO
+                        pedido.setFechaPago(LocalDateTime.now());
+                        pedido.setPagadoPor(pagarRequest.getProcesadoPor());
 
                         // Log para debugging
                         System.out.println("💰 Pedido procesado como pagado simple:");
