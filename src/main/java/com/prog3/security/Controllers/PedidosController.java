@@ -755,7 +755,6 @@ public class PedidosController {
             System.out.println("  - Propina: " + pagarRequest.getPropina());
             System.out.println("  - Descuento: " + pagarRequest.getDescuento());
             System.out.println("  - ProcesadoPor: " + pagarRequest.getProcesadoPor());
-            System.out.println("  - Monto: " + pagarRequest.getMonto());
             System.out.println("🔍 Raw object: " + pagarRequest.toString());
             System.out.println("===========================================\n");
 
