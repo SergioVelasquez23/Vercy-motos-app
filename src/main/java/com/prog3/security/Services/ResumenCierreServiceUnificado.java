@@ -591,6 +591,16 @@ public class ResumenCierreServiceUnificado {
      * respuesta
      */
     private Map<String, Object> convertirPedidoADetalle(Pedido pedido) {
+        // 🔍 DEBUG: Verificar datos del pedido al convertirlo
+        System.out.println("\n🔍 ===== DEBUG CONVERSIÓN PEDIDO A DETALLE =====");
+        System.out.println("  - ID Pedido: " + pedido.get_id());
+        System.out.println("  - Mesa: " + pedido.getMesa());
+        System.out.println("  - Total original: " + pedido.getTotal());
+        System.out.println("  - Descuento leído: " + pedido.getDescuento());
+        System.out.println("  - Propina leída: " + pedido.getPropina());
+        System.out.println("  - Total pagado: " + pedido.getTotalPagado());
+        System.out.println("===============================================\n");
+
         Map<String, Object> detalle = new HashMap<>();
         detalle.put("id", pedido.get_id());
         detalle.put("mesa", pedido.getMesa());

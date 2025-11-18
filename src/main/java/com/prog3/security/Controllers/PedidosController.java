@@ -97,8 +97,15 @@ public class PedidosController {
             // Actualizar cuadre de caja (restar anterior, sumar nuevo)
             cuadreCajaService.sumarPagoACuadreActivo(-montoAnterior, formaPagoAnterior);
             cuadreCajaService.sumarPagoACuadreActivo(montoNuevo, formaPagoNueva);
-            // Actualizar estado del pedido
-            if (pedido.getTotalPagado() < pedido.getTotal() + pedido.getPropina()) {
+            // ✅ ACTUALIZAR ESTADO DEL PEDIDO (CONSIDERANDO DESCUENTOS)
+            // Calcular total final esperado: (total - descuento) + propina
+            double totalItems = pedido.getTotal();
+            double descuento = pedido.getDescuento();
+            double propina = pedido.getPropina();
+            double totalConDescuento = Math.max(totalItems - descuento, 0.0);
+            double totalFinalEsperado = totalConDescuento + propina;
+
+            if (pedido.getTotalPagado() < totalFinalEsperado) {
                 pedido.setEstado("pendiente");
             } else {
                 pedido.setEstado("pagado");
@@ -126,8 +133,16 @@ public class PedidosController {
             pedido.setTotalPagado(pedido.getTotalPagado() - pago.getMonto());
             // Actualizar cuadre de caja
             cuadreCajaService.sumarPagoACuadreActivo(-pago.getMonto(), pago.getFormaPago());
-            // Actualizar estado del pedido
-            if (pedido.getTotalPagado() < pedido.getTotal() + pedido.getPropina()) {
+
+            // ✅ ACTUALIZAR ESTADO DEL PEDIDO (CONSIDERANDO DESCUENTOS)
+            // Calcular total final esperado: (total - descuento) + propina
+            double totalItems = pedido.getTotal();
+            double descuento = pedido.getDescuento();
+            double propina = pedido.getPropina();
+            double totalConDescuento = Math.max(totalItems - descuento, 0.0);
+            double totalFinalEsperado = totalConDescuento + propina;
+
+            if (pedido.getTotalPagado() < totalFinalEsperado) {
                 pedido.setEstado("pendiente");
             }
             this.thePedidoRepository.save(pedido);
@@ -609,20 +624,50 @@ public class PedidosController {
 
             System.out.println("Pedidos pagados: " + pedidosPagados.size());
 
-            // Calcular totales por forma de pago
+            // ✅ CALCULAR TOTALES APLICANDO DESCUENTOS Y PROPINAS CORRECTAMENTE
             double totalEfectivo = pedidosPagados.stream()
                     .filter(p -> "efectivo".equalsIgnoreCase(p.getFormaPago()))
-                    .mapToDouble(p -> p.getTotalPagado() > 0 ? p.getTotalPagado() : p.getTotal())
+                    .mapToDouble(p -> {
+                        // Aplicar descuentos y sumar propinas
+                        double totalItems = p.getTotal();
+                        double descuento = p.getDescuento();
+                        double propina = p.getPropina();
+                        double totalConDescuento = Math.max(totalItems - descuento, 0.0);
+                        double totalFinal = totalConDescuento + propina;
+
+                        // Usar totalPagado si está disponible, sino calcular
+                        return p.getTotalPagado() > 0 ? p.getTotalPagado() : totalFinal;
+                    })
                     .sum();
 
             double totalTransferencia = pedidosPagados.stream()
                     .filter(p -> "transferencia".equalsIgnoreCase(p.getFormaPago()))
-                    .mapToDouble(p -> p.getTotalPagado() > 0 ? p.getTotalPagado() : p.getTotal())
+                    .mapToDouble(p -> {
+                        // Aplicar descuentos y sumar propinas
+                        double totalItems = p.getTotal();
+                        double descuento = p.getDescuento();
+                        double propina = p.getPropina();
+                        double totalConDescuento = Math.max(totalItems - descuento, 0.0);
+                        double totalFinal = totalConDescuento + propina;
+
+                        // Usar totalPagado si está disponible, sino calcular
+                        return p.getTotalPagado() > 0 ? p.getTotalPagado() : totalFinal;
+                    })
                     .sum();
 
             double totalTarjeta = pedidosPagados.stream()
                     .filter(p -> "tarjeta".equalsIgnoreCase(p.getFormaPago()))
-                    .mapToDouble(p -> p.getTotalPagado() > 0 ? p.getTotalPagado() : p.getTotal())
+                    .mapToDouble(p -> {
+                        // Aplicar descuentos y sumar propinas
+                        double totalItems = p.getTotal();
+                        double descuento = p.getDescuento();
+                        double propina = p.getPropina();
+                        double totalConDescuento = Math.max(totalItems - descuento, 0.0);
+                        double totalFinal = totalConDescuento + propina;
+
+                        // Usar totalPagado si está disponible, sino calcular
+                        return p.getTotalPagado() > 0 ? p.getTotalPagado() : totalFinal;
+                    })
                     .sum();
 
             double totalOtros = pedidosPagados.stream()
@@ -630,17 +675,40 @@ public class PedidosController {
                     || (!p.getFormaPago().equalsIgnoreCase("efectivo")
                     && !p.getFormaPago().equalsIgnoreCase("transferencia")
                     && !p.getFormaPago().equalsIgnoreCase("tarjeta")))
-                    .mapToDouble(p -> p.getTotalPagado() > 0 ? p.getTotalPagado() : p.getTotal())
+                    .mapToDouble(p -> {
+                        // Aplicar descuentos y sumar propinas
+                        double totalItems = p.getTotal();
+                        double descuento = p.getDescuento();
+                        double propina = p.getPropina();
+                        double totalConDescuento = Math.max(totalItems - descuento, 0.0);
+                        double totalFinal = totalConDescuento + propina;
+
+                        // Usar totalPagado si está disponible, sino calcular
+                        return p.getTotalPagado() > 0 ? p.getTotalPagado() : totalFinal;
+                    })
                     .sum();
 
             double totalGeneral = totalEfectivo + totalTransferencia + totalTarjeta + totalOtros;
 
-            System.out.println("=== RESUMEN DE VENTAS POR FORMA DE PAGO ===");
+            System.out.println(
+                    "=== RESUMEN DE VENTAS POR FORMA DE PAGO (💰 CON DESCUENTOS APLICADOS) ===");
             System.out.println("Total Efectivo: " + totalEfectivo);
             System.out.println("Total Transferencia: " + totalTransferencia);
             System.out.println("Total Tarjeta: " + totalTarjeta);
             System.out.println("Total Otros: " + totalOtros);
             System.out.println("Total General: " + totalGeneral);
+
+            // ✅ DEBUG: Calcular totales sin descuentos para comparación
+            double totalSinDescuentos =
+                    pedidosPagados.stream().mapToDouble(p -> p.getTotal() + p.getPropina()).sum();
+            double totalDescuentosAplicados =
+                    pedidosPagados.stream().mapToDouble(p -> p.getDescuento()).sum();
+            System.out.println("\n📊 COMPARACIÓN:");
+            System.out.println("Total SIN descuentos: " + totalSinDescuentos);
+            System.out.println("Total descuentos aplicados: " + totalDescuentosAplicados);
+            System.out.println("Total CON descuentos: " + totalGeneral);
+            System.out.println(
+                    "Diferencia (ahorro clientes): " + (totalSinDescuentos - totalGeneral));
 
             TotalVentasResponse response = new TotalVentasResponse(totalGeneral, totalEfectivo, totalTransferencia,
                     totalTarjeta, totalOtros);
@@ -679,6 +747,18 @@ public class PedidosController {
             @Parameter(description = "ID del pedido a procesar", required = true) @PathVariable String id,
             @Parameter(description = "Datos del pago", required = true) @RequestBody @Valid PagarPedidoRequest pagarRequest) {
         try {
+            // 🔍 DEBUG COMPLETO: Mostrar TODOS los datos que llegan del frontend
+            System.out.println("\n🔍 ===== DEBUG COMPLETO PAGO PEDIDO =====");
+            System.out.println("📝 ID del pedido: " + id);
+            System.out.println("💰 Datos completos del request:");
+            System.out.println("  - FormaPago: " + pagarRequest.getFormaPago());
+            System.out.println("  - Propina: " + pagarRequest.getPropina());
+            System.out.println("  - Descuento: " + pagarRequest.getDescuento());
+            System.out.println("  - ProcesadoPor: " + pagarRequest.getProcesadoPor());
+            System.out.println("  - Monto: " + pagarRequest.getMonto());
+            System.out.println("🔍 Raw object: " + pagarRequest.toString());
+            System.out.println("===========================================\n");
+
             System.out.println("[PAGAR_PEDIDO] Iniciando pago para pedido ID: " + id);
 
             // Validar que el ID no sea nulo o vacío
@@ -721,7 +801,15 @@ public class PedidosController {
             if (pagarRequest.esPagado()) {
                 System.out.println(
                         "[PAGAR_PEDIDO] Procesando pago real. FormaPago: " + pagarRequest.getFormaPago() + ", Propina: "
-                        + pagarRequest.getPropina() + ", ProcesadoPor: " + pagarRequest.getProcesadoPor());
+                                + pagarRequest.getPropina() + ", Descuento: "
+                                + pagarRequest.getDescuento() + ", ProcesadoPor: "
+                                + pagarRequest.getProcesadoPor());
+
+                // ✅ APLICAR DESCUENTO AL PEDIDO
+                if (pagarRequest.getDescuento() > 0) {
+                    System.out.println("💰 Aplicando descuento: $" + pagarRequest.getDescuento());
+                    pedido.setDescuento(pagarRequest.getDescuento());
+                }
                 // Pagos parciales y múltiples formas de pago
                 // Sumar propina
                 if (pagarRequest.getPropina() > 0) {
@@ -734,11 +822,25 @@ public class PedidosController {
                     boolean esPagoMixto = pagarRequest.getPagosMixtos() != null && !pagarRequest.getPagosMixtos().isEmpty();
                     
                     if (esPagoMixto) {
+                        // ✅ CALCULAR TOTAL CON DESCUENTO APLICADO
+                        double totalOriginal = pedido.getTotal();
+                        double descuento = pagarRequest.getDescuento();
+                        double totalConDescuento = Math.max(totalOriginal - descuento, 0.0);
+                        double totalFinal = totalConDescuento + pagarRequest.getPropina();
+
+                        System.out.println("💰 Cálculos de pago mixto:");
+                        System.out.println("   - Total original: $" + totalOriginal);
+                        System.out.println("   - Descuento: $" + descuento);
+                        System.out.println("   - Total con descuento: $" + totalConDescuento);
+                        System.out.println("   - Propina: $" + pagarRequest.getPropina());
+                        System.out.println("   - Total final: $" + totalFinal);
+
                         // Si es un pago mixto, configuramos el estado y otros campos básicos
                         pedido.setEstado("pagado");
                         pedido.setFormaPago("mixto"); // Marcar específicamente como pago mixto
                         pedido.setPropina(pagarRequest.getPropina());
-                        pedido.setTotalPagado(pedido.getTotal() + pagarRequest.getPropina());
+                        pedido.setDescuento(descuento); // ✅ GUARDAR DESCUENTO
+                        pedido.setTotalPagado(totalFinal); // ✅ USAR TOTAL FINAL CON DESCUENTO
                         pedido.setFechaPago(LocalDateTime.now());
                         pedido.setPagadoPor(pagarRequest.getProcesadoPor());
                         
@@ -784,28 +886,53 @@ public class PedidosController {
                         }
                         
                         System.out.println("💰 Total registrado en pagos mixtos: $" + totalRegistrado);
-                        System.out.println("💰 Total del pedido: $" + pedido.getTotal());
+                        System.out.println(
+                                "💰 Total con descuento del pedido: $" + totalConDescuento);
                         
-                        // Verificar que los montos son correctos
-                        if (Math.abs(totalRegistrado - pedido.getTotal()) > 0.01) {
+                        // Verificar que los montos son correctos (comparar con total con descuento)
+                        if (Math.abs(totalRegistrado - totalConDescuento) > 0.01) {
                             System.out.println("⚠️ ADVERTENCIA: El total de pagos mixtos ($" + totalRegistrado + 
-                                              ") no coincide con el total del pedido ($" + pedido.getTotal() + ")");
+                                    ") no coincide con el total con descuento del pedido ($"
+                                    + totalConDescuento + ")");
                         }
                     } else {
+                        // ✅ CALCULAR TOTAL CON DESCUENTO APLICADO PARA PAGO SIMPLE
+                        double totalOriginal = pedido.getTotal();
+                        double descuento = pagarRequest.getDescuento();
+                        double totalConDescuento = Math.max(totalOriginal - descuento, 0.0);
+                        double totalFinal = totalConDescuento + pagarRequest.getPropina();
+
+                        System.out.println("💰 Cálculos de pago simple:");
+                        System.out.println("   - Total original: $" + totalOriginal);
+                        System.out.println("   - Descuento: $" + descuento);
+                        System.out.println("   - Total con descuento: $" + totalConDescuento);
+                        System.out.println("   - Propina: $" + pagarRequest.getPropina());
+                        System.out.println("   - Total final: $" + totalFinal);
+
                         // Pago regular con una sola forma de pago
+                        // ✅ APLICAR DESCUENTO ANTES DEL PAGO
+                        pedido.setDescuento(descuento);
+
                         // Establecer la forma de pago y datos del pago usando el método pagar
                         pedido.pagar(pagarRequest.getFormaPago(), pagarRequest.getPropina(), pagarRequest.getProcesadoPor());
                         
+                        // ✅ ACTUALIZAR TOTAL PAGADO CON DESCUENTO APLICADO
+                        pedido.setTotalPagado(totalFinal);
+
                         // Log para debugging
                         System.out.println("💰 Pedido procesado como pagado simple:");
-                        System.out.println("   - Total: $" + pedido.getTotal());
+                        System.out.println("   - Total original: $" + totalOriginal);
+                        System.out.println("   - Descuento aplicado: $" + descuento);
+                        System.out.println("   - Total con descuento: $" + totalConDescuento);
                         System.out.println("   - Propina: $" + pedido.getPropina());
-                        System.out.println("   - Total pagado: $" + pedido.getTotalPagado());
+                        System.out.println("   - Total pagado final: $" + pedido.getTotalPagado());
                         System.out.println("   - Forma de pago: " + pedido.getFormaPago());
                         
-                        // Sumar el total del pedido a la caja
-                        System.out.println("💰 Sumando venta a caja: $" + pedido.getTotal() + " por " + pagarRequest.getFormaPago());
-                        cuadreCajaService.sumarPagoACuadreActivo(pedido.getTotal(), pagarRequest.getFormaPago());
+                        // ✅ SUMAR SOLO EL TOTAL CON DESCUENTO A LA CAJA (NO EL TOTAL ORIGINAL)
+                        System.out.println("💰 Sumando venta a caja: $" + totalConDescuento
+                                + " por " + pagarRequest.getFormaPago());
+                        cuadreCajaService.sumarPagoACuadreActivo(totalConDescuento,
+                                pagarRequest.getFormaPago());
                         
                         // Sumar la propina a la caja si hay
                         if (pagarRequest.getPropina() > 0) {
@@ -820,6 +947,14 @@ public class PedidosController {
                 // el método pagar() ya lo hace correctamente
             } else if (pagarRequest.esCortesia()) {
                 System.out.println("[PAGAR_PEDIDO] Procesando cortesía");
+
+                // ✅ APLICAR DESCUENTO TAMBIÉN EN CORTESÍAS
+                if (pagarRequest.getDescuento() > 0) {
+                    System.out.println(
+                            "💰 Aplicando descuento en cortesía: $" + pagarRequest.getDescuento());
+                    pedido.setDescuento(pagarRequest.getDescuento());
+                }
+
                 pedido.setEstado("cortesia");
                 pedido.setFechaCortesia(LocalDateTime.now());
                 pedido.setPropina(0);
@@ -869,7 +1004,25 @@ public class PedidosController {
 
             System.out.println("[PAGAR_PEDIDO] Estado final del pedido: " + pedido.getEstado());
             System.out.println("[PAGAR_PEDIDO] Pedido antes de guardar: " + pedido);
+
+            // 🔍 DEBUG ESPECÍFICO ANTES DE GUARDAR
+            System.out.println("\n💰 ===== DEBUG DESCUENTO ANTES DE GUARDAR =====");
+            System.out.println("  - Total original: " + pedido.getTotal());
+            System.out.println("  - Descuento aplicado: " + pedido.getDescuento());
+            System.out.println("  - Propina aplicada: " + pedido.getPropina());
+            System.out.println("  - Total pagado: " + pedido.getTotalPagado());
+            System.out.println("================================================\n");
+
             Pedido pedidoProcesado = this.thePedidoRepository.save(pedido);
+
+            // 🔍 DEBUG ESPECÍFICO DESPUÉS DE GUARDAR
+            System.out.println("\n✅ ===== DEBUG DESCUENTO DESPUÉS DE GUARDAR =====");
+            System.out.println("  - Total original: " + pedidoProcesado.getTotal());
+            System.out.println("  - Descuento persistido: " + pedidoProcesado.getDescuento());
+            System.out.println("  - Propina persistida: " + pedidoProcesado.getPropina());
+            System.out.println("  - Total pagado persistido: " + pedidoProcesado.getTotalPagado());
+            System.out.println("==================================================\n");
+
             System.out.println("[PAGAR_PEDIDO] Pedido guardado correctamente. ID: " + pedidoProcesado.get_id());
 
             // Asignar al cuadre de caja activo siempre (no solo para pagos)
@@ -884,11 +1037,21 @@ public class PedidosController {
 
                 // Notificar vía WebSocket que se pagó un pedido (para actualizar dashboard)
                 try {
+                    // ✅ CALCULAR TOTAL CORRECTO CON DESCUENTOS PARA WEBSOCKET
+                    double totalItems = pedidoProcesado.getTotal();
+                    double descuento = pedidoProcesado.getDescuento();
+                    double propina = pedidoProcesado.getPropina();
+                    double totalConDescuento = Math.max(totalItems - descuento, 0.0);
+                    double totalFinal = totalConDescuento + propina;
+
+                    double totalParaNotificacion =
+                            pedidoProcesado.getTotalPagado() > 0 ? pedidoProcesado.getTotalPagado()
+                                    : totalFinal;
+
                     webSocketService.notificarPedidoPagado(
                             pedidoProcesado.get_id(),
                             pedidoProcesado.getMesa(),
-                            pedidoProcesado.getTotalPagado() > 0 ? pedidoProcesado.getTotalPagado()
-                            : pedidoProcesado.getTotal(),
+                            totalParaNotificacion,
                             pedidoProcesado.getFormaPago());
                 } catch (Exception wsError) {
                     System.err.println("⚠️ Error enviando notificación WebSocket: " + wsError.getMessage());
@@ -1753,11 +1916,21 @@ public class PedidosController {
 
                 // Notificar vía WebSocket que se pagó un pedido (para actualizar dashboard)
                 try {
+                    // ✅ CALCULAR TOTAL CORRECTO CON DESCUENTOS PARA WEBSOCKET
+                    double totalItems = pedidoPagadoGuardado.getTotal();
+                    double descuento = pedidoPagadoGuardado.getDescuento();
+                    double propina = pedidoPagadoGuardado.getPropina();
+                    double totalConDescuento = Math.max(totalItems - descuento, 0.0);
+                    double totalFinal = totalConDescuento + propina;
+
+                    double totalParaNotificacion = pedidoPagadoGuardado.getTotalPagado() > 0
+                            ? pedidoPagadoGuardado.getTotalPagado()
+                            : totalFinal;
+
                     webSocketService.notificarPedidoPagado(
                             pedidoPagadoGuardado.get_id(),
                             pedidoPagadoGuardado.getMesa(),
-                            pedidoPagadoGuardado.getTotalPagado() > 0 ? pedidoPagadoGuardado.getTotalPagado()
-                            : pedidoPagadoGuardado.getTotal(),
+                            totalParaNotificacion,
                             pedidoPagadoGuardado.getFormaPago());
                 } catch (Exception wsError) {
                     System.err.println(
@@ -1893,5 +2066,20 @@ public class PedidosController {
         double totalBase = pedido.getTotal(); // Ya incluye descuentos aplicados
         double propina = pedido.isIncluyePropina() ? pedido.getPropina() : 0.0;
         return totalBase + propina;
+    }
+
+    /**
+     * ✅ Calcula el total final aplicando descuentos y propinas correctamente
+     * 
+     * @param pedido El pedido
+     * @return Total final (total - descuento + propina)
+     */
+    private double calcularTotalConDescuentos(Pedido pedido) {
+        double totalItems = pedido.getTotal(); // Total base de items
+        double descuento = pedido.getDescuento(); // Descuento aplicado
+        double propina = pedido.getPropina(); // Propina añadida
+
+        double totalConDescuento = Math.max(totalItems - descuento, 0.0); // Nunca negativo
+        return totalConDescuento + propina; // Total final
     }
 }

@@ -25,6 +25,10 @@ public class PagarPedidoRequest {
     @DecimalMax(value = "999999.99", message = "La propina no puede exceder $999,999.99")
     private double propina = 0.0;
 
+    @PositiveOrZero(message = "El descuento no puede ser negativo")
+    @DecimalMax(value = "999999.99", message = "El descuento no puede exceder $999,999.99")
+    private double descuento = 0.0;
+
     @NotBlank(message = "Debe especificar quién procesa la operación")
     @Size(min = 2, max = 100, message = "El nombre de quien procesa debe tener entre 2 y 100 caracteres")
     private String procesadoPor;
@@ -50,6 +54,7 @@ public class PagarPedidoRequest {
         this.propina = propina;
         this.procesadoPor = procesadoPor;
         this.notas = notas;
+        this.descuento = 0.0; // Valor por defecto
     }
 
     // Getters y Setters
@@ -75,6 +80,14 @@ public class PagarPedidoRequest {
 
     public void setPropina(double propina) {
         this.propina = propina;
+    }
+
+    public double getDescuento() {
+        return descuento;
+    }
+
+    public void setDescuento(double descuento) {
+        this.descuento = descuento;
     }
 
     public String getProcesadoPor() {
@@ -219,6 +232,8 @@ public class PagarPedidoRequest {
                 "tipoPago='" + tipoPago + '\'' +
                 ", formaPago='" + formaPago + '\'' +
                 ", propina=" + propina +
+                ", descuento=" + descuento
+                +
                 ", procesadoPor='" + procesadoPor + '\'' +
                 ", motivoCortesia='" + motivoCortesia + '\'' +
                 ", tipoConsumoInterno='" + tipoConsumoInterno + '\'' +
