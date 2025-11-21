@@ -967,15 +967,13 @@ public class PedidosController {
                 String motivoCortesia = pagarRequest.getMotivoCortesia() != null ? pagarRequest.getMotivoCortesia()
                         : "";
                 pedido.setNotas("CORTESÍA - " + motivoCortesia + " - " + notasAdicionales);
-                // Liberar la mesa si existe
+                // Liberar la mesa si existe - Usando MesaService
                 if (pedido.getMesa() != null && !pedido.getMesa().isEmpty()) {
-                    MesaRepository mesaRepository = (MesaRepository) org.springframework.beans.factory.BeanFactoryUtils.beanOfTypeIncludingAncestors(
-                            org.springframework.web.context.ContextLoader.getCurrentWebApplicationContext(), MesaRepository.class);
-                    Mesa mesa = mesaRepository.findByNombre(pedido.getMesa());
-                    if (mesa != null) {
-                        mesa.setOcupada(false);
-                        mesaRepository.save(mesa);
-                        System.out.println("[PAGAR_PEDIDO] Mesa liberada por cortesía: " + mesa.getNombre());
+                    try {
+                        mesaService.liberarMesa(pedido.getMesa());
+                        System.out.println("[PAGAR_PEDIDO] Mesa liberada por cortesía: " + pedido.getMesa());
+                    } catch (Exception e) {
+                        System.out.println("⚠️ Advertencia: No se pudo liberar mesa " + pedido.getMesa() + ": " + e.getMessage());
                     }
                 }
             } else if (pagarRequest.esConsumoInterno()) {
@@ -986,15 +984,13 @@ public class PedidosController {
                 String tipoConsumo = pagarRequest.getTipoConsumoInterno() != null ? pagarRequest.getTipoConsumoInterno()
                         : "";
                 pedido.setNotas("CONSUMO INTERNO - " + tipoConsumo + " - " + notasAdicionales);
-                // Liberar la mesa si existe
+                // Liberar la mesa si existe - Usando MesaService
                 if (pedido.getMesa() != null && !pedido.getMesa().isEmpty()) {
-                    MesaRepository mesaRepository = (MesaRepository) org.springframework.beans.factory.BeanFactoryUtils.beanOfTypeIncludingAncestors(
-                            org.springframework.web.context.ContextLoader.getCurrentWebApplicationContext(), MesaRepository.class);
-                    Mesa mesa = mesaRepository.findByNombre(pedido.getMesa());
-                    if (mesa != null) {
-                        mesa.setOcupada(false);
-                        mesaRepository.save(mesa);
-                        System.out.println("[PAGAR_PEDIDO] Mesa liberada por consumo interno: " + mesa.getNombre());
+                    try {
+                        mesaService.liberarMesa(pedido.getMesa());
+                        System.out.println("[PAGAR_PEDIDO] Mesa liberada por consumo interno: " + pedido.getMesa());
+                    } catch (Exception e) {
+                        System.out.println("⚠️ Advertencia: No se pudo liberar mesa " + pedido.getMesa() + ": " + e.getMessage());
                     }
                 }
             } else if (pagarRequest.esCancelado()) {

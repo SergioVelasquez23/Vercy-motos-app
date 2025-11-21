@@ -30,4 +30,16 @@ public class MesaService {
             }
         }
     }
+
+    /**
+     * Libera una mesa específica (para cortesías y consumo interno)
+     */
+    public void liberarMesa(String nombreMesa) {
+        Mesa mesa = mesaRepository.findByNombre(nombreMesa);
+        if (mesa != null) {
+            mesa.setOcupada(false);
+            mesa.setTotal(0.0);
+            mesaRepository.save(mesa);
+        }
+    }
 }
