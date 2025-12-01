@@ -455,6 +455,10 @@ public class ProductosController extends BaseController<Producto, String> {
     /**
      * Obtiene un producto con los nombres de los ingredientes resueltos
      */
+    /**
+     * Obtiene un producto con los nombres de los ingredientes resueltos
+     * OPTIMIZADO: Usa carga por lotes para ingredientes del producto
+     */
     @GetMapping("/{id}/con-nombres-ingredientes")
     public ResponseEntity<ApiResponse<Producto>> getProductoConNombresIngredientes(@PathVariable String id) {
         try {
@@ -463,16 +467,39 @@ public class ProductosController extends BaseController<Producto, String> {
                 return responseService.notFound("Producto no encontrado con ID: " + id);
             }
 
+            // OPTIMIZACIÓN: Recopilar todos los IDs de ingredientes del producto
+            Set<String> ingredientesIds = new HashSet<>();
+            
+            if (producto.getIngredientesRequeridos() != null) {
+                for (IngredienteProducto ip : producto.getIngredientesRequeridos()) {
+                    if (ip.getIngredienteId() != null) {
+                        ingredientesIds.add(ip.getIngredienteId());
+                    }
+                }
+            }
+            if (producto.getIngredientesOpcionales() != null) {
+                for (IngredienteProducto ip : producto.getIngredientesOpcionales()) {
+                    if (ip.getIngredienteId() != null) {
+                        ingredientesIds.add(ip.getIngredienteId());
+                    }
+                }
+            }
+            
+            // CARGA POR LOTES: Una sola consulta para todos los ingredientes del producto
+            Map<String, String> mapaIngredientes = new HashMap<>();
+            if (!ingredientesIds.isEmpty()) {
+                List<Ingrediente> ingredientes = this.theIngredienteRepository.findAllById(ingredientesIds);
+                for (Ingrediente ingrediente : ingredientes) {
+                    mapaIngredientes.put(ingrediente.get_id(), ingrediente.getNombre());
+                }
+            }
+
             // Resolver nombres de ingredientes requeridos
             if (producto.getIngredientesRequeridos() != null) {
                 for (IngredienteProducto ingredienteProducto : producto.getIngredientesRequeridos()) {
                     if (ingredienteProducto.getNombre() == null || ingredienteProducto.getNombre().isEmpty()) {
-                        Ingrediente ingrediente = this.theIngredienteRepository.findById(ingredienteProducto.getIngredienteId()).orElse(null);
-                        if (ingrediente != null) {
-                            ingredienteProducto.setNombre(ingrediente.getNombre());
-                        } else {
-                            ingredienteProducto.setNombre("Ingrediente no encontrado");
-                        }
+                        String nombre = mapaIngredientes.get(ingredienteProducto.getIngredienteId());
+                        ingredienteProducto.setNombre(nombre != null ? nombre : "Ingrediente no encontrado");
                     }
                 }
             }
@@ -481,12 +508,8 @@ public class ProductosController extends BaseController<Producto, String> {
             if (producto.getIngredientesOpcionales() != null) {
                 for (IngredienteProducto ingredienteProducto : producto.getIngredientesOpcionales()) {
                     if (ingredienteProducto.getNombre() == null || ingredienteProducto.getNombre().isEmpty()) {
-                        Ingrediente ingrediente = this.theIngredienteRepository.findById(ingredienteProducto.getIngredienteId()).orElse(null);
-                        if (ingrediente != null) {
-                            ingredienteProducto.setNombre(ingrediente.getNombre());
-                        } else {
-                            ingredienteProducto.setNombre("Ingrediente no encontrado");
-                        }
+                        String nombre = mapaIngredientes.get(ingredienteProducto.getIngredienteId());
+                        ingredienteProducto.setNombre(nombre != null ? nombre : "Ingrediente no encontrado");
                     }
                 }
             }
