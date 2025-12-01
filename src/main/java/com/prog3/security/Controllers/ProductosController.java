@@ -836,6 +836,10 @@ public class ProductosController extends BaseController<Producto, String> {
             @RequestParam(required = false) String categoriaId,
             @RequestParam(required = false) String search) {
         try {
+            System.out.println("🚀 LAZY LOADING - Iniciando carga de productos...");
+            System.out.println("📋 Parámetros: page=" + page + ", size=" + size + ", categoriaId=" + categoriaId + ", search=" + search);
+            long startTime = System.currentTimeMillis();
+            
             // Limitar size máximo a 50 para prevenir OutOfMemory
             size = Math.min(size, 50);
             page = Math.max(page, 0);
@@ -845,8 +849,9 @@ public class ProductosController extends BaseController<Producto, String> {
             
             // Filtrar según parámetros usando paginación en DB
             if (search != null && !search.trim().isEmpty()) {
-                // Búsqueda por nombre - solo obtiene page size elementos
+                System.out.println("🔍 Búsqueda por nombre: " + search);
                 List<Producto> searchResults = this.theProductoRepository.findByNombreContainingIgnoreCase(search);
+                System.out.println("📦 Resultados de búsqueda: " + searchResults.size());
                 int totalElements = searchResults.size();
                 int startIndex = page * size;
                 int endIndex = Math.min(startIndex + size, totalElements);
@@ -857,8 +862,9 @@ public class ProductosController extends BaseController<Producto, String> {
                     
                 pageRes = new org.springframework.data.domain.PageImpl<>(paginatedResults, pageable, totalElements);
             } else if (categoriaId != null && !categoriaId.trim().isEmpty()) {
-                // Filtro por categoría - solo obtiene page size elementos
+                System.out.println("🗂️ Filtro por categoría: " + categoriaId);
                 List<Producto> categoryResults = this.theProductoRepository.findByCategoriaId(categoriaId);
+                System.out.println("📦 Productos por categoría: " + categoryResults.size());
                 int totalElements = categoryResults.size();
                 int startIndex = page * size;
                 int endIndex = Math.min(startIndex + size, totalElements);
@@ -869,8 +875,9 @@ public class ProductosController extends BaseController<Producto, String> {
                     
                 pageRes = new org.springframework.data.domain.PageImpl<>(paginatedResults, pageable, totalElements);
             } else {
-                // Todos los productos activos - solo obtiene page size elementos
+                System.out.println("📦 Cargando todos los productos activos...");
                 List<Producto> allActive = this.theProductoRepository.findByEstado("Activo");
+                System.out.println("📦 Total productos activos: " + allActive.size());
                 int totalElements = allActive.size();
                 int startIndex = page * size;
                 int endIndex = Math.min(startIndex + size, totalElements);
@@ -882,20 +889,21 @@ public class ProductosController extends BaseController<Producto, String> {
                 pageRes = new org.springframework.data.domain.PageImpl<>(paginatedResults, pageable, totalElements);
             }
 
+            System.out.println("📄 Productos en página actual: " + pageRes.getContent().size());
+            
             // Convertir SOLO la página actual a DTO ligero (sin ingredientes)
-            List<com.prog3.security.DTOs.ProductoLazyDTO> productosLigeros = new ArrayList<>();
+            List<Map<String, Object>> productosLigeros = new ArrayList<>();
             for (Producto p : pageRes.getContent()) {
-                com.prog3.security.DTOs.ProductoLazyDTO dto = new com.prog3.security.DTOs.ProductoLazyDTO(
-                    p.get_id(),
-                    p.getNombre(),
-                    p.getPrecio(),
-                    p.getCategoriaId(),
-                    p.getImagenUrl(),
-                    p.getEstado(),
-                    p.isTieneVariantes(),
-                    p.isTieneIngredientes(),
-                    p.getTipoProducto()
-                );
+                Map<String, Object> dto = new HashMap<>();
+                dto.put("_id", p.get_id());
+                dto.put("nombre", p.getNombre());
+                dto.put("precio", p.getPrecio());
+                dto.put("categoriaId", p.getCategoriaId());
+                dto.put("imagenUrl", p.getImagenUrl());
+                dto.put("estado", p.getEstado());
+                dto.put("tieneVariantes", p.isTieneVariantes());
+                dto.put("tieneIngredientes", p.isTieneIngredientes());
+                dto.put("tipoProducto", p.getTipoProducto());
                 productosLigeros.add(dto);
             }
 
@@ -908,9 +916,15 @@ public class ProductosController extends BaseController<Producto, String> {
             result.put("totalElements", pageRes.getTotalElements());
             result.put("hasMore", !pageRes.isLast());
 
+            long endTime = System.currentTimeMillis();
+            System.out.println("⚡ LAZY LOADING completado en: " + (endTime - startTime) + "ms");
+            System.out.println("✅ Respuesta: " + productosLigeros.size() + " productos de " + pageRes.getTotalElements() + " totales");
+
             return responseService.success(result, 
                 "Productos lazy obtenidos: " + productosLigeros.size() + " de " + pageRes.getTotalElements());
         } catch (Exception e) {
+            System.err.println("❌ Error en /lazy: " + e.getMessage());
+            e.printStackTrace();
             return responseService.internalError("Error al obtener productos lazy: " + e.getMessage());
         }
     }
