@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.ArrayList;
+import java.util.Set;
+import java.util.HashSet;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.repository.MongoRepository;
@@ -496,25 +498,63 @@ public class ProductosController extends BaseController<Producto, String> {
     }
 
     /**
-     * Obtiene todos los productos con los nombres de ingredientes resueltos
+     * Obtiene todos los productos con los nombres de ingredientes resueltos OPTIMIZADO: Usa carga
+     * por lotes para evitar N+1 queries
      */
     @GetMapping("/con-nombres-ingredientes")
     public ResponseEntity<ApiResponse<List<Producto>>> getAllProductosConNombres() {
         try {
-            List<Producto> productos = this.theProductoRepository.findAll();
+            System.out.println("🚀 Iniciando carga de productos con ingredientes...");
+            long startTime = System.currentTimeMillis();
 
-            // Resolver nombres para cada producto
+            List<Producto> productos = this.theProductoRepository.findAll();
+            System.out.println("📦 Productos cargados: " + productos.size());
+
+            // OPTIMIZACIÓN: Recopilar todos los IDs de ingredientes únicos
+            Set<String> todosLosIngredientesIds = new HashSet<>();
+
+            for (Producto producto : productos) {
+                if (producto.getIngredientesRequeridos() != null) {
+                    for (IngredienteProducto ip : producto.getIngredientesRequeridos()) {
+                        if (ip.getIngredienteId() != null) {
+                            todosLosIngredientesIds.add(ip.getIngredienteId());
+                        }
+                    }
+                }
+                if (producto.getIngredientesOpcionales() != null) {
+                    for (IngredienteProducto ip : producto.getIngredientesOpcionales()) {
+                        if (ip.getIngredienteId() != null) {
+                            todosLosIngredientesIds.add(ip.getIngredienteId());
+                        }
+                    }
+                }
+            }
+
+            System.out.println(
+                    "🔍 IDs únicos de ingredientes encontrados: " + todosLosIngredientesIds.size());
+
+            // CARGA POR LOTES: Una sola consulta para todos los ingredientes
+            Map<String, String> mapaIngredientes = new HashMap<>();
+            if (!todosLosIngredientesIds.isEmpty()) {
+                List<Ingrediente> ingredientes =
+                        this.theIngredienteRepository.findAllById(todosLosIngredientesIds);
+                System.out.println("📋 Ingredientes cargados: " + ingredientes.size());
+
+                for (Ingrediente ingrediente : ingredientes) {
+                    mapaIngredientes.put(ingrediente.get_id(), ingrediente.getNombre());
+                }
+            }
+
+            // RESOLUCIÓN RÁPIDA: Usar el mapa en memoria
             for (Producto producto : productos) {
                 // Resolver nombres de ingredientes requeridos
                 if (producto.getIngredientesRequeridos() != null) {
                     for (IngredienteProducto ingredienteProducto : producto.getIngredientesRequeridos()) {
                         if (ingredienteProducto.getNombre() == null || ingredienteProducto.getNombre().isEmpty()) {
-                            Ingrediente ingrediente = this.theIngredienteRepository.findById(ingredienteProducto.getIngredienteId()).orElse(null);
-                            if (ingrediente != null) {
-                                ingredienteProducto.setNombre(ingrediente.getNombre());
-                            } else {
-                                ingredienteProducto.setNombre("Ingrediente no encontrado");
-                            }
+                            String nombre =
+                                    mapaIngredientes.get(ingredienteProducto.getIngredienteId());
+                            ingredienteProducto.setNombre(
+                                    nombre != null ? nombre : "Ingrediente no encontrado");
                         }
                     }
                 }
@@ -523,19 +563,22 @@ public class ProductosController extends BaseController<Producto, String> {
                 if (producto.getIngredientesOpcionales() != null) {
                     for (IngredienteProducto ingredienteProducto : producto.getIngredientesOpcionales()) {
                         if (ingredienteProducto.getNombre() == null || ingredienteProducto.getNombre().isEmpty()) {
-                            Ingrediente ingrediente = this.theIngredienteRepository.findById(ingredienteProducto.getIngredienteId()).orElse(null);
-                            if (ingrediente != null) {
-                                ingredienteProducto.setNombre(ingrediente.getNombre());
-                            } else {
-                                ingredienteProducto.setNombre("Ingrediente no encontrado");
-                            }
+                            String nombre =
+                                    mapaIngredientes.get(ingredienteProducto.getIngredienteId());
+                            ingredienteProducto.setNombre(
+                                    nombre != null ? nombre : "Ingrediente no encontrado");
                         }
                     }
                 }
             }
 
+            long endTime = System.currentTimeMillis();
+            System.out.println("⚡ Endpoint completado en: " + (endTime - startTime) + "ms");
+
             return responseService.success(productos, "Productos con nombres de ingredientes obtenidos exitosamente");
         } catch (Exception e) {
+            System.err.println("❌ Error en /con-nombres-ingredientes: " + e.getMessage());
+            e.printStackTrace();
             return responseService.internalError("Error al obtener productos con nombres: " + e.getMessage());
         }
     }
