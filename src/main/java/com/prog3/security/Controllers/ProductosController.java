@@ -957,4 +957,68 @@ public class ProductosController extends BaseController<Producto, String> {
             return responseService.internalError("Error al obtener productos lazy: " + e.getMessage());
         }
     }
+
+    /**
+     * Endpoint de diagnóstico para verificar el estado de la base de datos
+     */
+    @GetMapping("/diagnostico")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> diagnosticoProductos() {
+        try {
+            System.out.println("🔧 DIAGNÓSTICO: Verificando estado de productos en MongoDB...");
+
+            Map<String, Object> diagnostico = new HashMap<>();
+
+            // Contar productos totales
+            long totalProductos = this.theProductoRepository.count();
+            System.out.println("📊 Total productos en MongoDB: " + totalProductos);
+
+            // Productos por estado
+            List<Producto> productosActivos = this.theProductoRepository.findByEstado("Activo");
+            List<Producto> productosInactivos = this.theProductoRepository.findByEstado("Inactivo");
+
+            System.out.println("✅ Productos ACTIVOS: " + productosActivos.size());
+            System.out.println("❌ Productos INACTIVOS: " + productosInactivos.size());
+
+            // Productos con categoría asignada
+            List<Producto> todosLosProductos = this.theProductoRepository.findAll();
+            long conCategoria = todosLosProductos.stream()
+                    .filter(p -> p.getCategoriaId() != null && !p.getCategoriaId().trim().isEmpty())
+                    .count();
+            long sinCategoria = totalProductos - conCategoria;
+
+            System.out.println("🏷️ Productos con categoría: " + conCategoria);
+            System.out.println("❓ Productos sin categoría: " + sinCategoria);
+
+            // Muestra de primeros 5 productos
+            List<Map<String, Object>> muestra = new ArrayList<>();
+            int limite = Math.min(5, todosLosProductos.size());
+            for (int i = 0; i < limite; i++) {
+                Producto p = todosLosProductos.get(i);
+                Map<String, Object> info = new HashMap<>();
+                info.put("_id", p.get_id());
+                info.put("nombre", p.getNombre());
+                info.put("precio", p.getPrecio());
+                info.put("estado", p.getEstado());
+                info.put("categoriaId", p.getCategoriaId());
+                muestra.add(info);
+            }
+
+            // Compilar resultado
+            diagnostico.put("totalProductos", totalProductos);
+            diagnostico.put("activos", productosActivos.size());
+            diagnostico.put("inactivos", productosInactivos.size());
+            diagnostico.put("conCategoria", conCategoria);
+            diagnostico.put("sinCategoria", sinCategoria);
+            diagnostico.put("muestra", muestra);
+            diagnostico.put("timestamp", System.currentTimeMillis());
+
+            System.out.println("✅ Diagnóstico completado");
+
+            return responseService.success(diagnostico, "Diagnóstico de productos completado");
+        } catch (Exception e) {
+            System.err.println("❌ Error en diagnóstico: " + e.getMessage());
+            e.printStackTrace();
+            return responseService.internalError("Error en diagnóstico: " + e.getMessage());
+        }
+    }
 }
