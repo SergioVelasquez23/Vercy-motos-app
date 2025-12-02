@@ -96,9 +96,26 @@ public class ProductosController extends BaseController<Producto, String> {
     @GetMapping("")
     public ResponseEntity<ApiResponse<List<Producto>>> find() {
         try {
+            System.out.println("🔍 ENDPOINT /api/productos - Llamado desde frontend");
+            long startTime = System.currentTimeMillis();
+
             List<Producto> productos = this.theProductoRepository.findAll();
+
+            long endTime = System.currentTimeMillis();
+            System.out.println(
+                    "📦 ENDPOINT /api/productos - Completado en: " + (endTime - startTime) + "ms");
+            System.out.println(
+                    "📊 ENDPOINT /api/productos - Productos encontrados: " + productos.size());
+
+            if (productos.isEmpty()) {
+                System.out.println("⚠️ ALERTA: Endpoint /api/productos devolviendo 0 productos");
+                System.out.println("🔍 Verificar base de datos MongoDB y collection 'producto'");
+            }
+
             return responseService.success(productos, "Productos obtenidos exitosamente");
         } catch (Exception e) {
+            System.err.println("❌ ERROR en /api/productos: " + e.getMessage());
+            e.printStackTrace();
             return responseService.internalError("Error al obtener productos: " + e.getMessage());
         }
     }
@@ -802,6 +819,10 @@ public class ProductosController extends BaseController<Producto, String> {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
         try {
+            System.out.println("📄 ENDPOINT /api/productos/paginados - Llamado desde frontend");
+            System.out.println("📋 Parámetros: page=" + page + ", size=" + size);
+            long startTime = System.currentTimeMillis();
+
             Pageable pageable = PageRequest.of(Math.max(0, page), Math.max(1, size));
             Page<Producto> pageRes = this.theProductoRepository.findAll(pageable);
 
@@ -812,8 +833,16 @@ public class ProductosController extends BaseController<Producto, String> {
             result.put("totalPages", pageRes.getTotalPages());
             result.put("totalElements", pageRes.getTotalElements());
 
+            long endTime = System.currentTimeMillis();
+            System.out.println("⚡ ENDPOINT /api/productos/paginados - Completado en: "
+                    + (endTime - startTime) + "ms");
+            System.out.println("📊 Total elementos encontrados: " + pageRes.getTotalElements());
+            System.out.println("📦 Elementos en página actual: " + pageRes.getContent().size());
+
             return responseService.success(result, "Productos paginados obtenidos exitosamente");
         } catch (Exception e) {
+            System.err.println("❌ ERROR en /api/productos/paginados: " + e.getMessage());
+            e.printStackTrace();
             return responseService.internalError("Error al obtener productos paginados: " + e.getMessage());
         }
     }
