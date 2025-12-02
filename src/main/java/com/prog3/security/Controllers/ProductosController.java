@@ -236,10 +236,130 @@ public class ProductosController extends BaseController<Producto, String> {
     @GetMapping("/categoria/{categoriaId}")
     public ResponseEntity<ApiResponse<List<Producto>>> findByCategoria(@PathVariable String categoriaId) {
         try {
+            System.out.println("🏷️ ENDPOINT /categoria/" + categoriaId + " - Llamado desde frontend");
+            long startTime = System.currentTimeMillis();
+            
             List<Producto> productos = this.theProductoRepository.findByCategoriaId(categoriaId);
+            
+            long endTime = System.currentTimeMillis();
+            System.out.println("⚡ ENDPOINT /categoria/" + categoriaId + " - Completado en: " + (endTime - startTime) + "ms");
+            System.out.println("📦 Productos encontrados: " + productos.size());
+            
             return responseService.success(productos, "Productos por categoría obtenidos");
         } catch (Exception e) {
+            System.err.println("❌ ERROR en /categoria/" + categoriaId + ": " + e.getMessage());
             return responseService.internalError("Error al buscar productos por categoría: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Endpoint ULTRA RÁPIDO: Productos ligeros por categoría
+     * Solo devuelve datos esenciales para carga rápida
+     */
+    @GetMapping("/categoria/{categoriaId}/ligero")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getProductosPorCategoriaLigero(@PathVariable String categoriaId) {
+        try {
+            System.out.println("🚀 ENDPOINT /categoria/" + categoriaId + "/ligero - ULTRA RÁPIDO");
+            long startTime = System.currentTimeMillis();
+            
+            List<Producto> productos = this.theProductoRepository.findByCategoriaId(categoriaId);
+            
+            // Convertir a formato ligero (solo datos esenciales)
+            List<Map<String, Object>> productosLigeros = new ArrayList<>();
+            for (Producto p : productos) {
+                if ("Activo".equals(p.getEstado())) { // Solo productos activos
+                    Map<String, Object> productoLigero = new HashMap<>();
+                    productoLigero.put("_id", p.get_id());
+                    productoLigero.put("nombre", p.getNombre());
+                    productoLigero.put("precio", p.getPrecio());
+                    productoLigero.put("imagenUrl", p.getImagenUrl());
+                    productoLigero.put("tieneIngredientes", p.isTieneIngredientes());
+                    productoLigero.put("tipoProducto", p.getTipoProducto());
+                    productoLigero.put("estado", p.getEstado());
+                    productosLigeros.add(productoLigero);
+                }
+            }
+            
+            long endTime = System.currentTimeMillis();
+            System.out.println("⚡ ULTRA RÁPIDO completado en: " + (endTime - startTime) + "ms");
+            System.out.println("📦 Productos ligeros (solo activos): " + productosLigeros.size() + "/" + productos.size());
+            
+            return responseService.success(productosLigeros, 
+                "Productos ligeros por categoría: " + productosLigeros.size() + " activos");
+        } catch (Exception e) {
+            System.err.println("❌ ERROR en /categoria/" + categoriaId + "/ligero: " + e.getMessage());
+            return responseService.internalError("Error al obtener productos ligeros: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Endpoint SÚPER OPTIMIZADO: Resumen de productos agrupados por categoría
+     * Devuelve solo datos básicos de todos los productos organizados por categoría
+     * IDEAL para carga inicial del frontend
+     */
+    @GetMapping("/resumen-por-categorias")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getResumenPorCategorias(
+            @RequestParam(defaultValue = "5") int limitePorCategoria) {
+        try {
+            System.out.println("📊 ENDPOINT /resumen-por-categorias - SÚPER OPTIMIZADO");
+            System.out.println("📋 Límite por categoría: " + limitePorCategoria);
+            long startTime = System.currentTimeMillis();
+            
+            // Obtener todas las categorías
+            List<Categoria> categorias = this.theCategoriaRepository.findAll();
+            
+            Map<String, Object> resumen = new HashMap<>();
+            List<Map<String, Object>> categoriasSummary = new ArrayList<>();
+            int totalProductos = 0;
+            
+            for (Categoria categoria : categorias) {
+                List<Producto> productosCategoria = this.theProductoRepository.findByCategoriaId(categoria.get_id());
+                
+                // Filtrar solo productos activos
+                List<Producto> productosActivos = productosCategoria.stream()
+                    .filter(p -> "Activo".equals(p.getEstado()))
+                    .limit(limitePorCategoria) // Limitar cantidad por categoría
+                    .toList();
+                
+                if (!productosActivos.isEmpty()) {
+                    Map<String, Object> categoriaInfo = new HashMap<>();
+                    categoriaInfo.put("categoriaId", categoria.get_id());
+                    categoriaInfo.put("categoriaNombre", categoria.getNombre());
+                    categoriaInfo.put("totalProductos", productosActivos.size());
+                    
+                    // Productos ligeros de esta categoría
+                    List<Map<String, Object>> productosLigeros = new ArrayList<>();
+                    for (Producto p : productosActivos) {
+                        Map<String, Object> productoLigero = new HashMap<>();
+                        productoLigero.put("_id", p.get_id());
+                        productoLigero.put("nombre", p.getNombre());
+                        productoLigero.put("precio", p.getPrecio());
+                        productoLigero.put("imagenUrl", p.getImagenUrl());
+                        productosLigeros.add(productoLigero);
+                    }
+                    
+                    categoriaInfo.put("productos", productosLigeros);
+                    categoriasSummary.add(categoriaInfo);
+                    totalProductos += productosActivos.size();
+                }
+            }
+            
+            resumen.put("categorias", categoriasSummary);
+            resumen.put("totalCategorias", categoriasSummary.size());
+            resumen.put("totalProductos", totalProductos);
+            resumen.put("limitePorCategoria", limitePorCategoria);
+            
+            long endTime = System.currentTimeMillis();
+            System.out.println("⚡ SÚPER OPTIMIZADO completado en: " + (endTime - startTime) + "ms");
+            System.out.println("🏷️ Categorías procesadas: " + categoriasSummary.size());
+            System.out.println("📦 Total productos ligeros: " + totalProductos);
+            
+            return responseService.success(resumen, 
+                "Resumen por categorías: " + categoriasSummary.size() + " categorías, " + totalProductos + " productos");
+        } catch (Exception e) {
+            System.err.println("❌ ERROR en /resumen-por-categorias: " + e.getMessage());
+            e.printStackTrace();
+            return responseService.internalError("Error al obtener resumen: " + e.getMessage());
         }
     }
 
