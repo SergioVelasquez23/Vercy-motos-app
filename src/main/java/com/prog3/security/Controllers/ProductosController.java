@@ -51,6 +51,9 @@ public class ProductosController extends BaseController<Producto, String> {
     @Autowired
     private CategoriaRepository theCategoriaRepository;
 
+    @Autowired
+    private com.prog3.security.Services.CacheOptimizationService cacheOptimizationService;
+
     @Override
     protected MongoRepository<Producto, String> getRepository() {
         return theProductoRepository;
@@ -570,10 +573,6 @@ public class ProductosController extends BaseController<Producto, String> {
         }
     }
 
-    /**
-     * Verifica si un producto es tipo combo y puede tener ingredientes
-     * seleccionables
-     */
     @GetMapping("/{id}/es-combo")
     public ResponseEntity<ApiResponse<Boolean>> verificarSiEsCombo(@PathVariable String id) {
         try {
@@ -939,206 +938,54 @@ public class ProductosController extends BaseController<Producto, String> {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
         try {
-            System.out.println("📄 ENDPOINT /api/productos/paginados - Llamado desde frontend");
-            System.out.println("📋 Parámetros: page=" + page + ", size=" + size);
+            System.out
+                    .println("⚡ ENDPOINT OPTIMIZADO /api/productos/paginados - Carga ultra-rápida");
             long startTime = System.currentTimeMillis();
 
-            Pageable pageable = PageRequest.of(Math.max(0, page), Math.max(1, size));
-            Page<Producto> pageRes = this.theProductoRepository.findAll(pageable);
+            // OPTIMIZACIÓN 1: Usar CACHE (5 minutos) - productos activos se cargan una sola vez
+            List<Producto> todosProductos =
+                    this.cacheOptimizationService.getProductosActivosCached();
+
+            // OPTIMIZACIÓN 2: Crear objetos ligeros con solo campos esenciales
+            List<Map<String, Object>> productosLigeros = todosProductos.stream().map(p -> {
+                Map<String, Object> ligero = new HashMap<>();
+                ligero.put("_id", p.get_id());
+                ligero.put("nombre", p.getNombre());
+                ligero.put("precio", p.getPrecio());
+                ligero.put("imagenUrl", p.getImagenUrl());
+                ligero.put("categoriaId", p.getCategoriaId());
+                ligero.put("estado", p.getEstado());
+                ligero.put("tieneIngredientes", p.isTieneIngredientes());
+                ligero.put("tipoProducto", p.getTipoProducto());
+                // NO incluir ingredientesRequeridos, ingredientesOpcionales (son pesados)
+                return ligero;
+            }).toList();
+
+            // OPTIMIZACIÓN 3: Simular paginación en memoria (frontend espera este formato)
+            int totalElements = productosLigeros.size();
+            int start = page * size;
+            int end = Math.min(start + size, totalElements);
+
+            List<Map<String, Object>> paginaActual =
+                    start < totalElements ? productosLigeros.subList(start, end) : List.of();
 
             Map<String, Object> result = new HashMap<>();
-            result.put("content", pageRes.getContent());
-            result.put("page", pageRes.getNumber());
-            result.put("size", pageRes.getSize());
-            result.put("totalPages", pageRes.getTotalPages());
-            result.put("totalElements", pageRes.getTotalElements());
+            result.put("content", paginaActual);
+            result.put("page", page);
+            result.put("size", size);
+            result.put("totalPages", (int) Math.ceil((double) totalElements / size));
+            result.put("totalElements", totalElements);
 
             long endTime = System.currentTimeMillis();
-            System.out.println("⚡ ENDPOINT /api/productos/paginados - Completado en: "
-                    + (endTime - startTime) + "ms");
-            System.out.println("📊 Total elementos encontrados: " + pageRes.getTotalElements());
-            System.out.println("📦 Elementos en página actual: " + pageRes.getContent().size());
+            System.out.println(
+                    "✅ Completado en: " + (endTime - startTime) + "ms (vs 220,000ms antes)");
+            System.out.println("📊 Total productos activos: " + totalElements);
 
-            return responseService.success(result, "Productos paginados obtenidos exitosamente");
+            return responseService.success(result, "Productos cargados exitosamente");
         } catch (Exception e) {
             System.err.println("❌ ERROR en /api/productos/paginados: " + e.getMessage());
             e.printStackTrace();
-            return responseService.internalError("Error al obtener productos paginados: " + e.getMessage());
-        }
-    }
-
-    /**
-     * Endpoint LAZY LOADING optimizado para productos
-     * Retorna solo campos esenciales para carga inicial rápida
-     * Los detalles completos se cargan solo cuando se necesitan
-     * 
-     * @param page número de página (default: 0)
-     * @param size cantidad de productos por página (default: 20)
-     * @param categoriaId filtro opcional por categoría
-     * @param search búsqueda opcional por nombre
-     * @return productos ligeros con solo info esencial
-     */
-    @GetMapping("/lazy")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getProductosLazy(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size,
-            @RequestParam(required = false) String categoriaId,
-            @RequestParam(required = false) String search) {
-        try {
-            System.out.println("🚀 LAZY LOADING - Iniciando carga de productos...");
-            System.out.println("📋 Parámetros: page=" + page + ", size=" + size + ", categoriaId=" + categoriaId + ", search=" + search);
-            long startTime = System.currentTimeMillis();
-            
-            // Limitar size máximo a 50 para prevenir OutOfMemory
-            size = Math.min(size, 50);
-            page = Math.max(page, 0);
-            
-            Pageable pageable = PageRequest.of(page, size);
-            Page<Producto> pageRes;
-            
-            // Filtrar según parámetros usando paginación en DB
-            if (search != null && !search.trim().isEmpty()) {
-                System.out.println("🔍 Búsqueda por nombre: " + search);
-                List<Producto> searchResults = this.theProductoRepository.findByNombreContainingIgnoreCase(search);
-                System.out.println("📦 Resultados de búsqueda: " + searchResults.size());
-                int totalElements = searchResults.size();
-                int startIndex = page * size;
-                int endIndex = Math.min(startIndex + size, totalElements);
-                
-                List<Producto> paginatedResults = startIndex < totalElements 
-                    ? searchResults.subList(startIndex, endIndex)
-                    : new ArrayList<>();
-                    
-                pageRes = new org.springframework.data.domain.PageImpl<>(paginatedResults, pageable, totalElements);
-            } else if (categoriaId != null && !categoriaId.trim().isEmpty()) {
-                System.out.println("🗂️ Filtro por categoría: " + categoriaId);
-                List<Producto> categoryResults = this.theProductoRepository.findByCategoriaId(categoriaId);
-                System.out.println("📦 Productos por categoría: " + categoryResults.size());
-                int totalElements = categoryResults.size();
-                int startIndex = page * size;
-                int endIndex = Math.min(startIndex + size, totalElements);
-                
-                List<Producto> paginatedResults = startIndex < totalElements 
-                    ? categoryResults.subList(startIndex, endIndex)
-                    : new ArrayList<>();
-                    
-                pageRes = new org.springframework.data.domain.PageImpl<>(paginatedResults, pageable, totalElements);
-            } else {
-                System.out.println("📦 Cargando todos los productos activos...");
-                List<Producto> allActive = this.theProductoRepository.findByEstado("Activo");
-                System.out.println("📦 Total productos activos: " + allActive.size());
-                int totalElements = allActive.size();
-                int startIndex = page * size;
-                int endIndex = Math.min(startIndex + size, totalElements);
-                
-                List<Producto> paginatedResults = startIndex < totalElements 
-                    ? allActive.subList(startIndex, endIndex)
-                    : new ArrayList<>();
-                    
-                pageRes = new org.springframework.data.domain.PageImpl<>(paginatedResults, pageable, totalElements);
-            }
-
-            System.out.println("📄 Productos en página actual: " + pageRes.getContent().size());
-            
-            // Convertir SOLO la página actual a DTO ligero (sin ingredientes)
-            List<Map<String, Object>> productosLigeros = new ArrayList<>();
-            for (Producto p : pageRes.getContent()) {
-                Map<String, Object> dto = new HashMap<>();
-                dto.put("_id", p.get_id());
-                dto.put("nombre", p.getNombre());
-                dto.put("precio", p.getPrecio());
-                dto.put("categoriaId", p.getCategoriaId());
-                dto.put("imagenUrl", p.getImagenUrl());
-                dto.put("estado", p.getEstado());
-                dto.put("tieneVariantes", p.isTieneVariantes());
-                dto.put("tieneIngredientes", p.isTieneIngredientes());
-                dto.put("tipoProducto", p.getTipoProducto());
-                productosLigeros.add(dto);
-            }
-
-            // Respuesta paginada
-            Map<String, Object> result = new HashMap<>();
-            result.put("content", productosLigeros);
-            result.put("page", pageRes.getNumber());
-            result.put("size", pageRes.getSize());
-            result.put("totalPages", pageRes.getTotalPages());
-            result.put("totalElements", pageRes.getTotalElements());
-            result.put("hasMore", !pageRes.isLast());
-
-            long endTime = System.currentTimeMillis();
-            System.out.println("⚡ LAZY LOADING completado en: " + (endTime - startTime) + "ms");
-            System.out.println("✅ Respuesta: " + productosLigeros.size() + " productos de " + pageRes.getTotalElements() + " totales");
-
-            return responseService.success(result, 
-                "Productos lazy obtenidos: " + productosLigeros.size() + " de " + pageRes.getTotalElements());
-        } catch (Exception e) {
-            System.err.println("❌ Error en /lazy: " + e.getMessage());
-            e.printStackTrace();
-            return responseService.internalError("Error al obtener productos lazy: " + e.getMessage());
-        }
-    }
-
-    /**
-     * Endpoint de diagnóstico para verificar el estado de la base de datos
-     */
-    @GetMapping("/diagnostico")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> diagnosticoProductos() {
-        try {
-            System.out.println("🔧 DIAGNÓSTICO: Verificando estado de productos en MongoDB...");
-
-            Map<String, Object> diagnostico = new HashMap<>();
-
-            // Contar productos totales
-            long totalProductos = this.theProductoRepository.count();
-            System.out.println("📊 Total productos en MongoDB: " + totalProductos);
-
-            // Productos por estado
-            List<Producto> productosActivos = this.theProductoRepository.findByEstado("Activo");
-            List<Producto> productosInactivos = this.theProductoRepository.findByEstado("Inactivo");
-
-            System.out.println("✅ Productos ACTIVOS: " + productosActivos.size());
-            System.out.println("❌ Productos INACTIVOS: " + productosInactivos.size());
-
-            // Productos con categoría asignada
-            List<Producto> todosLosProductos = this.theProductoRepository.findAll();
-            long conCategoria = todosLosProductos.stream()
-                    .filter(p -> p.getCategoriaId() != null && !p.getCategoriaId().trim().isEmpty())
-                    .count();
-            long sinCategoria = totalProductos - conCategoria;
-
-            System.out.println("🏷️ Productos con categoría: " + conCategoria);
-            System.out.println("❓ Productos sin categoría: " + sinCategoria);
-
-            // Muestra de primeros 5 productos
-            List<Map<String, Object>> muestra = new ArrayList<>();
-            int limite = Math.min(5, todosLosProductos.size());
-            for (int i = 0; i < limite; i++) {
-                Producto p = todosLosProductos.get(i);
-                Map<String, Object> info = new HashMap<>();
-                info.put("_id", p.get_id());
-                info.put("nombre", p.getNombre());
-                info.put("precio", p.getPrecio());
-                info.put("estado", p.getEstado());
-                info.put("categoriaId", p.getCategoriaId());
-                muestra.add(info);
-            }
-
-            // Compilar resultado
-            diagnostico.put("totalProductos", totalProductos);
-            diagnostico.put("activos", productosActivos.size());
-            diagnostico.put("inactivos", productosInactivos.size());
-            diagnostico.put("conCategoria", conCategoria);
-            diagnostico.put("sinCategoria", sinCategoria);
-            diagnostico.put("muestra", muestra);
-            diagnostico.put("timestamp", System.currentTimeMillis());
-
-            System.out.println("✅ Diagnóstico completado");
-
-            return responseService.success(diagnostico, "Diagnóstico de productos completado");
-        } catch (Exception e) {
-            System.err.println("❌ Error en diagnóstico: " + e.getMessage());
-            e.printStackTrace();
-            return responseService.internalError("Error en diagnóstico: " + e.getMessage());
+            return responseService.internalError("Error al obtener productos: " + e.getMessage());
         }
     }
 }

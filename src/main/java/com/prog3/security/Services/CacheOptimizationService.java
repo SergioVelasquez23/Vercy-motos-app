@@ -51,7 +51,18 @@ public class CacheOptimizationService {
         System.out.println("🔄 Cargando todos los productos desde BD (NO desde cache)");
         return productoRepository.findAll();
     }
-    
+
+    /**
+     * Obtiene todos los productos ACTIVOS con cache (ultra-optimizado) Cache: 5 minutos - Usado por
+     * endpoint /paginados
+     */
+    @Cacheable(value = "productos", key = "'activos'")
+    public List<Producto> getProductosActivosCached() {
+        System.out
+                .println("⚡ Cargando productos activos desde BD (primera vez o después de 5 min)");
+        return productoRepository.findByEstado("Activo");
+    }
+
     /**
      * Obtiene productos por categoría con cache
      */
