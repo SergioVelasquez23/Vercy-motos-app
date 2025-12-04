@@ -9,6 +9,9 @@ import java.util.HashSet;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.aggregation.Aggregation;
+import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -53,6 +56,9 @@ public class ProductosController extends BaseController<Producto, String> {
 
     @Autowired
     private com.prog3.security.Services.CacheOptimizationService cacheOptimizationService;
+
+    @Autowired
+    private MongoTemplate mongoTemplate;
 
     @Override
     protected MongoRepository<Producto, String> getRepository() {
@@ -986,6 +992,37 @@ public class ProductosController extends BaseController<Producto, String> {
             System.err.println("❌ ERROR en /api/productos/paginados: " + e.getMessage());
             e.printStackTrace();
             return responseService.internalError("Error al obtener productos: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Endpoint ULTRA-OPTIMIZADO con índices MongoDB REQUIERE crear índice:
+     * db.producto.createIndex({ "estado": 1 })
+     */
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<List<Producto>>> searchProductos() {
+        try {
+            System.out.println("🔍 ENDPOINT /search - Usando índices MongoDB");
+            long startTime = System.currentTimeMillis();
+
+            // Usar aggregation pipeline optimizado con índice
+            Aggregation aggregation = Aggregation.newAggregation(
+                    Aggregation.match(Criteria.where("estado").is("ACTIVO")), // Usa índice estado
+                    Aggregation.limit(1000) // Limitar resultados para mejor performance
+            );
+
+            List<Producto> productos = mongoTemplate
+                    .aggregate(aggregation, "producto", Producto.class).getMappedResults();
+
+            long endTime = System.currentTimeMillis();
+            System.out.println("✅ Búsqueda completada en: " + (endTime - startTime) + "ms");
+            System.out.println("📊 Productos encontrados: " + productos.size());
+
+            return responseService.success(productos, "Productos cargados exitosamente");
+        } catch (Exception e) {
+            System.err.println("❌ ERROR en /search: " + e.getMessage());
+            e.printStackTrace();
+            return responseService.internalError("Error al buscar productos: " + e.getMessage());
         }
     }
 }
