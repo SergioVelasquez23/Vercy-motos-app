@@ -372,6 +372,19 @@ public class ProductosController extends BaseController<Producto, String> {
         }
     }
 
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<List<Producto>>> searchProductos() {
+        // Usar aggregation pipeline con $search
+        Aggregation aggregation = Aggregation.newAggregation(
+                Aggregation.match(Criteria.where("estado").regex("^activo$", "i")),
+                Aggregation.limit(1000));
+
+        List<Producto> productos =
+                mongoTemplate.aggregate(aggregation, "producto", Producto.class).getMappedResults();
+
+        return responseService.success(productos, "Productos cargados exitosamente");
+    }
+
     @GetMapping("/buscar")
     public ResponseEntity<ApiResponse<List<Producto>>> findByNombreContaining(@RequestParam String nombre) {
         try {
@@ -995,34 +1008,4 @@ public class ProductosController extends BaseController<Producto, String> {
         }
     }
 
-    /**
-     * Endpoint ULTRA-OPTIMIZADO con índices MongoDB REQUIERE crear índice:
-     * db.producto.createIndex({ "estado": 1 })
-     */
-    @GetMapping("/search")
-    public ResponseEntity<ApiResponse<List<Producto>>> searchProductos() {
-        try {
-            System.out.println("🔍 ENDPOINT /search - Usando índices MongoDB");
-            long startTime = System.currentTimeMillis();
-
-            // Usar aggregation pipeline optimizado con índice
-            Aggregation aggregation = Aggregation.newAggregation(
-                    Aggregation.match(Criteria.where("estado").is("ACTIVO")), // Usa índice estado
-                    Aggregation.limit(1000) // Limitar resultados para mejor performance
-            );
-
-            List<Producto> productos = mongoTemplate
-                    .aggregate(aggregation, "producto", Producto.class).getMappedResults();
-
-            long endTime = System.currentTimeMillis();
-            System.out.println("✅ Búsqueda completada en: " + (endTime - startTime) + "ms");
-            System.out.println("📊 Productos encontrados: " + productos.size());
-
-            return responseService.success(productos, "Productos cargados exitosamente");
-        } catch (Exception e) {
-            System.err.println("❌ ERROR en /search: " + e.getMessage());
-            e.printStackTrace();
-            return responseService.internalError("Error al buscar productos: " + e.getMessage());
-        }
-    }
 }
