@@ -103,25 +103,34 @@ public class ProductosController extends BaseController<Producto, String> {
     }
 
     @GetMapping("")
-    public ResponseEntity<ApiResponse<List<Producto>>> find() {
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> find() {
         try {
-            System.out.println("🔍 ENDPOINT /api/productos - Llamado desde frontend");
+            System.out.println("⚡ ENDPOINT ULTRA-RÁPIDO /api/productos - CON CACHÉ + PROYECCIÓN");
             long startTime = System.currentTimeMillis();
 
-            List<Producto> productos = this.theProductoRepository.findAll();
+            // OPTIMIZACIÓN 1: Usar CACHÉ de productos activos (5 min TTL)
+            List<Producto> productos = this.cacheOptimizationService.getProductosActivosCached();
+
+            // OPTIMIZACIÓN 2: Proyección ligera - solo campos esenciales
+            List<Map<String, Object>> productosLigeros = productos.stream().map(p -> {
+                Map<String, Object> ligero = new HashMap<>();
+                ligero.put("_id", p.get_id());
+                ligero.put("nombre", p.getNombre());
+                ligero.put("precio", p.getPrecio());
+                ligero.put("imagenUrl", p.getImagenUrl());
+                ligero.put("categoriaId", p.getCategoriaId());
+                ligero.put("estado", p.getEstado());
+                ligero.put("tieneIngredientes", p.isTieneIngredientes());
+                ligero.put("tipoProducto", p.getTipoProducto());
+                // NO incluir ingredientes (son pesados)
+                return ligero;
+            }).toList();
 
             long endTime = System.currentTimeMillis();
-            System.out.println(
-                    "📦 ENDPOINT /api/productos - Completado en: " + (endTime - startTime) + "ms");
-            System.out.println(
-                    "📊 ENDPOINT /api/productos - Productos encontrados: " + productos.size());
+            System.out.println("⚡ Completado en: " + (endTime - startTime) + "ms (CACHÉ activo)");
+            System.out.println("📦 Productos ligeros: " + productosLigeros.size());
 
-            if (productos.isEmpty()) {
-                System.out.println("⚠️ ALERTA: Endpoint /api/productos devolviendo 0 productos");
-                System.out.println("🔍 Verificar base de datos MongoDB y collection 'producto'");
-            }
-
-            return responseService.success(productos, "Productos obtenidos exitosamente");
+            return responseService.success(productosLigeros, "Productos obtenidos exitosamente");
         } catch (Exception e) {
             System.err.println("❌ ERROR en /api/productos: " + e.getMessage());
             e.printStackTrace();
@@ -682,10 +691,11 @@ public class ProductosController extends BaseController<Producto, String> {
     @GetMapping("/con-nombres-ingredientes")
     public ResponseEntity<ApiResponse<List<Producto>>> getAllProductosConNombres() {
         try {
-            System.out.println("🚀 Iniciando carga de productos con ingredientes...");
+            System.out.println("⚡ ENDPOINT OPTIMIZADO /con-nombres-ingredientes - CON CACHÉ");
             long startTime = System.currentTimeMillis();
 
-            List<Producto> productos = this.theProductoRepository.findAll();
+            // USAR CACHÉ en lugar de findAll() directo
+            List<Producto> productos = this.cacheOptimizationService.getAllProductosCached();
             System.out.println("📦 Productos cargados: " + productos.size());
 
             // OPTIMIZACIÓN: Recopilar todos los IDs de ingredientes únicos
@@ -957,36 +967,28 @@ public class ProductosController extends BaseController<Producto, String> {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
         try {
-            System.out
-                    .println("⚡ ENDPOINT OPTIMIZADO /api/productos/paginados - Carga ultra-rápida");
+            System.out.println("🚀 /paginados - OPTIMIZADO COMO INGREDIENTES");
             long startTime = System.currentTimeMillis();
 
-            // OPTIMIZACIÓN 1: Usar CACHE (5 minutos) - productos activos se cargan una sola vez
-            List<Producto> todosProductos =
-                    this.cacheOptimizationService.getProductosActivosCached();
+            // USAR AGGREGATION PIPELINE directo (igual que /search)
+            Aggregation aggregation = Aggregation.newAggregation(
+                    Aggregation.match(Criteria.where("estado").regex("^activo$", "i")),
+                    Aggregation
+                            .project("_id", "nombre", "precio", "imagenUrl", "categoriaId",
+                                    "tieneIngredientes", "tipoProducto", "estado")
+                            .andExclude("ingredientesRequeridos", "ingredientesOpcionales",
+                                    "descripcion", "nota", "ingredientesDisponibles"));
 
-            // OPTIMIZACIÓN 2: Crear objetos ligeros con solo campos esenciales
-            List<Map<String, Object>> productosLigeros = todosProductos.stream().map(p -> {
-                Map<String, Object> ligero = new HashMap<>();
-                ligero.put("_id", p.get_id());
-                ligero.put("nombre", p.getNombre());
-                ligero.put("precio", p.getPrecio());
-                ligero.put("imagenUrl", p.getImagenUrl());
-                ligero.put("categoriaId", p.getCategoriaId());
-                ligero.put("estado", p.getEstado());
-                ligero.put("tieneIngredientes", p.isTieneIngredientes());
-                ligero.put("tipoProducto", p.getTipoProducto());
-                // NO incluir ingredientesRequeridos, ingredientesOpcionales (son pesados)
-                return ligero;
-            }).toList();
+            List<Producto> productos = mongoTemplate
+                    .aggregate(aggregation, "producto", Producto.class).getMappedResults();
 
-            // OPTIMIZACIÓN 3: Simular paginación en memoria (frontend espera este formato)
-            int totalElements = productosLigeros.size();
+            // Paginación en memoria
+            int totalElements = productos.size();
             int start = page * size;
             int end = Math.min(start + size, totalElements);
 
-            List<Map<String, Object>> paginaActual =
-                    start < totalElements ? productosLigeros.subList(start, end) : List.of();
+            List<Producto> paginaActual =
+                    start < totalElements ? productos.subList(start, end) : List.of();
 
             Map<String, Object> result = new HashMap<>();
             result.put("content", paginaActual);
