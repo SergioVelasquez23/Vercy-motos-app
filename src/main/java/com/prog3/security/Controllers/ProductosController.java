@@ -502,41 +502,6 @@ public class ProductosController extends BaseController<Producto, String> {
         }
     }
 
-    /**
-     * Endpoint para obtener solo las imágenes de productos específicos Llamar DESPUÉS de cargar los
-     * datos básicos
-     */
-    @PostMapping("/imagenes")
-    public ResponseEntity<ApiResponse<Map<String, String>>> getImagenesPorIds(
-            @RequestBody List<String> productosIds) {
-        try {
-            System.out.println("🖼️ Cargando imágenes de " + productosIds.size() + " productos");
-            long startTime = System.currentTimeMillis();
-
-            // Solo traer _id e imagenUrl
-            Aggregation aggregation = Aggregation.newAggregation(
-                    Aggregation.match(Criteria.where("_id").in(productosIds)),
-                    Aggregation.project("_id", "imagenUrl"));
-
-            List<Producto> productos = mongoTemplate
-                    .aggregate(aggregation, "producto", Producto.class).getMappedResults();
-
-            // Crear mapa id -> imagenUrl
-            Map<String, String> imagenes = new HashMap<>();
-            for (Producto p : productos) {
-                imagenes.put(p.get_id(), p.getImagenUrl());
-            }
-
-            long endTime = System.currentTimeMillis();
-            System.out.println("✅ Imágenes cargadas en: " + (endTime - startTime) + "ms");
-
-            return responseService.success(imagenes, "Imágenes cargadas");
-        } catch (Exception e) {
-            System.err.println("❌ ERROR en /imagenes: " + e.getMessage());
-            return responseService.internalError("Error: " + e.getMessage());
-        }
-    }
-
     @GetMapping("/search")
     public ResponseEntity<ApiResponse<List<Producto>>> searchProductos() {
         // Usar aggregation pipeline con $search
