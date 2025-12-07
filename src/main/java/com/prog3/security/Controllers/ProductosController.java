@@ -430,74 +430,115 @@ public class ProductosController extends BaseController<Producto, String> {
     }
 
     /**
-     * Endpoint para cargar SOLO las imágenes de productos específicos
-     * Uso: POST /api/productos/imagenes
-     * Body: ["producto_id_1", "producto_id_2", ...]
+     * Endpoint para cargar SOLO las imágenes de productos específicos Uso: POST
+     * /api/productos/imagenes Body: ["producto_id_1", "producto_id_2", ...]
      * 
-     * Estrategia de carga progresiva:
-     * 1. Cargar productos con /ligero (sin imágenes)
-     * 2. Cargar imágenes solo de los productos visibles en pantalla
-     * 3. Cargar más imágenes cuando el usuario haga scroll
+     * OPTIMIZACIÓN: Retorna solo IDs, el frontend cargará las imágenes bajo demanda usando GET
+     * /api/productos/{id}/imagen individual
      */
     @PostMapping("/imagenes")
-    public ResponseEntity<ApiResponse<Map<String, String>>> getImagenesProductos(
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getImagenesProductos(
             @RequestBody List<String> productosIds) {
         try {
-            System.out.println("🖼️ Cargando imágenes de " + productosIds.size() + " productos");
+            System.out.println("🖼️ Verificando " + productosIds.size() + " productos");
             long startTime = System.currentTimeMillis();
 
             if (productosIds == null || productosIds.isEmpty()) {
                 return responseService.badRequest("Lista de IDs vacía");
             }
 
-            // Limitar a 20 productos por request para evitar payloads gigantes
-            if (productosIds.size() > 20) {
-                return responseService.badRequest("Máximo 20 productos por request");
+            // Limitar a 50 productos por request
+            if (productosIds.size() > 50) {
+                return responseService.badRequest("Máximo 50 productos por request");
             }
 
-            // Buscar solo los productos solicitados
+            // Solo verificar que existen y retornar metadata ligera
             List<Producto> productos = this.theProductoRepository.findAllById(productosIds);
 
-            // Mapear: productoId -> imagenUrl
-            Map<String, String> imagenesMap = new HashMap<>();
+            // Retornar SOLO metadata (NO las imágenes completas)
+            Map<String, Object> metadata = new HashMap<>();
             for (Producto p : productos) {
-                imagenesMap.put(p.get_id(), p.getImagenUrl());
+                Map<String, Object> info = new HashMap<>();
+
+                // Determinar si tiene imagen
+                String imgUrl = p.getImagenUrl();
+                boolean tieneImagen = imgUrl != null && !imgUrl.isEmpty();
+
+                info.put("tieneImagen", tieneImagen);
+
+                // Si tiene imagen, indicar tipo y tamaño aproximado
+                if (tieneImagen) {
+                    if (imgUrl.startsWith("data:image/")) {
+                        info.put("tipo", "base64");
+                        info.put("tamanio", imgUrl.length());
+                    } else {
+                        info.put("tipo", "url");
+                        info.put("url", imgUrl); // Solo si es URL corta
+                    }
+                }
+
+                metadata.put(p.get_id(), info);
             }
 
             long endTime = System.currentTimeMillis();
-            System.out.println("✅ Imágenes cargadas en: " + (endTime - startTime) + "ms");
-            System.out.println("🖼️ Total imágenes: " + imagenesMap.size());
+            System.out.println("✅ Metadata de imágenes: " + (endTime - startTime) + "ms");
+            System.out.println("📊 Productos verificados: " + metadata.size());
 
-            return responseService.success(imagenesMap, 
-                "Imágenes de " + imagenesMap.size() + " productos");
+            return responseService.success(metadata,
+                    "Metadata de " + metadata.size() + " productos");
         } catch (Exception e) {
-            System.err.println("❌ ERROR cargando imágenes: " + e.getMessage());
+            System.err.println("❌ ERROR verificando imágenes: " + e.getMessage());
             e.printStackTrace();
-            return responseService.internalError("Error cargando imágenes: " + e.getMessage());
+            return responseService.internalError("Error: " + e.getMessage());
         }
     }
 
     /**
-     * Endpoint para obtener UNA SOLA imagen de un producto
-     * Uso: GET /api/productos/{id}/imagen
+     * Endpoint para obtener UNA SOLA imagen de un producto (lazy loading) Uso: GET
+     * /api/productos/{id}/imagen
      * 
-     * Ideal para lazy loading de imágenes individuales
+     * IMPORTANTE: Este es el ÚNICO endpoint que retorna la imagen completa (base64) El frontend
+     * debe llamar a este endpoint solo cuando necesite mostrar la imagen
      */
     @GetMapping("/{id}/imagen")
-    public ResponseEntity<ApiResponse<Map<String, String>>> getImagenProducto(@PathVariable String id) {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getImagenProducto(
+            @PathVariable String id) {
         try {
+            System.out.println("🖼️ Cargando imagen individual de producto: " + id);
+            long startTime = System.currentTimeMillis();
+
             Producto producto = this.theProductoRepository.findById(id).orElse(null);
             
             if (producto == null) {
                 return responseService.notFound("Producto no encontrado");
             }
 
-            Map<String, String> result = new HashMap<>();
+            Map<String, Object> result = new HashMap<>();
             result.put("_id", producto.get_id());
-            result.put("imagenUrl", producto.getImagenUrl());
+            result.put("nombre", producto.getNombre());
+
+            String imagenUrl = producto.getImagenUrl();
+
+            if (imagenUrl == null || imagenUrl.isEmpty()) {
+                result.put("tieneImagen", false);
+                result.put("imagenUrl", null);
+            } else {
+                result.put("tieneImagen", true);
+                result.put("imagenUrl", imagenUrl);
+
+                // Log del tamaño para debugging
+                if (imagenUrl.startsWith("data:image/")) {
+                    int tamanioKB = imagenUrl.length() / 1024;
+                    System.out.println("📊 Imagen base64 - Tamaño: " + tamanioKB + "KB");
+                }
+            }
+
+            long endTime = System.currentTimeMillis();
+            System.out.println("✅ Imagen cargada en: " + (endTime - startTime) + "ms");
 
             return responseService.success(result, "Imagen del producto");
         } catch (Exception e) {
+            System.err.println("❌ ERROR obteniendo imagen: " + e.getMessage());
             return responseService.internalError("Error obteniendo imagen: " + e.getMessage());
         }
     }
