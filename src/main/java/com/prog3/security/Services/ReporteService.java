@@ -67,7 +67,7 @@ public class ReporteService {
             "año", 36000000.0 // $36,000,000 por año
     );
 
-    @PostConstruct
+    // @PostConstruct - Comentado temporalmente para evitar fallo al inicio si MongoDB no conecta
     public void inicializarObjetivos() {
         // Verificar si ya existen objetivos en la base de datos
         // Si no existen, crear con valores por defecto

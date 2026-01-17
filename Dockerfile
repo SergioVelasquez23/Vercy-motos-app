@@ -36,4 +36,5 @@ CMD java -Dserver.port=$PORT \
     -Djdk.tls.client.protocols=TLSv1.2 \
     -Dhttps.protocols=TLSv1.2 \
     -Djavax.net.ssl.trustStoreType=jks \
+    -Djsse.enableSNIExtension=false \
     -jar app.jar
