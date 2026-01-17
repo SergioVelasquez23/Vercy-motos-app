@@ -31,5 +31,9 @@ COPY --from=build /app/target/*.jar app.jar
 # Exponer puerto
 EXPOSE $PORT
 
-# Comando para ejecutar la aplicación
-CMD java -Dserver.port=$PORT -jar app.jar
+# Comando para ejecutar la aplicación con configuración SSL mejorada
+CMD java -Dserver.port=$PORT \
+    -Djdk.tls.client.protocols=TLSv1.2 \
+    -Dhttps.protocols=TLSv1.2 \
+    -Djavax.net.ssl.trustStoreType=jks \
+    -jar app.jar
