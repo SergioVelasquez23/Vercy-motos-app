@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 import com.prog3.security.Models.Role;
 import com.prog3.security.Repositories.RoleRepository;
 
-@Component
+// @Component - Comentado temporalmente para evitar fallo SSL en Render
 public class InitialDataService implements CommandLineRunner {
 
     @Autowired
