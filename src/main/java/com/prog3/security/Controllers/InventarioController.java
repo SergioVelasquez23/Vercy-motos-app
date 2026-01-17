@@ -48,9 +48,6 @@ import com.prog3.security.Utils.ApiResponse;
 @RequestMapping("/api/inventario")
 public class InventarioController {
     @Autowired
-    private com.prog3.security.Repositories.UnidadRepository unidadRepository;
-
-    @Autowired
     private InventarioRepository inventarioRepository;
 
     @Autowired
@@ -220,11 +217,7 @@ public class InventarioController {
             for (Inventario inv : inventarios) {
                 Map<String, Object> map = new HashMap<>();
                 map.put("inventario", inv);
-                if (inv.getUnidadId() != null) {
-                    unidadRepository.findById(inv.getUnidadId()).ifPresent(u -> {
-                        map.put("unidad", u);
-                    });
-                }
+                // Unidad ya no está disponible
                 resultado.add(map);
             }
             return responseService.success(resultado, "Inventario obtenido exitosamente");
@@ -344,10 +337,6 @@ public class InventarioController {
 
     @PostMapping
     public ResponseEntity<ApiResponse<Inventario>> create(@RequestBody Inventario inventario) {
-            // Validar unidadId
-            if (inventario.getUnidadId() == null || !unidadRepository.existsById(inventario.getUnidadId())) {
-                return responseService.badRequest("La unidad seleccionada no existe");
-            }
         try {
             // Verificar si ya existe inventario para este producto
             if (inventarioRepository.existsByProductoId(inventario.getProductoId())) {
@@ -378,11 +367,8 @@ public class InventarioController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<ApiResponse<Inventario>> update(@PathVariable String id, @RequestBody Inventario inventarioActualizado) {
-            // Validar unidadId
-            if (inventarioActualizado.getUnidadId() == null || !unidadRepository.existsById(inventarioActualizado.getUnidadId())) {
-                return responseService.badRequest("La unidad seleccionada no existe");
-            }
+    public ResponseEntity<ApiResponse<Inventario>> update(@PathVariable String id,
+            @RequestBody Inventario inventarioActualizado) {
         try {
             Inventario inventarioExistente = inventarioRepository.findById(id).orElse(null);
             if (inventarioExistente == null) {

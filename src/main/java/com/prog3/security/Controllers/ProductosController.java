@@ -26,7 +26,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.prog3.security.Models.Producto;
 import com.prog3.security.Models.Ingrediente;
-import com.prog3.security.Models.Categoria;
 import com.prog3.security.Models.IngredienteProducto;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -35,7 +34,6 @@ import com.prog3.security.DTOs.CrearProductoRequest;
 import com.prog3.security.DTOs.IngredienteConCategoriaDTO;
 import com.prog3.security.Repositories.ProductoRepository;
 import com.prog3.security.Repositories.IngredienteRepository;
-import com.prog3.security.Repositories.CategoriaRepository;
 import com.prog3.security.Utils.ApiResponse;
 
 @CrossOrigin
@@ -43,16 +41,10 @@ import com.prog3.security.Utils.ApiResponse;
 @RequestMapping("api/productos")
 public class ProductosController extends BaseController<Producto, String> {
     @Autowired
-    private com.prog3.security.Repositories.UnidadRepository unidadRepository;
-
-    @Autowired
     private ProductoRepository theProductoRepository;
 
     @Autowired
     private IngredienteRepository theIngredienteRepository;
-
-    @Autowired
-    private CategoriaRepository theCategoriaRepository;
 
     @Autowired
     private com.prog3.security.Services.CacheOptimizationService cacheOptimizationService;
@@ -311,76 +303,10 @@ public class ProductosController extends BaseController<Producto, String> {
     }
 
     /**
-     * Endpoint SÚPER OPTIMIZADO: Resumen de productos agrupados por categoría
-     * Devuelve solo datos básicos de todos los productos organizados por categoría
-     * IDEAL para carga inicial del frontend
+     * Endpoint SÚPER OPTIMIZADO: Resumen de productos agrupados por categoría Devuelve solo datos
+     * básicos de todos los productos organizados por categoría IDEAL para carga inicial del
+     * frontend
      */
-    @GetMapping("/resumen-por-categorias")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getResumenPorCategorias(
-            @RequestParam(defaultValue = "5") int limitePorCategoria) {
-        try {
-            System.out.println("📊 ENDPOINT /resumen-por-categorias - SÚPER OPTIMIZADO");
-            System.out.println("📋 Límite por categoría: " + limitePorCategoria);
-            long startTime = System.currentTimeMillis();
-            
-            // Obtener todas las categorías
-            List<Categoria> categorias = this.theCategoriaRepository.findAll();
-            
-            Map<String, Object> resumen = new HashMap<>();
-            List<Map<String, Object>> categoriasSummary = new ArrayList<>();
-            int totalProductos = 0;
-            
-            for (Categoria categoria : categorias) {
-                List<Producto> productosCategoria = this.theProductoRepository.findByCategoriaId(categoria.get_id());
-                
-                // Filtrar solo productos activos
-                List<Producto> productosActivos = productosCategoria.stream()
-                    .filter(p -> "Activo".equals(p.getEstado()))
-                    .limit(limitePorCategoria) // Limitar cantidad por categoría
-                    .toList();
-                
-                if (!productosActivos.isEmpty()) {
-                    Map<String, Object> categoriaInfo = new HashMap<>();
-                    categoriaInfo.put("categoriaId", categoria.get_id());
-                    categoriaInfo.put("categoriaNombre", categoria.getNombre());
-                    categoriaInfo.put("totalProductos", productosActivos.size());
-                    
-                    // Productos ligeros de esta categoría
-                    List<Map<String, Object>> productosLigeros = new ArrayList<>();
-                    for (Producto p : productosActivos) {
-                        Map<String, Object> productoLigero = new HashMap<>();
-                        productoLigero.put("_id", p.get_id());
-                        productoLigero.put("nombre", p.getNombre());
-                        productoLigero.put("precio", p.getPrecio());
-                        productoLigero.put("imagenUrl", p.getImagenUrl());
-                        productosLigeros.add(productoLigero);
-                    }
-                    
-                    categoriaInfo.put("productos", productosLigeros);
-                    categoriasSummary.add(categoriaInfo);
-                    totalProductos += productosActivos.size();
-                }
-            }
-            
-            resumen.put("categorias", categoriasSummary);
-            resumen.put("totalCategorias", categoriasSummary.size());
-            resumen.put("totalProductos", totalProductos);
-            resumen.put("limitePorCategoria", limitePorCategoria);
-            
-            long endTime = System.currentTimeMillis();
-            System.out.println("⚡ SÚPER OPTIMIZADO completado en: " + (endTime - startTime) + "ms");
-            System.out.println("🏷️ Categorías procesadas: " + categoriasSummary.size());
-            System.out.println("📦 Total productos ligeros: " + totalProductos);
-            
-            return responseService.success(resumen, 
-                "Resumen por categorías: " + categoriasSummary.size() + " categorías, " + totalProductos + " productos");
-        } catch (Exception e) {
-            System.err.println("❌ ERROR en /resumen-por-categorias: " + e.getMessage());
-            e.printStackTrace();
-            return responseService.internalError("Error al obtener resumen: " + e.getMessage());
-        }
-    }
-
     /**
      * Endpoint ULTRA RÁPIDO sin imágenes - Solo datos esenciales Paginado para carga progresiva
      */
@@ -586,10 +512,6 @@ public class ProductosController extends BaseController<Producto, String> {
             // Procesamiento de la categoría para la búsqueda
             String categoriaProcesada = null;
             if (categoriaId != null && !categoriaId.isEmpty()) {
-                // Validar que la categoría exista
-                if (!theCategoriaRepository.existsById(categoriaId)) {
-                    return responseService.badRequest("La categoría con ID " + categoriaId + " no existe");
-                }
                 categoriaProcesada = categoriaId;
             }
 
@@ -730,24 +652,16 @@ public class ProductosController extends BaseController<Producto, String> {
 
             List<Ingrediente> ingredientes = this.theIngredienteRepository.findAllById(ingredientesIds);
 
-            // Convertir a DTO con información de categorías
+            // Convertir a DTO sin categorías
             List<IngredienteConCategoriaDTO> ingredientesConCategoria = ingredientes.stream()
                     .map(ingrediente -> {
-                        String categoriaNombre = "Sin categoría";
-                        if (ingrediente.getCategoriaId() != null) {
-                            Categoria categoria = this.theCategoriaRepository.findById(ingrediente.getCategoriaId()).orElse(null);
-                            if (categoria != null) {
-                                categoriaNombre = categoria.getNombre();
-                            }
-                        }
-
                         // Usar directamente el campo unidad del ingrediente
                         String unidadNombre = ingrediente.getUnidad();
                         String unidadAbreviatura = ingrediente.getUnidad();
                         return new IngredienteConCategoriaDTO(
                                 ingrediente.get_id(),
                                 ingrediente.getCategoriaId(),
-                                categoriaNombre,
+                                "Sin categoría",
                                 ingrediente.getNombre(),
                                 unidadNombre,
                                 unidadAbreviatura,
@@ -956,16 +870,8 @@ public class ProductosController extends BaseController<Producto, String> {
                         continue;
                     }
 
-                    // Validar que la categoría exista
-                    if (producto.getCategoriaId() == null || producto.getCategoriaId().trim().isEmpty()) {
-                        errores.add("Producto " + (i + 1) + ": El ID de categoría es obligatorio");
-                        continue;
-                    }
-
-                    if (!this.theCategoriaRepository.existsById(producto.getCategoriaId())) {
-                        errores.add("Producto " + (i + 1) + ": La categoría con ID '" + producto.getCategoriaId() + "' no existe");
-                        continue;
-                    }
+                    // La categoría ya no es obligatoria
+                    // Se permite null o vacío
 
                     // Validar ingredientes requeridos si existen
                     if (producto.getIngredientesRequeridos() != null && !producto.getIngredientesRequeridos().isEmpty()) {

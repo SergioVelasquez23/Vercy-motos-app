@@ -36,4 +36,10 @@ public interface ProductoRepository extends MongoRepository<Producto, String> {
 
     // Buscar producto por nombre exacto
     Producto findByNombre(String nombre);
+
+    // Buscar por código de barras
+    java.util.Optional<Producto> findByCodigoBarras(String codigoBarras);
+
+    // Buscar por código interno
+    java.util.Optional<Producto> findByCodigoInterno(String codigoInterno);
 }

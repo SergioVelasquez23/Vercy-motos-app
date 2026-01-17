@@ -17,6 +17,8 @@ public class Ingrediente {
     @JsonProperty("costo")
     private double costo;
     private boolean descontable = true; // Por defecto true
+    private String codigoBarras; // Código de barras personalizado (opcional)
+    private String codigoInterno; // Código interno del negocio (opcional)
 
     public Ingrediente() {
         // Constructor vacío - MongoDB generará automáticamente el _id
@@ -98,6 +100,22 @@ public class Ingrediente {
     @JsonProperty("costo")
     public void setCosto(double costo) {
         this.costo = costo;
+    }
+
+    public String getCodigoBarras() {
+        return codigoBarras;
+    }
+
+    public void setCodigoBarras(String codigoBarras) {
+        this.codigoBarras = codigoBarras;
+    }
+
+    public String getCodigoInterno() {
+        return codigoInterno;
+    }
+
+    public void setCodigoInterno(String codigoInterno) {
+        this.codigoInterno = codigoInterno;
     }
 
     @Override

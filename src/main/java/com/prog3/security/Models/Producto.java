@@ -27,6 +27,8 @@ public class Producto {
     private String tipoProducto; // "combo" o "individual" - determina si el cliente puede elegir ingredientes
     private List<IngredienteProducto> ingredientesRequeridos; // Ingredientes fijos que siempre se consumen
     private List<IngredienteProducto> ingredientesOpcionales; // Ingredientes opcionales que el cliente puede elegir (solo para combos)
+    private String codigoBarras; // Código de barras personalizado (opcional)
+    private String codigoInterno; // Código interno del negocio (opcional)
 
     public Producto() {
         // Inicializar campos que pueden ser null con valores por defecto
@@ -207,5 +209,21 @@ public class Producto {
 
     public void setIngredientesOpcionales(List<IngredienteProducto> ingredientesOpcionales) {
         this.ingredientesOpcionales = ingredientesOpcionales;
+    }
+
+    public String getCodigoBarras() {
+        return codigoBarras;
+    }
+
+    public void setCodigoBarras(String codigoBarras) {
+        this.codigoBarras = codigoBarras;
+    }
+
+    public String getCodigoInterno() {
+        return codigoInterno;
+    }
+
+    public void setCodigoInterno(String codigoInterno) {
+        this.codigoInterno = codigoInterno;
     }
 }

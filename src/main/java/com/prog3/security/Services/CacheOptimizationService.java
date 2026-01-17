@@ -22,13 +22,7 @@ public class CacheOptimizationService {
 
     @Autowired
     private ProductoRepository productoRepository;
-    
-    @Autowired
-    private MesaRepository mesaRepository;
-    
-    @Autowired
-    private CategoriaRepository categoriaRepository;
-    
+
     @Autowired
     private PedidoRepository pedidoRepository;
     
@@ -88,53 +82,6 @@ public class CacheOptimizationService {
     public Producto updateProducto(Producto producto) {
         System.out.println("🗑️ Invalidando cache de productos por actualización");
         return productoRepository.save(producto);
-    }
-
-    // ==================================================
-    // CACHE DE MESAS
-    // ==================================================
-    
-    /**
-     * Obtiene todas las mesas con cache
-     * Cache: 2 minutos (estado cambia constantemente)
-     */
-    @Cacheable(value = "mesas", key = "'all'")
-    public List<Mesa> getAllMesasCached() {
-        System.out.println("🔄 Cargando todas las mesas desde BD");
-        return mesaRepository.findAll();
-    }
-    
-    /**
-     * Obtiene mesa por nombre con cache
-     */
-    @Cacheable(value = "mesas", key = "'mesa_' + #nombre")
-    public Mesa getMesaByNombreCached(String nombre) {
-        System.out.println("🔄 Cargando mesa " + nombre + " desde BD");
-        return mesaRepository.findByNombre(nombre);
-    }
-    
-    /**
-     * Actualiza una mesa e invalida su cache específico
-     */
-    @CachePut(value = "mesas", key = "'mesa_' + #mesa.nombre")
-    @CacheEvict(value = "mesas", key = "'all'")
-    public Mesa updateMesa(Mesa mesa) {
-        System.out.println("🔄 Actualizando cache de mesa: " + mesa.getNombre());
-        return mesaRepository.save(mesa);
-    }
-
-    // ==================================================
-    // CACHE DE CATEGORÍAS
-    // ==================================================
-    
-    /**
-     * Obtiene todas las categorías con cache
-     * Cache: 10 minutos (categorías cambian muy poco)
-     */
-    @Cacheable(value = "categorias", key = "'all'")
-    public List<Categoria> getAllCategoriasCached() {
-        System.out.println("🔄 Cargando todas las categorías desde BD");
-        return categoriaRepository.findAll();
     }
 
     // ==================================================
@@ -208,19 +155,12 @@ public class CacheOptimizationService {
     public void clearProductosCache() {
         System.out.println("🗑️ Limpiando cache completo de productos");
     }
-    
-    /**
-     * Limpia todo el cache de mesas
-     */
-    @CacheEvict(value = "mesas", allEntries = true)
-    public void clearMesasCache() {
-        System.out.println("🗑️ Limpiando cache completo de mesas");
-    }
-    
+
     /**
      * Limpia todos los caches
      */
-    @CacheEvict(value = {"productos", "mesas", "categorias", "cuadres-activos", "pedidos-activos", "ingredientes"}, allEntries = true)
+    @CacheEvict(value = {"productos", "cuadres-activos", "pedidos-activos", "ingredientes"},
+            allEntries = true)
     public void clearAllCaches() {
         System.out.println("🗑️ Limpiando TODOS los caches del sistema");
     }
@@ -233,12 +173,11 @@ public class CacheOptimizationService {
     public String getSystemStatsCached() {
         System.out.println("🔄 Calculando estadísticas del sistema desde BD");
         long totalPedidos = pedidoRepository.count();
-        long totalMesas = mesaRepository.count();
         long totalProductos = productoRepository.count();
         long cajasAbiertas = cuadreCajaRepository.findByCerradaFalse().size();
         
-        return String.format("Pedidos:%d|Mesas:%d|Productos:%d|CajasAbiertas:%d", 
-                           totalPedidos, totalMesas, totalProductos, cajasAbiertas);
+        return String.format("Pedidos:%d|Productos:%d|CajasAbiertas:%d", totalPedidos,
+                totalProductos, cajasAbiertas);
     }
     
     /**
@@ -249,13 +188,7 @@ public class CacheOptimizationService {
         
         // Precargar productos (muy consultados)
         getAllProductosCached();
-        
-        // Precargar mesas (consultadas constantemente)
-        getAllMesasCached();
-        
-        // Precargar categorías (usadas en menús)
-        getAllCategoriasCached();
-        
+
         // Precargar cajas abiertas (consulta crítica)
         getCajasAbiertasCached();
         

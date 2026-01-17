@@ -36,15 +36,11 @@ import com.prog3.security.Services.ResponseService;
 import com.prog3.security.Services.CuadreCajaService;
 import com.prog3.security.Services.WebSocketNotificationService;
 import com.prog3.security.Services.PedidoService;
-import com.prog3.security.Services.MesaService; // Import agregado
-// import com.prog3.security.Utils.ApiResponse; // Comentado para evitar conflicto con anotación Swagger
 import com.prog3.security.DTOs.PagarPedidoRequest;
 import com.prog3.security.DTOs.CancelarProductoRequest;
+import com.prog3.security.DTOs.PagoMixto;
 import com.prog3.security.Exception.BusinessException;
 import com.prog3.security.Exception.ResourceNotFoundException;
-import com.prog3.security.Models.Mesa;
-import com.prog3.security.Repositories.MesaRepository;
-import com.prog3.security.DTOs.PagoMixto;
 
 import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
@@ -185,9 +181,6 @@ public class PedidosController {
 
     @Autowired
     private PedidoService pedidoService;
-
-    @Autowired
-    private MesaService mesaService;
 
     @Operation(summary = "Obtener todos los pedidos", description = "Retorna la lista completa de pedidos en el sistema")
     @ApiResponses(value = {
@@ -564,8 +557,7 @@ public class PedidosController {
 
             // Eliminar el pedido
             this.thePedidoRepository.delete(pedido);
-            // Limpieza automática de la mesa
-            mesaService.limpiarMesaSiNoTienePedidos(pedido.getMesa());
+            // Mesa ya no existe
             
             return responseService.success(null, "Pedido eliminado exitosamente y dinero descontado de caja");
         } catch (Exception e) {
@@ -967,15 +959,7 @@ public class PedidosController {
                 String motivoCortesia = pagarRequest.getMotivoCortesia() != null ? pagarRequest.getMotivoCortesia()
                         : "";
                 pedido.setNotas("CORTESÍA - " + motivoCortesia + " - " + notasAdicionales);
-                // Liberar la mesa si existe - Usando MesaService
-                if (pedido.getMesa() != null && !pedido.getMesa().isEmpty()) {
-                    try {
-                        mesaService.liberarMesa(pedido.getMesa());
-                        System.out.println("[PAGAR_PEDIDO] Mesa liberada por cortesía: " + pedido.getMesa());
-                    } catch (Exception e) {
-                        System.out.println("⚠️ Advertencia: No se pudo liberar mesa " + pedido.getMesa() + ": " + e.getMessage());
-                    }
-                }
+                // Mesa ya no existe
             } else if (pagarRequest.esConsumoInterno()) {
                 System.out.println("[PAGAR_PEDIDO] Procesando consumo interno");
                 pedido.setEstado("consumo_interno");
@@ -984,15 +968,7 @@ public class PedidosController {
                 String tipoConsumo = pagarRequest.getTipoConsumoInterno() != null ? pagarRequest.getTipoConsumoInterno()
                         : "";
                 pedido.setNotas("CONSUMO INTERNO - " + tipoConsumo + " - " + notasAdicionales);
-                // Liberar la mesa si existe - Usando MesaService
-                if (pedido.getMesa() != null && !pedido.getMesa().isEmpty()) {
-                    try {
-                        mesaService.liberarMesa(pedido.getMesa());
-                        System.out.println("[PAGAR_PEDIDO] Mesa liberada por consumo interno: " + pedido.getMesa());
-                    } catch (Exception e) {
-                        System.out.println("⚠️ Advertencia: No se pudo liberar mesa " + pedido.getMesa() + ": " + e.getMessage());
-                    }
-                }
+                // Mesa ya no existe
             } else if (pagarRequest.esCancelado()) {
                 System.out.println("[PAGAR_PEDIDO] Procesando cancelación");
                 pedido.setEstado("cancelado");

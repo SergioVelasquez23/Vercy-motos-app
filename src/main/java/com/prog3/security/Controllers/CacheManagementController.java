@@ -61,23 +61,6 @@ public class CacheManagementController {
     }
 
     /**
-     * Limpia el cache de mesas
-     */
-    @Operation(
-        summary = "Limpiar cache de mesas",
-        description = "Invalida todo el cache de mesas para forzar recarga desde base de datos"
-    )
-    @DeleteMapping("/mesas")
-    public ResponseEntity<com.prog3.security.Utils.ApiResponse<String>> clearMesasCache() {
-        try {
-            cacheService.clearMesasCache();
-            return responseService.success("Cache de mesas limpiado", "Cache invalidado exitosamente");
-        } catch (Exception e) {
-            return responseService.internalError("Error al limpiar cache de mesas: " + e.getMessage());
-        }
-    }
-
-    /**
      * Limpia todos los caches del sistema
      */
     @Operation(

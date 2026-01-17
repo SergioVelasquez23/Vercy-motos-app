@@ -44,10 +44,7 @@ public class AdminController {
     // Repositorios para eliminación por fechas
     @Autowired
     private PedidoRepository pedidoRepository;
-    
-    @Autowired
-    private DocumentoMesaRepository documentoMesaRepository;
-    
+
     @Autowired
     private CuadreCajaRepository cuadreCajaRepository;
     
@@ -203,8 +200,7 @@ public class AdminController {
             List<Pedido> pedidos = pedidoRepository.findByFechaBetween(fechaInicio, fechaFin);
             conteos.put("pedidos", (long) pedidos.size());
             
-            List<DocumentoMesa> documentos = documentoMesaRepository.findByFechaBetween(fechaInicio, fechaFin);
-            conteos.put("documentos_mesa", (long) documentos.size());
+            // DocumentoMesa ya no existe
             
             List<CuadreCaja> cuadres = cuadreCajaRepository.findByFechaAperturaBetween(fechaInicio, fechaFin);
             conteos.put("cuadres_caja", (long) cuadres.size());
@@ -297,15 +293,7 @@ public class AdminController {
                 System.out.println("⚠️ No se encontraron pedidos para eliminar en el rango de fechas");
             }
             
-            // 2. Eliminar documentos mesa en rango  
-            List<DocumentoMesa> documentos = documentoMesaRepository.findByFechaBetween(fechaInicio, fechaFin);
-            if (!documentos.isEmpty()) {
-                documentoMesaRepository.deleteAll(documentos);
-                eliminados.put("documentos_mesa", (long) documentos.size());
-                System.out.println("✅ Eliminados " + documentos.size() + " documentos de mesa");
-            } else {
-                eliminados.put("documentos_mesa", 0L);
-            }
+            // DocumentoMesa ya no existe
             
             // 3. Eliminar cuadres de caja en rango
             List<CuadreCaja> cuadres = cuadreCajaRepository.findByFechaAperturaBetween(fechaInicio, fechaFin);

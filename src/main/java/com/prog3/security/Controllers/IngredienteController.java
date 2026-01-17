@@ -9,7 +9,6 @@ import org.springframework.web.bind.annotation.*;
 import com.prog3.security.Models.Ingrediente;
 import com.prog3.security.Models.MovimientoInventario;
 import com.prog3.security.Repositories.IngredienteRepository;
-import com.prog3.security.Repositories.CategoriaRepository;
 import com.prog3.security.Repositories.MovimientoInventarioRepository;
 import com.prog3.security.Services.ResponseService;
 import com.prog3.security.Utils.ApiResponse;
@@ -21,9 +20,6 @@ public class IngredienteController {
 
     @Autowired
     private IngredienteRepository ingredienteRepository;
-
-    @Autowired
-    private CategoriaRepository categoriaRepository;
 
     @Autowired
     private MovimientoInventarioRepository movimientoInventarioRepository;
@@ -92,14 +88,7 @@ public class IngredienteController {
                 return responseService.conflict("Ya existe un ingrediente con el nombre: " + ingrediente.getNombre());
             }
 
-            // Validar que la categoría exista
-            if (ingrediente.getCategoriaId() == null || ingrediente.getCategoriaId().trim().isEmpty()) {
-                return responseService.badRequest("El ID de categoría es obligatorio");
-            }
-
-            if (!this.categoriaRepository.existsById(ingrediente.getCategoriaId())) {
-                return responseService.badRequest("La categoría con ID '" + ingrediente.getCategoriaId() + "' no existe");
-            }
+            // La categoría ya no es obligatoria
 
             // Asegurar que el ID sea null antes de guardar (MongoDB lo generará automáticamente)
             ingrediente.set_id(null);
@@ -143,16 +132,7 @@ public class IngredienteController {
                         continue;
                     }
 
-                    // Validar que la categoría exista
-                    if (ingrediente.getCategoriaId() == null || ingrediente.getCategoriaId().trim().isEmpty()) {
-                        errores.add("Ingrediente " + (i + 1) + ": El ID de categoría es obligatorio");
-                        continue;
-                    }
-
-                    if (!this.categoriaRepository.existsById(ingrediente.getCategoriaId())) {
-                        errores.add("Ingrediente " + (i + 1) + ": La categoría con ID '" + ingrediente.getCategoriaId() + "' no existe");
-                        continue;
-                    }
+                    // La categoría ya no es obligatoria
 
                     // Asegurar que el ID sea null antes de guardar
                     ingrediente.set_id(null);
@@ -196,14 +176,7 @@ public class IngredienteController {
                 return responseService.conflict("Ya existe un ingrediente con el nombre: " + ingrediente.getNombre());
             }
 
-            // Validar que la categoría exista
-            if (ingrediente.getCategoriaId() == null || ingrediente.getCategoriaId().trim().isEmpty()) {
-                return responseService.badRequest("El ID de categoría es obligatorio");
-            }
-
-            if (!this.categoriaRepository.existsById(ingrediente.getCategoriaId())) {
-                return responseService.badRequest("La categoría con ID '" + ingrediente.getCategoriaId() + "' no existe");
-            }
+            // La categoría ya no es obligatoria
 
             // Log de valores originales para depuración
             System.out.println("📝 VALORES ORIGINALES:");

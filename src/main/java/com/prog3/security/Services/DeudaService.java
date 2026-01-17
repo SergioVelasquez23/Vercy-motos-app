@@ -5,7 +5,6 @@ import com.prog3.security.Models.PagoDeuda;
 import com.prog3.security.Repositories.DeudaRepository;
 import com.prog3.security.Repositories.PagoDeudaRepository;
 import com.prog3.security.Repositories.PedidoRepository;
-import com.prog3.security.Repositories.MesaRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -27,9 +26,6 @@ public class DeudaService {
 
     @Autowired
     private PedidoRepository pedidoRepository;
-
-    @Autowired
-    private MesaRepository mesaRepository;
 
     /**
      * Crear una nueva deuda
@@ -60,15 +56,11 @@ public class DeudaService {
             deuda.setMontoDeuda(deuda.getMontoTotal());
             deuda.setActiva(true);
 
-            // Obtener información adicional del pedido y mesa si está disponible
+            // Obtener información adicional del pedido si está disponible
             try {
                 var pedido = pedidoRepository.findById(deuda.getPedidoId());
                 if (pedido.isPresent()) {
-                    var mesa = mesaRepository.findById(pedido.get().getMesa());
-                    if (mesa.isPresent()) {
-                        deuda.setMesaId(mesa.get().get_id());
-                        deuda.setMesaNombre(mesa.get().getNombre());
-                    }
+                    // Mesa ya no está disponible
                 }
             } catch (Exception e) {
                 System.out.println("Warning: No se pudo obtener información adicional del pedido: " + e.getMessage());

@@ -23,4 +23,10 @@ public interface IngredienteRepository extends MongoRepository<Ingrediente, Stri
     List<Ingrediente> findByStockBajo();
 
     boolean existsByNombre(String nombre);
+
+    // Buscar por código de barras
+    java.util.Optional<Ingrediente> findByCodigoBarras(String codigoBarras);
+
+    // Buscar por código interno
+    java.util.Optional<Ingrediente> findByCodigoInterno(String codigoInterno);
 }

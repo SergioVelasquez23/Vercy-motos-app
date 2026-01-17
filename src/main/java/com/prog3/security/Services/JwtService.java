@@ -12,7 +12,7 @@ import io.jsonwebtoken.security.SignatureException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import java.security.Key;
+import javax.crypto.SecretKey;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -29,7 +29,7 @@ public class JwtService {
     @Value("${jwt.expiration}")
     private Long expiration; // Tiempo de expiración del token en milisegundos.
 
-    private Key getSigningKey() {
+    private SecretKey getSigningKey() {
         return Keys.hmacShaKeyFor(secret.getBytes());
     }
 
@@ -90,14 +90,14 @@ public class JwtService {
 
     public boolean validateToken(String token) {
         try {
-            Jws<Claims> claimsJws = Jwts.parserBuilder()
-                    .setSigningKey(getSigningKey())
+            Jws<Claims> claimsJws =
+                    Jwts.parser().verifyWith(getSigningKey())
                     .build()
-                    .parseClaimsJws(token);
+                            .parseSignedClaims(token);
 
             // Verifica la expiración del token
             Date now = new Date();
-            return !claimsJws.getBody().getExpiration().before(now);
+            return !claimsJws.getPayload().getExpiration().before(now);
         } catch (SignatureException ex) {
             // La firma del token es inválida
             return false;
@@ -109,12 +109,12 @@ public class JwtService {
 
     public User getUserFromToken(String token) {
         try {
-            Jws<Claims> claimsJws = Jwts.parserBuilder()
-                    .setSigningKey(getSigningKey())
+            Jws<Claims> claimsJws =
+                    Jwts.parser().verifyWith(getSigningKey())
                     .build()
-                    .parseClaimsJws(token);
+                            .parseSignedClaims(token);
 
-            Claims claims = claimsJws.getBody();
+            Claims claims = claimsJws.getPayload();
 
             System.out.println("Claims: " + claims);
 
@@ -134,12 +134,12 @@ public class JwtService {
     // Helper method to extract roles from token
     public List<String> getRolesFromToken(String token) {
         try {
-            Jws<Claims> claimsJws = Jwts.parserBuilder()
-                    .setSigningKey(getSigningKey())
+            Jws<Claims> claimsJws =
+                    Jwts.parser().verifyWith(getSigningKey())
                     .build()
-                    .parseClaimsJws(token);
+                            .parseSignedClaims(token);
 
-            Claims claims = claimsJws.getBody();
+            Claims claims = claimsJws.getPayload();
 
             @SuppressWarnings("unchecked")
             List<String> roles = (List<String>) claims.get("roles");
