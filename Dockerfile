@@ -19,8 +19,11 @@ RUN mvn clean package -DskipTests
 # Usar imagen más liviana para ejecutar (Debian-based para mejor soporte SSL)
 FROM eclipse-temurin:17-jre-jammy
 
-# Actualizar certificados CA
-RUN apt-get update && apt-get install -y ca-certificates && update-ca-certificates && rm -rf /var/lib/apt/lists/*
+# Instalar certificados CA y herramientas de red
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates openssl && \
+    update-ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 
 # Copiar el JAR compilado desde la etapa anterior
 COPY --from=build /app/target/*.jar app.jar
