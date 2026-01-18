@@ -33,7 +33,7 @@ import com.prog3.security.Repositories.*;
     "http://localhost:3000", 
     "http://localhost:8080", 
     "http://127.0.0.1:3000",
-    "https://sopa-y-carbon-app.web.app"
+        "https://vercy-motos-app.web.app"
 }, allowCredentials = "true")
 
 public class AdminController {

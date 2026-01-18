@@ -28,7 +28,7 @@ public class RootController {
     @GetMapping("/")
     public ResponseEntity<ApiResponse<Map<String, Object>>> root() {
         Map<String, Object> body = new HashMap<>();
-        body.put("message", "Sopa-y-Carbon API está arriba");
+        body.put("message", "Vercy Motos API está arriba");
         body.put("timestamp", Instant.now().toString());
         return responseService.success(body, "API disponible");
     }

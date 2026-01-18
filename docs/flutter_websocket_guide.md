@@ -1,6 +1,6 @@
 # Guía de Implementación de WebSockets para Flutter
 
-Este documento proporciona una guía sobre cómo implementar la conexión WebSocket en Flutter para recibir actualizaciones en tiempo real desde el servidor backend de Sopa y Carbón.
+Este documento proporciona una guía sobre cómo implementar la conexión WebSocket en Flutter para recibir actualizaciones en tiempo real desde el servidor backend de Vercy Motos.
 
 ## Dependencias Necesarias
 

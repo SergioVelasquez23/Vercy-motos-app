@@ -5,7 +5,7 @@
       "type": "java",
       "name": "Launch Application",
       "request": "launch",
-      "mainClass": "com.prog3.sopaycarbon.SopaycarBonApplication",
+      "mainClass": "com.prog3.security.SecurityApplication",
       "projectName": "security",
       "args": "",
       "vmArgs": "",
@@ -13,10 +13,10 @@
     },
     {
       "type": "java",
-      "name": "Spring Boot-SopaycarBonApplication",
+      "name": "Spring Boot-SecurityApplication",
       "request": "launch",
       "cwd": "${workspaceFolder}",
-      "mainClass": "com.prog3.sopaycarbon.SopaycarBonApplication",
+      "mainClass": "com.prog3.security.SecurityApplication",
       "projectName": "security",
       "args": "",
       "envFile": "${workspaceFolder}/.env"

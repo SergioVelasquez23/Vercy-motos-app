@@ -1,4 +1,4 @@
-# Guía de WebSocket - Sopa y Carbon
+# Guía de WebSocket - Vercy Motos
 
 ## ✅ Problemas Solucionados
 

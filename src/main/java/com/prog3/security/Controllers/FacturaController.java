@@ -469,7 +469,7 @@ public class FacturaController {
             resumen.put("estado", pedido.getEstado());
 
             // Información para el encabezado de la impresión
-            resumen.put("nombreRestaurante", "Sopa y Carbón");
+            resumen.put("nombreRestaurante", "Vercy Motos");
             resumen.put("direccionRestaurante", "Dirección del restaurante");
             resumen.put("telefonoRestaurante", "Teléfono del restaurante");
 
@@ -526,7 +526,7 @@ public class FacturaController {
             resumen.put("formaPago", factura.getFormaPago());
 
             // Información para el encabezado
-            resumen.put("nombreRestaurante", "Sopa y Carbón");
+            resumen.put("nombreRestaurante", "Vercy Motos");
             resumen.put("direccionRestaurante", "Dirección del restaurante");
             resumen.put("telefonoRestaurante", "Teléfono del restaurante");
 

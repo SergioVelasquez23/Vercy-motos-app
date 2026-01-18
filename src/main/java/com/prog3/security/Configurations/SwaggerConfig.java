@@ -15,8 +15,8 @@ import org.springframework.context.annotation.Configuration;
 import java.util.List;
 
 /**
- * Configuración de Swagger/OpenAPI para la documentación automática de la API
- * del sistema de restaurante "Sopa y Carbón".
+ * Configuración de Swagger/OpenAPI para la documentación automática de la API del sistema "Vercy
+ * Motos".
  */
 @Configuration
 public class SwaggerConfig {
@@ -32,9 +32,9 @@ public class SwaggerConfig {
 
     private Info apiInfo() {
         return new Info()
-                .title("Sopa y Carbón - API REST")
+                .title("Vercy Motos - API REST")
                 .description("""
-                    API REST para el sistema de gestión de restaurante "Sopa y Carbón".
+                        API REST para el sistema de gestión "Vercy Motos".
                     
                     ## Características principales:
                     - **Gestión completa de pedidos** con validación de caja abierta
@@ -71,15 +71,14 @@ public class SwaggerConfig {
 
     private Contact apiContact() {
         return new Contact()
-                .name("Equipo de Desarrollo - Sopa y Carbón")
-                .email("desarrollo@sopaycarbon.com")
-                .url("https://sopaycarbon.com");
+                .name("Equipo de Desarrollo - Vercy Motos").email("desarrollo@vercymotos.com")
+                .url("https://vercymotos.com");
     }
 
     private License apiLicense() {
         return new License()
                 .name("Licencia Privada")
-                .url("https://sopaycarbon.com/license");
+                .url("https://vercymotos.com/license");
     }
 
     private List<Server> apiServers() {
@@ -88,7 +87,7 @@ public class SwaggerConfig {
                 .url("http://localhost:8080")
                 .description("Servidor de desarrollo local"),
             new Server()
-                .url("https://api.sopaycarbon.com")
+                        .url("https://api.vercymotos.com")
                 .description("Servidor de producción")
         );
     }

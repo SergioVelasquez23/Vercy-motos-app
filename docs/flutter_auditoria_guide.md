@@ -1,6 +1,6 @@
 # Guía de Implementación de Auditoría para Flutter
 
-Este documento proporciona una guía para implementar la visualización y gestión de registros de auditoría en la aplicación Flutter de Sopa y Carbón.
+Este documento proporciona una guía para implementar la visualización y gestión de registros de auditoría en la aplicación Flutter de Vercy Motos.
 
 ## Dependencias Necesarias
 

@@ -1,4 +1,4 @@
-# Sopa y Carbón: Sistema Integral de Gestión para Restaurantes
+# Vercy Motos: Sistema Integral de Gestión
 
 ## Descripción General
 
@@ -87,4 +87,4 @@
 
 ---
 
-_Sopa y Carbón: La solución completa para la gestión eficiente de tu restaurante_
+_Vercy Motos: La solución completa para la gestión eficiente de tu negocio_

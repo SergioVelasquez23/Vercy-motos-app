@@ -32,7 +32,7 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
         // ✅ CORREGIDO: Usar orígenes específicos en lugar de "*" para permitir credenciales
-        config.addAllowedOrigin("https://sopa-y-carbon-app.web.app"); // 🔥 Firebase frontend
+        config.addAllowedOrigin("https://vercy-motos-app.web.app"); // 🔥 Firebase frontend
         config.addAllowedOrigin("https://vercy-motos.web.app"); // 🏍️ Vercy Motos frontend
         config.addAllowedMethod("*");
         config.addAllowedHeader("*");

@@ -31,9 +31,9 @@ public class WebConfig implements WebMvcConfigurer {
                 "http://10.112.216.36:5300",
                 "http://192.168.20.24:5300",
                 "http://192.168.20.24:8081",
-                "https://sopa-y-carbon.netlify.app",
+                                        "https://vercy-motos.netlify.app",
                 "https://zingy-kitsune-66762f.netlify.app",
-                        "https://sopa-y-carbon-app.web.app", // 🔥 Firebase frontend
+                                        "https://vercy-motos-app.web.app", // 🔥 Firebase frontend
                         "https://vercy-motos.web.app" // 🏍️ Vercy Motos frontend
             )
             .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
