@@ -27,24 +27,32 @@ public class CacheWarmupConfig {
         System.out.println("🔥 INICIANDO WARMUP DE CACHES...");
         System.out.println("═══════════════════════════════════════════════════════");
         
-        try {
-            long startTime = System.currentTimeMillis();
-            
-            // Precargar todos los caches importantes
-            cacheService.preloadImportantCaches();
-            
-            long endTime = System.currentTimeMillis();
-            long duration = endTime - startTime;
-            
-            System.out.println("═══════════════════════════════════════════════════════");
-            System.out.println("✅ WARMUP COMPLETADO en " + duration + "ms");
-            System.out.println("🚀 La aplicación está lista para servir requests rápidos");
-            System.out.println("═══════════════════════════════════════════════════════");
-            
-        } catch (Exception e) {
-            System.err.println("❌ ERROR durante warmup de caches: " + e.getMessage());
-            e.printStackTrace();
-            // No lanzar excepción para que la app arranque de todos modos
-        }
+        // Ejecutar warmup en un thread separado para no bloquear el inicio
+        new Thread(() -> {
+            try {
+                // Esperar 5 segundos para que MongoDB se estabilice
+                Thread.sleep(5000);
+
+                long startTime = System.currentTimeMillis();
+
+                // Precargar todos los caches importantes
+                cacheService.preloadImportantCaches();
+
+                long endTime = System.currentTimeMillis();
+                long duration = endTime - startTime;
+
+                System.out.println("═══════════════════════════════════════════════════════");
+                System.out.println("✅ WARMUP COMPLETADO en " + duration + "ms");
+                System.out.println("🚀 La aplicación está lista para servir requests rápidos");
+                System.out.println("═══════════════════════════════════════════════════════");
+
+            } catch (Exception e) {
+                System.err
+                        .println("⚠️ WARMUP FALLIDO (la app sigue funcionando): " + e.getMessage());
+                // No imprimir stack trace completo, solo advertencia
+            }
+        }, "cache-warmup-thread").start();
+
+        System.out.println("⏳ Warmup ejecutándose en background, la app ya está lista");
     }
 }
