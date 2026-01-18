@@ -75,18 +75,58 @@ public class ProductosController extends BaseController<Producto, String> {
     
     @Override
     protected void updateEntityFields(Producto existing, Producto updated) {
+        // Información básica
+        existing.setCodigo(updated.getCodigo());
         existing.setNombre(updated.getNombre());
+        existing.setDescripcion(updated.getDescripcion());
+        existing.setUnidadMedida(updated.getUnidadMedida());
+        existing.setCodigoBarras(updated.getCodigoBarras());
+        existing.setCodigoInterno(updated.getCodigoInterno());
+
+        // Precios
         existing.setPrecio(updated.getPrecio());
         existing.setCosto(updated.getCosto());
         existing.setImpuestos(updated.getImpuestos());
+        existing.setPrecioConIva(updated.getPrecioConIva());
         existing.setUtilidad(updated.getUtilidad());
-        existing.setTieneVariantes(updated.isTieneVariantes());
+        existing.setPreciosOpcionales(updated.getPreciosOpcionales());
+
+        // Clasificación
+        existing.setTipoItem(updated.getTipoItem());
+        existing.setCategoriaId(updated.getCategoriaId());
+        existing.setTipoProductoNombre(updated.getTipoProductoNombre());
+        existing.setLineaProducto(updated.getLineaProducto());
+        existing.setClaseProducto(updated.getClaseProducto());
+        existing.setMarca(updated.getMarca());
+
+        // Inventario
+        existing.setControlInventario(updated.isControlInventario());
+        existing.setCantidad(updated.getCantidad());
+        existing.setStockMinimo(updated.getStockMinimo());
+        existing.setStockOptimo(updated.getStockOptimo());
+        existing.setCantidadAlmacen(updated.getCantidadAlmacen());
+        existing.setCantidadBodega(updated.getCantidadBodega());
+
+        // Ubicación
+        existing.setLocalizacion(updated.getLocalizacion());
+        existing.setUbicacion3(updated.getUbicacion3());
+        existing.setUbicacion4(updated.getUbicacion4());
+        existing.setLocalizacionUbi1(updated.getLocalizacionUbi1());
+        existing.setLocalizacionUbi2(updated.getLocalizacionUbi2());
+        existing.setLocalizacionUbi3(updated.getLocalizacionUbi3());
+        existing.setLocalizacionUbi4(updated.getLocalizacionUbi4());
+
+        // Proveedor
+        existing.setProveedorNombre(updated.getProveedorNombre());
+        existing.setProveedorNit(updated.getProveedorNit());
+
+        // Otros
         existing.setEstado(updated.getEstado());
         existing.setImagenUrl(updated.getImagenUrl());
-        existing.setCategoriaId(updated.getCategoriaId());
-        existing.setDescripcion(updated.getDescripcion());
-        existing.setCantidad(updated.getCantidad());
         existing.setNota(updated.getNota());
+        existing.setTieneVariantes(updated.isTieneVariantes());
+
+        // Ingredientes
         existing.setIngredientesDisponibles(updated.getIngredientesDisponibles());
         existing.setTieneIngredientes(updated.isTieneIngredientes());
         existing.setTipoProducto(updated.getTipoProducto());
@@ -1079,8 +1119,11 @@ public class ProductosController extends BaseController<Producto, String> {
     }
 
     /**
-     * 📊 CARGA MASIVA DE PRODUCTOS DESDE EXCEL Formato esperado del Excel: | nombre | precio |
-     * costo | cantidad | categoriaId | descripcion | codigoBarras | codigoInterno |
+     * 📊 CARGA MASIVA DE PRODUCTOS DESDE EXCEL Columnas esperadas según el formato del sistema:
+     * CODIGO*, NOMBRE DEL PRODUCTO*, PRECIO VENTA PRINCIPAL*, COSTO UNITARIO*, PRODUCTO O
+     * SERVICIO*, CONTROL DE INVENTARIO, % IMPUESTO, INVENTARIO BAJO, INVENTARIO ÓPTIMO, TIPO
+     * PRODUCTO (NOMBRE), LINEA PRODUCTO, CLASE PRODUCTO, CÓDIGO DE BARRAS, LOCALIZACIÓN, NOMBRE
+     * PROVEEDOR, NIT PROVEEDOR, MARCA, ALMACEN, BODEGA, etc.
      */
     @PostMapping("/carga-masiva")
     public ResponseEntity<ApiResponse<Map<String, Object>>> cargarProductosDesdeExcel(
@@ -1089,12 +1132,10 @@ public class ProductosController extends BaseController<Producto, String> {
             System.out.println("📊 CARGA MASIVA - Iniciando procesamiento de Excel");
             long startTime = System.currentTimeMillis();
 
-            // Validar que el archivo no esté vacío
             if (archivo.isEmpty()) {
                 return responseService.badRequest("El archivo está vacío");
             }
 
-            // Validar extensión del archivo
             String nombreArchivo = archivo.getOriginalFilename();
             if (nombreArchivo == null
                     || (!nombreArchivo.endsWith(".xlsx") && !nombreArchivo.endsWith(".xls"))) {
@@ -1110,30 +1151,80 @@ public class ProductosController extends BaseController<Producto, String> {
 
                 org.apache.poi.ss.usermodel.Sheet sheet = workbook.getSheetAt(0);
 
-                // Obtener encabezados de la primera fila
                 org.apache.poi.ss.usermodel.Row headerRow = sheet.getRow(0);
                 if (headerRow == null) {
                     return responseService.badRequest("El archivo Excel no tiene encabezados");
                 }
 
+                // Mapear encabezados (normalizar a minúsculas y sin espacios)
                 Map<String, Integer> columnas = new HashMap<>();
                 for (int i = 0; i < headerRow.getLastCellNum(); i++) {
                     org.apache.poi.ss.usermodel.Cell cell = headerRow.getCell(i);
                     if (cell != null) {
-                        String header = obtenerValorCelda(cell).toLowerCase().trim();
+                        String header = obtenerValorCelda(cell).toLowerCase().trim()
+                                .replace("*", "").replace(" ", "_");
                         columnas.put(header, i);
                     }
                 }
 
-                // Validar columnas requeridas
-                if (!columnas.containsKey("nombre")) {
-                    return responseService.badRequest("El Excel debe contener la columna 'nombre'");
-                }
-                if (!columnas.containsKey("precio")) {
-                    return responseService.badRequest("El Excel debe contener la columna 'precio'");
+                // Mapeo de alias de columnas para flexibilidad
+                Map<String, String[]> aliasColumnas = new HashMap<>();
+                aliasColumnas.put("codigo", new String[] {"codigo", "codigo*", "código"});
+                aliasColumnas.put("nombre",
+                        new String[] {"nombre", "nombre_del_producto", "nombre_del_producto*"});
+                aliasColumnas.put("precio", new String[] {"precio", "precio_venta_principal",
+                        "precio_venta_principal*"});
+                aliasColumnas.put("costo",
+                        new String[] {"costo", "costo_unitario", "costo_unitario*"});
+                aliasColumnas.put("tipoitem", new String[] {"tipoitem", "tipo_item",
+                        "producto_o_servicio", "producto_o_servicio*"});
+                aliasColumnas.put("impuesto",
+                        new String[] {"impuesto", "impuestos", "%_impuesto", "iva"});
+                aliasColumnas.put("controlinventario",
+                        new String[] {"controlinventario", "control_de_inventario"});
+                aliasColumnas.put("stockminimo",
+                        new String[] {"stockminimo", "inventario_bajo", "stock_minimo"});
+                aliasColumnas.put("stockoptimo", new String[] {"stockoptimo", "inventario_óptimo",
+                        "inventario_optimo", "stock_optimo"});
+                aliasColumnas.put("tipoproductonombre", new String[] {"tipoproductonombre",
+                        "tipo_producto_(nombre)", "tipo_producto"});
+                aliasColumnas.put("lineaproducto", new String[] {"lineaproducto",
+                        "linea_producto_(nombre)", "linea_producto"});
+                aliasColumnas.put("claseproducto", new String[] {"claseproducto",
+                        "clase_producto_(nombre)", "clase_producto"});
+                aliasColumnas.put("codigobarras",
+                        new String[] {"codigobarras", "código_de_barras", "codigo_de_barras"});
+                aliasColumnas.put("localizacion", new String[] {"localizacion", "localización"});
+                aliasColumnas.put("proveedornombre",
+                        new String[] {"proveedornombre", "nombre_proveedor"});
+                aliasColumnas.put("proveedornit",
+                        new String[] {"proveedornit", "nit_proveedor_(sin_dv)", "nit_proveedor"});
+                aliasColumnas.put("marca", new String[] {"marca"});
+                aliasColumnas.put("almacen", new String[] {"almacen", "almacén"});
+                aliasColumnas.put("bodega", new String[] {"bodega"});
+
+                // Resolver columnas con alias
+                Map<String, Integer> columnasResueltas = new HashMap<>();
+                for (Map.Entry<String, String[]> entry : aliasColumnas.entrySet()) {
+                    for (String alias : entry.getValue()) {
+                        if (columnas.containsKey(alias)) {
+                            columnasResueltas.put(entry.getKey(), columnas.get(alias));
+                            break;
+                        }
+                    }
                 }
 
-                // Procesar cada fila (desde la fila 1, saltando encabezados)
+                // Validar columnas obligatorias
+                if (!columnasResueltas.containsKey("nombre")) {
+                    return responseService.badRequest(
+                            "El Excel debe contener la columna 'NOMBRE DEL PRODUCTO' o 'nombre'");
+                }
+                if (!columnasResueltas.containsKey("precio")) {
+                    return responseService.badRequest(
+                            "El Excel debe contener la columna 'PRECIO VENTA PRINCIPAL' o 'precio'");
+                }
+
+                // Procesar cada fila
                 for (int i = 1; i <= sheet.getLastRowNum(); i++) {
                     org.apache.poi.ss.usermodel.Row row = sheet.getRow(i);
                     if (row == null)
@@ -1142,8 +1233,8 @@ public class ProductosController extends BaseController<Producto, String> {
                     filasProcesadas++;
 
                     try {
-                        // Obtener valores de las columnas
-                        String nombre = obtenerValorCeldaSeguro(row, columnas.get("nombre"));
+                        String nombre =
+                                obtenerValorCeldaSeguro(row, columnasResueltas.get("nombre"));
 
                         if (nombre == null || nombre.trim().isEmpty()) {
                             Map<String, Object> error = new HashMap<>();
@@ -1153,7 +1244,20 @@ public class ProductosController extends BaseController<Producto, String> {
                             continue;
                         }
 
-                        // Verificar si ya existe un producto con ese nombre
+                        String codigo =
+                                obtenerValorCeldaSeguro(row, columnasResueltas.get("codigo"));
+
+                        // Verificar si ya existe un producto con ese código o nombre
+                        if (codigo != null && !codigo.isEmpty()
+                                && this.theProductoRepository.existsByCodigo(codigo.trim())) {
+                            Map<String, Object> error = new HashMap<>();
+                            error.put("fila", i + 1);
+                            error.put("codigo", codigo);
+                            error.put("error", "Ya existe un producto con este código");
+                            errores.add(error);
+                            continue;
+                        }
+
                         if (this.theProductoRepository.existsByNombre(nombre.trim())) {
                             Map<String, Object> error = new HashMap<>();
                             error.put("fila", i + 1);
@@ -1163,7 +1267,8 @@ public class ProductosController extends BaseController<Producto, String> {
                             continue;
                         }
 
-                        double precio = obtenerValorNumerico(row, columnas.get("precio"), 0.0);
+                        double precio =
+                                obtenerValorNumerico(row, columnasResueltas.get("precio"), 0.0);
                         if (precio <= 0) {
                             Map<String, Object> error = new HashMap<>();
                             error.put("fila", i + 1);
@@ -1173,46 +1278,65 @@ public class ProductosController extends BaseController<Producto, String> {
                             continue;
                         }
 
-                        // Crear el producto
+                        // Crear el producto con todos los campos
                         Producto producto = new Producto();
+
+                        // Información básica
+                        producto.setCodigo(codigo != null ? codigo.trim() : null);
                         producto.setNombre(nombre.trim());
+                        producto.setCodigoBarras(obtenerValorCeldaSeguro(row,
+                                columnasResueltas.get("codigobarras")));
+
+                        // Precios
                         producto.setPrecio(precio);
-                        producto.setCosto(obtenerValorNumerico(row, columnas.get("costo"), 0.0));
-                        producto.setCantidad(
-                                (int) obtenerValorNumerico(row, columnas.get("cantidad"), 1.0));
+                        producto.setCosto(
+                                obtenerValorNumerico(row, columnasResueltas.get("costo"), 0.0));
                         producto.setImpuestos(
-                                obtenerValorNumerico(row, columnas.get("impuestos"), 0.0));
+                                obtenerValorNumerico(row, columnasResueltas.get("impuesto"), 0.0));
+                        producto.calcularPrecioConIva();
+                        producto.calcularUtilidad();
 
-                        // Campos opcionales
-                        if (columnas.containsKey("categoriaid")) {
-                            producto.setCategoriaId(
-                                    obtenerValorCeldaSeguro(row, columnas.get("categoriaid")));
-                        }
-                        if (columnas.containsKey("descripcion")) {
-                            producto.setDescripcion(
-                                    obtenerValorCeldaSeguro(row, columnas.get("descripcion")));
-                        }
-                        if (columnas.containsKey("codigobarras")) {
-                            producto.setCodigoBarras(
-                                    obtenerValorCeldaSeguro(row, columnas.get("codigobarras")));
-                        }
-                        if (columnas.containsKey("codigointerno")) {
-                            producto.setCodigoInterno(
-                                    obtenerValorCeldaSeguro(row, columnas.get("codigointerno")));
-                        }
-                        if (columnas.containsKey("nota")) {
-                            producto.setNota(obtenerValorCeldaSeguro(row, columnas.get("nota")));
-                        }
-                        if (columnas.containsKey("estado")) {
-                            String estado = obtenerValorCeldaSeguro(row, columnas.get("estado"));
-                            producto.setEstado(
-                                    estado != null && !estado.isEmpty() ? estado : "Activo");
-                        }
+                        // Clasificación
+                        String tipoItem =
+                                obtenerValorCeldaSeguro(row, columnasResueltas.get("tipoitem"));
+                        producto.setTipoItem(
+                                tipoItem != null ? tipoItem.toUpperCase() : "PRODUCTO");
+                        producto.setTipoProductoNombre(obtenerValorCeldaSeguro(row,
+                                columnasResueltas.get("tipoproductonombre")));
+                        producto.setLineaProducto(obtenerValorCeldaSeguro(row,
+                                columnasResueltas.get("lineaproducto")));
+                        producto.setClaseProducto(obtenerValorCeldaSeguro(row,
+                                columnasResueltas.get("claseproducto")));
+                        producto.setMarca(
+                                obtenerValorCeldaSeguro(row, columnasResueltas.get("marca")));
 
-                        // Calcular utilidad
-                        double utilidad = producto.getPrecio() - producto.getCosto()
-                                - producto.getImpuestos();
-                        producto.setUtilidad(utilidad);
+                        // Inventario
+                        String controlInv = obtenerValorCeldaSeguro(row,
+                                columnasResueltas.get("controlinventario"));
+                        producto.setControlInventario(
+                                controlInv == null || "CONTROLAR".equalsIgnoreCase(controlInv)
+                                        || "SI".equalsIgnoreCase(controlInv)
+                                        || "SÍ".equalsIgnoreCase(controlInv));
+                        producto.setStockMinimo((int) obtenerValorNumerico(row,
+                                columnasResueltas.get("stockminimo"), 0.0));
+                        producto.setStockOptimo((int) obtenerValorNumerico(row,
+                                columnasResueltas.get("stockoptimo"), 0.0));
+                        producto.setCantidadAlmacen((int) obtenerValorNumerico(row,
+                                columnasResueltas.get("almacen"), 0.0));
+                        producto.setCantidadBodega((int) obtenerValorNumerico(row,
+                                columnasResueltas.get("bodega"), 0.0));
+                        producto.setCantidad(
+                                producto.getCantidadAlmacen() + producto.getCantidadBodega());
+
+                        // Ubicación
+                        producto.setLocalizacion(obtenerValorCeldaSeguro(row,
+                                columnasResueltas.get("localizacion")));
+
+                        // Proveedor
+                        producto.setProveedorNombre(obtenerValorCeldaSeguro(row,
+                                columnasResueltas.get("proveedornombre")));
+                        producto.setProveedorNit(obtenerValorCeldaSeguro(row,
+                                columnasResueltas.get("proveedornit")));
 
                         // Guardar producto
                         Producto saved = this.theProductoRepository.save(producto);
@@ -1257,7 +1381,8 @@ public class ProductosController extends BaseController<Producto, String> {
     }
 
     /**
-     * 📥 DESCARGAR PLANTILLA EXCEL Genera una plantilla Excel vacía con los encabezados correctos
+     * 📥 DESCARGAR PLANTILLA EXCEL Genera una plantilla Excel con los encabezados según el formato
+     * del sistema
      */
     @GetMapping("/plantilla-excel")
     public ResponseEntity<byte[]> descargarPlantillaExcel() {
@@ -1266,41 +1391,66 @@ public class ProductosController extends BaseController<Producto, String> {
                     new org.apache.poi.xssf.usermodel.XSSFWorkbook();
             org.apache.poi.ss.usermodel.Sheet sheet = workbook.createSheet("Productos");
 
-            // Crear estilo para encabezados
-            org.apache.poi.ss.usermodel.CellStyle headerStyle = workbook.createCellStyle();
-            org.apache.poi.ss.usermodel.Font headerFont = workbook.createFont();
-            headerFont.setBold(true);
-            headerStyle.setFont(headerFont);
-            headerStyle.setFillForegroundColor(
-                    org.apache.poi.ss.usermodel.IndexedColors.LIGHT_BLUE.getIndex());
-            headerStyle
+            // Crear estilo para encabezados obligatorios (rojo)
+            org.apache.poi.ss.usermodel.CellStyle headerStyleRequired = workbook.createCellStyle();
+            org.apache.poi.ss.usermodel.Font headerFontRequired = workbook.createFont();
+            headerFontRequired.setBold(true);
+            headerFontRequired.setColor(org.apache.poi.ss.usermodel.IndexedColors.RED.getIndex());
+            headerStyleRequired.setFont(headerFontRequired);
+            headerStyleRequired.setFillForegroundColor(
+                    org.apache.poi.ss.usermodel.IndexedColors.LIGHT_YELLOW.getIndex());
+            headerStyleRequired
                     .setFillPattern(org.apache.poi.ss.usermodel.FillPatternType.SOLID_FOREGROUND);
 
-            // Crear encabezados
+            // Crear estilo para encabezados opcionales
+            org.apache.poi.ss.usermodel.CellStyle headerStyleOptional = workbook.createCellStyle();
+            org.apache.poi.ss.usermodel.Font headerFontOptional = workbook.createFont();
+            headerFontOptional.setBold(true);
+            headerStyleOptional.setFont(headerFontOptional);
+            headerStyleOptional.setFillForegroundColor(
+                    org.apache.poi.ss.usermodel.IndexedColors.LIGHT_BLUE.getIndex());
+            headerStyleOptional
+                    .setFillPattern(org.apache.poi.ss.usermodel.FillPatternType.SOLID_FOREGROUND);
+
+            // Crear encabezados según el formato del sistema
             org.apache.poi.ss.usermodel.Row headerRow = sheet.createRow(0);
-            String[] headers = {"nombre", "precio", "costo", "cantidad", "impuestos", "categoriaId",
-                    "descripcion", "codigoBarras", "codigoInterno", "nota", "estado"};
+            String[] headers = {"CODIGO*", "NOMBRE DEL PRODUCTO*", "PRECIO VENTA PRINCIPAL*",
+                    "COSTO UNITARIO*", "PRODUCTO O SERVICIO*", "CONTROL DE INVENTARIO",
+                    "% IMPUESTO", "INVENTARIO BAJO", "INVENTARIO ÓPTIMO", "TIPO PRODUCTO (NOMBRE)",
+                    "LINEA PRODUCTO (NOMBRE)", "CLASE PRODUCTO (NOMBRE)", "CÓDIGO DE BARRAS",
+                    "LOCALIZACIÓN", "NOMBRE PROVEEDOR", "NIT PROVEEDOR (SIN DV)", "MARCA",
+                    "ALMACEN", "BODEGA"};
+            boolean[] isRequired = {true, true, true, true, true, false, false, false, false, false,
+                    false, false, false, false, false, false, false, false, false};
 
             for (int i = 0; i < headers.length; i++) {
                 org.apache.poi.ss.usermodel.Cell cell = headerRow.createCell(i);
                 cell.setCellValue(headers[i]);
-                cell.setCellStyle(headerStyle);
-                sheet.setColumnWidth(i, 4000);
+                cell.setCellStyle(isRequired[i] ? headerStyleRequired : headerStyleOptional);
+                sheet.setColumnWidth(i, 5000);
             }
 
             // Agregar fila de ejemplo
             org.apache.poi.ss.usermodel.Row exampleRow = sheet.createRow(1);
-            exampleRow.createCell(0).setCellValue("Producto Ejemplo");
-            exampleRow.createCell(1).setCellValue(10000);
-            exampleRow.createCell(2).setCellValue(5000);
-            exampleRow.createCell(3).setCellValue(10);
-            exampleRow.createCell(4).setCellValue(0);
-            exampleRow.createCell(5).setCellValue("");
-            exampleRow.createCell(6).setCellValue("Descripción del producto");
-            exampleRow.createCell(7).setCellValue("");
-            exampleRow.createCell(8).setCellValue("PRD-001");
-            exampleRow.createCell(9).setCellValue("");
-            exampleRow.createCell(10).setCellValue("Activo");
+            exampleRow.createCell(0).setCellValue("PFFBNKD");
+            exampleRow.createCell(1).setCellValue("PUFF BRILLANTE MULTICOLOR");
+            exampleRow.createCell(2).setCellValue(30000);
+            exampleRow.createCell(3).setCellValue(12500);
+            exampleRow.createCell(4).setCellValue("PRODUCTO");
+            exampleRow.createCell(5).setCellValue("CONTROLAR");
+            exampleRow.createCell(6).setCellValue(0);
+            exampleRow.createCell(7).setCellValue(5);
+            exampleRow.createCell(8).setCellValue(10);
+            exampleRow.createCell(9).setCellValue("ACCESORIO");
+            exampleRow.createCell(10).setCellValue("");
+            exampleRow.createCell(11).setCellValue("");
+            exampleRow.createCell(12).setCellValue("750220000001");
+            exampleRow.createCell(13).setCellValue("");
+            exampleRow.createCell(14).setCellValue("");
+            exampleRow.createCell(15).setCellValue("");
+            exampleRow.createCell(16).setCellValue("");
+            exampleRow.createCell(17).setCellValue(60);
+            exampleRow.createCell(18).setCellValue(72);
 
             // Convertir a bytes
             java.io.ByteArrayOutputStream outputStream = new java.io.ByteArrayOutputStream();

@@ -1,4 +1,4 @@
-package com.vercymotos.config;
+package com.sopaycarbon.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

@@ -34,8 +34,14 @@ public interface ProductoRepository extends MongoRepository<Producto, String> {
     // Verificar si existe un producto con ese nombre
     boolean existsByNombre(String nombre);
 
+    // Verificar si existe un producto con ese código
+    boolean existsByCodigo(String codigo);
+
     // Buscar producto por nombre exacto
     Producto findByNombre(String nombre);
+
+    // Buscar producto por código
+    java.util.Optional<Producto> findByCodigo(String codigo);
 
     // Buscar por código de barras
     java.util.Optional<Producto> findByCodigoBarras(String codigoBarras);
