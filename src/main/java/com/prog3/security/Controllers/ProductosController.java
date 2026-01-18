@@ -1179,7 +1179,7 @@ public class ProductosController extends BaseController<Producto, String> {
 
             return responseService.success(resultado, "Diagnóstico completado");
         } catch (Exception e) {
-            return responseService.error("Error al diagnosticar: " + e.getMessage());
+            return responseService.internalError("Error al diagnosticar: " + e.getMessage());
         }
     }
 
