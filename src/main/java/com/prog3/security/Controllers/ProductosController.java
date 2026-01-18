@@ -1167,8 +1167,9 @@ public class ProductosController extends BaseController<Producto, String> {
                     }
                 }
 
-                // Mapeo de alias de columnas para flexibilidad
+                // Mapeo de alias de columnas para flexibilidad (coincide con Excel del usuario)
                 Map<String, String[]> aliasColumnas = new HashMap<>();
+                // Fila 1 del Excel
                 aliasColumnas.put("codigo", new String[] {"codigo", "codigo*", "código"});
                 aliasColumnas.put("nombre",
                         new String[] {"nombre", "nombre_del_producto", "nombre_del_producto*"});
@@ -1178,10 +1179,10 @@ public class ProductosController extends BaseController<Producto, String> {
                         new String[] {"costo", "costo_unitario", "costo_unitario*"});
                 aliasColumnas.put("tipoitem", new String[] {"tipoitem", "tipo_item",
                         "producto_o_servicio", "producto_o_servicio*"});
-                aliasColumnas.put("impuesto",
-                        new String[] {"impuesto", "impuestos", "%_impuesto", "iva"});
                 aliasColumnas.put("controlinventario",
                         new String[] {"controlinventario", "control_de_inventario"});
+                aliasColumnas.put("impuesto",
+                        new String[] {"impuesto", "impuestos", "%_impuesto", "iva"});
                 aliasColumnas.put("stockminimo",
                         new String[] {"stockminimo", "inventario_bajo", "stock_minimo"});
                 aliasColumnas.put("stockoptimo", new String[] {"stockoptimo", "inventario_óptimo",
@@ -1190,6 +1191,8 @@ public class ProductosController extends BaseController<Producto, String> {
                         "tipo_producto_(nombre)", "tipo_producto"});
                 aliasColumnas.put("lineaproducto", new String[] {"lineaproducto",
                         "linea_producto_(nombre)", "linea_producto"});
+
+                // Fila 2 del Excel
                 aliasColumnas.put("claseproducto", new String[] {"claseproducto",
                         "clase_producto_(nombre)", "clase_producto"});
                 aliasColumnas.put("codigobarras",
@@ -1200,8 +1203,30 @@ public class ProductosController extends BaseController<Producto, String> {
                 aliasColumnas.put("proveedornit",
                         new String[] {"proveedornit", "nit_proveedor_(sin_dv)", "nit_proveedor"});
                 aliasColumnas.put("marca", new String[] {"marca"});
+                aliasColumnas.put("precioopc1",
+                        new String[] {"precio_de_venta_opc_1", "precioopc1"});
+                aliasColumnas.put("precioopc2",
+                        new String[] {"precio_de_venta_opc_2", "precioopc2"});
+                aliasColumnas.put("precioopc3",
+                        new String[] {"precio_de_venta_opc_3", "precioopc3"});
+                aliasColumnas.put("precioopc4",
+                        new String[] {"precio_de_venta_opc_4", "precioopc4"});
+                aliasColumnas.put("precioopc5",
+                        new String[] {"precio_de_venta_opc_5", "precioopc5"});
+
+                // Fila 3 del Excel
                 aliasColumnas.put("almacen", new String[] {"almacen", "almacén"});
                 aliasColumnas.put("bodega", new String[] {"bodega"});
+                aliasColumnas.put("ubicacion3", new String[] {"ubicación_3", "ubicacion_3"});
+                aliasColumnas.put("ubicacion4", new String[] {"ubicación_4", "ubicacion_4"});
+                aliasColumnas.put("localizacionubi1",
+                        new String[] {"localizacion_ubi_1", "localización_ubi_1"});
+                aliasColumnas.put("localizacionubi2",
+                        new String[] {"localizacion_ubi_2", "localización_ubi_2"});
+                aliasColumnas.put("localizacionubi3",
+                        new String[] {"localizacion_ubi_3", "localización_ubi_3"});
+                aliasColumnas.put("localizacionubi4",
+                        new String[] {"localizacion_ubi_4", "localización_ubi_4"});
 
                 // Resolver columnas con alias
                 Map<String, Integer> columnasResueltas = new HashMap<>();
@@ -1296,6 +1321,32 @@ public class ProductosController extends BaseController<Producto, String> {
                         producto.calcularPrecioConIva();
                         producto.calcularUtilidad();
 
+                        // Precios opcionales
+                        List<Double> preciosOpc = new ArrayList<>();
+                        double precioOpc1 =
+                                obtenerValorNumerico(row, columnasResueltas.get("precioopc1"), 0.0);
+                        double precioOpc2 =
+                                obtenerValorNumerico(row, columnasResueltas.get("precioopc2"), 0.0);
+                        double precioOpc3 =
+                                obtenerValorNumerico(row, columnasResueltas.get("precioopc3"), 0.0);
+                        double precioOpc4 =
+                                obtenerValorNumerico(row, columnasResueltas.get("precioopc4"), 0.0);
+                        double precioOpc5 =
+                                obtenerValorNumerico(row, columnasResueltas.get("precioopc5"), 0.0);
+                        if (precioOpc1 > 0)
+                            preciosOpc.add(precioOpc1);
+                        if (precioOpc2 > 0)
+                            preciosOpc.add(precioOpc2);
+                        if (precioOpc3 > 0)
+                            preciosOpc.add(precioOpc3);
+                        if (precioOpc4 > 0)
+                            preciosOpc.add(precioOpc4);
+                        if (precioOpc5 > 0)
+                            preciosOpc.add(precioOpc5);
+                        if (!preciosOpc.isEmpty()) {
+                            producto.setPreciosOpcionales(preciosOpc);
+                        }
+
                         // Clasificación
                         String tipoItem =
                                 obtenerValorCeldaSeguro(row, columnasResueltas.get("tipoitem"));
@@ -1331,6 +1382,18 @@ public class ProductosController extends BaseController<Producto, String> {
                         // Ubicación
                         producto.setLocalizacion(obtenerValorCeldaSeguro(row,
                                 columnasResueltas.get("localizacion")));
+                        producto.setUbicacion3(
+                                obtenerValorCeldaSeguro(row, columnasResueltas.get("ubicacion3")));
+                        producto.setUbicacion4(
+                                obtenerValorCeldaSeguro(row, columnasResueltas.get("ubicacion4")));
+                        producto.setLocalizacionUbi1(obtenerValorCeldaSeguro(row,
+                                columnasResueltas.get("localizacionubi1")));
+                        producto.setLocalizacionUbi2(obtenerValorCeldaSeguro(row,
+                                columnasResueltas.get("localizacionubi2")));
+                        producto.setLocalizacionUbi3(obtenerValorCeldaSeguro(row,
+                                columnasResueltas.get("localizacionubi3")));
+                        producto.setLocalizacionUbi4(obtenerValorCeldaSeguro(row,
+                                columnasResueltas.get("localizacionubi4")));
 
                         // Proveedor
                         producto.setProveedorNombre(obtenerValorCeldaSeguro(row,
