@@ -1119,7 +1119,72 @@ public class ProductosController extends BaseController<Producto, String> {
     }
 
     /**
-     * 📊 CARGA MASIVA DE PRODUCTOS DESDE EXCEL Columnas esperadas según el formato del sistema:
+     * � DIAGNÓSTICO - Ver columnas detectadas en un Excel Endpoint para verificar qué columnas
+     * detecta el sistema
+     */
+    @PostMapping("/diagnostico-excel")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> diagnosticarExcel(
+            @RequestParam("archivo") org.springframework.web.multipart.MultipartFile archivo) {
+        try {
+            Map<String, Object> resultado = new HashMap<>();
+
+            if (archivo.isEmpty()) {
+                return responseService.badRequest("El archivo está vacío");
+            }
+
+            try (org.apache.poi.ss.usermodel.Workbook workbook =
+                    org.apache.poi.ss.usermodel.WorkbookFactory.create(archivo.getInputStream())) {
+
+                org.apache.poi.ss.usermodel.Sheet sheet = workbook.getSheetAt(0);
+                org.apache.poi.ss.usermodel.Row headerRow = sheet.getRow(0);
+
+                if (headerRow == null) {
+                    return responseService.badRequest("No hay fila de encabezados");
+                }
+
+                List<Map<String, Object>> columnasDetectadas = new ArrayList<>();
+                Map<String, Integer> columnasNormalizadas = new HashMap<>();
+
+                for (int i = 0; i < headerRow.getLastCellNum(); i++) {
+                    org.apache.poi.ss.usermodel.Cell cell = headerRow.getCell(i);
+                    if (cell != null) {
+                        String valorOriginal = obtenerValorCelda(cell);
+                        String valorNormalizado = valorOriginal.toLowerCase().trim()
+                                .replace("*", "").replace(" ", "_").replace("á", "a")
+                                .replace("é", "e").replace("í", "i").replace("ó", "o")
+                                .replace("ú", "u").replace("ñ", "n");
+
+                        Map<String, Object> col = new HashMap<>();
+                        col.put("indice", i);
+                        col.put("original", valorOriginal);
+                        col.put("normalizado", valorNormalizado);
+                        columnasDetectadas.add(col);
+                        columnasNormalizadas.put(valorNormalizado, i);
+                    }
+                }
+
+                resultado.put("totalColumnas", columnasDetectadas.size());
+                resultado.put("columnas", columnasDetectadas);
+                resultado.put("columnasNormalizadas", columnasNormalizadas.keySet());
+                resultado.put("totalFilas", sheet.getLastRowNum());
+
+                // Verificar si tiene las columnas requeridas
+                boolean tieneNombre = columnasNormalizadas.containsKey("nombre_del_producto")
+                        || columnasNormalizadas.containsKey("nombre");
+                boolean tienePrecio = columnasNormalizadas.containsKey("precio_venta_principal")
+                        || columnasNormalizadas.containsKey("precio");
+                resultado.put("tieneColumnaNombre", tieneNombre);
+                resultado.put("tieneColumnaPrecio", tienePrecio);
+            }
+
+            return responseService.success(resultado, "Diagnóstico completado");
+        } catch (Exception e) {
+            return responseService.error("Error al diagnosticar: " + e.getMessage());
+        }
+    }
+
+    /**
+     * �📊 CARGA MASIVA DE PRODUCTOS DESDE EXCEL Columnas esperadas según el formato del sistema:
      * CODIGO*, NOMBRE DEL PRODUCTO*, PRECIO VENTA PRINCIPAL*, COSTO UNITARIO*, PRODUCTO O
      * SERVICIO*, CONTROL DE INVENTARIO, % IMPUESTO, INVENTARIO BAJO, INVENTARIO ÓPTIMO, TIPO
      * PRODUCTO (NOMBRE), LINEA PRODUCTO, CLASE PRODUCTO, CÓDIGO DE BARRAS, LOCALIZACIÓN, NOMBRE
