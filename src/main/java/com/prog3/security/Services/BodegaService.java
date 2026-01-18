@@ -443,7 +443,7 @@ public class BodegaService {
                 Ingrediente i = (Ingrediente) item;
                 itemId = i.get_id();
                 itemNombre = i.getNombre();
-                itemConsolidado.put("unidadMedida", i.getUnidadMedida());
+                itemConsolidado.put("unidad", i.getUnidad());
             }
 
             itemConsolidado.put("itemId", itemId);
