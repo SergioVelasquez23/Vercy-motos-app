@@ -1156,37 +1156,41 @@ public class ProductosController extends BaseController<Producto, String> {
                     return responseService.badRequest("El archivo Excel no tiene encabezados");
                 }
 
-                // Mapear encabezados (normalizar a minúsculas y sin espacios)
+                // Mapear encabezados (normalizar a minúsculas, sin asteriscos, espacios a guion
+                // bajo, sin tildes)
                 Map<String, Integer> columnas = new HashMap<>();
                 for (int i = 0; i < headerRow.getLastCellNum(); i++) {
                     org.apache.poi.ss.usermodel.Cell cell = headerRow.getCell(i);
                     if (cell != null) {
                         String header = obtenerValorCelda(cell).toLowerCase().trim()
-                                .replace("*", "").replace(" ", "_");
+                                .replace("*", "").replace(" ", "_").replace("á", "a")
+                                .replace("é", "e").replace("í", "i").replace("ó", "o")
+                                .replace("ú", "u").replace("ñ", "n");
                         columnas.put(header, i);
+                        System.out.println("📋 Columna " + i + ": '" + header + "'");
                     }
                 }
+                System.out.println("📋 Total columnas encontradas: " + columnas.keySet());
 
                 // Mapeo de alias de columnas para flexibilidad (coincide con Excel del usuario)
+                // Los alias ya están normalizados (sin *, sin tildes, espacios como _)
                 Map<String, String[]> aliasColumnas = new HashMap<>();
                 // Fila 1 del Excel
-                aliasColumnas.put("codigo", new String[] {"codigo", "codigo*", "código"});
+                aliasColumnas.put("codigo", new String[] {"codigo"});
                 aliasColumnas.put("nombre",
-                        new String[] {"nombre", "nombre_del_producto", "nombre_del_producto*"});
-                aliasColumnas.put("precio", new String[] {"precio", "precio_venta_principal",
-                        "precio_venta_principal*"});
-                aliasColumnas.put("costo",
-                        new String[] {"costo", "costo_unitario", "costo_unitario*"});
-                aliasColumnas.put("tipoitem", new String[] {"tipoitem", "tipo_item",
-                        "producto_o_servicio", "producto_o_servicio*"});
+                        new String[] {"nombre", "nombre_del_producto"});
+                aliasColumnas.put("precio", new String[] {"precio", "precio_venta_principal"});
+                aliasColumnas.put("costo", new String[] {"costo", "costo_unitario"});
+                aliasColumnas.put("tipoitem",
+                        new String[] {"tipoitem", "tipo_item", "producto_o_servicio"});
                 aliasColumnas.put("controlinventario",
                         new String[] {"controlinventario", "control_de_inventario"});
                 aliasColumnas.put("impuesto",
                         new String[] {"impuesto", "impuestos", "%_impuesto", "iva"});
                 aliasColumnas.put("stockminimo",
                         new String[] {"stockminimo", "inventario_bajo", "stock_minimo"});
-                aliasColumnas.put("stockoptimo", new String[] {"stockoptimo", "inventario_óptimo",
-                        "inventario_optimo", "stock_optimo"});
+                aliasColumnas.put("stockoptimo",
+                        new String[] {"stockoptimo", "inventario_optimo", "stock_optimo"});
                 aliasColumnas.put("tipoproductonombre", new String[] {"tipoproductonombre",
                         "tipo_producto_(nombre)", "tipo_producto"});
                 aliasColumnas.put("lineaproducto", new String[] {"lineaproducto",
@@ -1196,8 +1200,8 @@ public class ProductosController extends BaseController<Producto, String> {
                 aliasColumnas.put("claseproducto", new String[] {"claseproducto",
                         "clase_producto_(nombre)", "clase_producto"});
                 aliasColumnas.put("codigobarras",
-                        new String[] {"codigobarras", "código_de_barras", "codigo_de_barras"});
-                aliasColumnas.put("localizacion", new String[] {"localizacion", "localización"});
+                        new String[] {"codigobarras", "codigo_de_barras"});
+                aliasColumnas.put("localizacion", new String[] {"localizacion"});
                 aliasColumnas.put("proveedornombre",
                         new String[] {"proveedornombre", "nombre_proveedor"});
                 aliasColumnas.put("proveedornit",
@@ -1215,18 +1219,14 @@ public class ProductosController extends BaseController<Producto, String> {
                         new String[] {"precio_de_venta_opc_5", "precioopc5"});
 
                 // Fila 3 del Excel
-                aliasColumnas.put("almacen", new String[] {"almacen", "almacén"});
+                aliasColumnas.put("almacen", new String[] {"almacen"});
                 aliasColumnas.put("bodega", new String[] {"bodega"});
-                aliasColumnas.put("ubicacion3", new String[] {"ubicación_3", "ubicacion_3"});
-                aliasColumnas.put("ubicacion4", new String[] {"ubicación_4", "ubicacion_4"});
-                aliasColumnas.put("localizacionubi1",
-                        new String[] {"localizacion_ubi_1", "localización_ubi_1"});
-                aliasColumnas.put("localizacionubi2",
-                        new String[] {"localizacion_ubi_2", "localización_ubi_2"});
-                aliasColumnas.put("localizacionubi3",
-                        new String[] {"localizacion_ubi_3", "localización_ubi_3"});
-                aliasColumnas.put("localizacionubi4",
-                        new String[] {"localizacion_ubi_4", "localización_ubi_4"});
+                aliasColumnas.put("ubicacion3", new String[] {"ubicacion_3"});
+                aliasColumnas.put("ubicacion4", new String[] {"ubicacion_4"});
+                aliasColumnas.put("localizacionubi1", new String[] {"localizacion_ubi_1"});
+                aliasColumnas.put("localizacionubi2", new String[] {"localizacion_ubi_2"});
+                aliasColumnas.put("localizacionubi3", new String[] {"localizacion_ubi_3"});
+                aliasColumnas.put("localizacionubi4", new String[] {"localizacion_ubi_4"});
 
                 // Resolver columnas con alias
                 Map<String, Integer> columnasResueltas = new HashMap<>();
@@ -1238,6 +1238,7 @@ public class ProductosController extends BaseController<Producto, String> {
                         }
                     }
                 }
+                System.out.println("✅ Columnas resueltas: " + columnasResueltas.keySet());
 
                 // Validar columnas obligatorias
                 if (!columnasResueltas.containsKey("nombre")) {
