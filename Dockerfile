@@ -1,5 +1,5 @@
 # Usar imagen base con Maven incluido
-FROM maven:3.8.4-openjdk-17 as build
+FROM maven:3.9.5-eclipse-temurin-21 as build
 
 # Establecer directorio de trabajo
 WORKDIR /app
@@ -17,7 +17,7 @@ COPY src ./src
 RUN mvn clean package -DskipTests
 
 # Usar imagen más liviana para ejecutar (Debian-based para mejor soporte SSL)
-FROM eclipse-temurin:17-jre-jammy
+FROM eclipse-temurin:21-jre-jammy
 
 # Instalar certificados CA y herramientas de red
 RUN apt-get update && \
