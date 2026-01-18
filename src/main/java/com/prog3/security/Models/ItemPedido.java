@@ -40,6 +40,16 @@ public class ItemPedido {
     private String agregadoPor;                     // Usuario que agregó el producto (opcional)
     private java.time.LocalDateTime fechaAgregado; // Fecha cuando se agregó el producto (opcional)
     
+    // 💰 CAMPOS PARA FACTURACIÓN ELECTRÓNICA (DIAN)
+    private String codigoProducto; // Código interno del producto (ej: "PROD-001")
+    private String codigoBarras; // Código de barras (ej: "7501234567890")
+    private String tipoImpuesto; // Tipo de impuesto: "IVA", "INC", "Exento", "IVA+INC"
+    private double porcentajeImpuesto = 0.0; // Porcentaje del impuesto (ej: 19.0 para IVA 19%)
+    private double valorImpuesto = 0.0; // Valor calculado del impuesto
+    private double porcentajeDescuento = 0.0; // Porcentaje de descuento aplicado (ej: 10.0 para
+                                              // 10%)
+    private double valorDescuento = 0.0; // Valor del descuento aplicado
+
     // 🏗️ CONSTRUCTORES
     public ItemPedido() {
         this.ingredientesSeleccionados = new ArrayList<>();
@@ -170,6 +180,98 @@ public class ItemPedido {
     public void setFechaAgregado(java.time.LocalDateTime fechaAgregado) {
         this.fechaAgregado = fechaAgregado;
     }
+
+    // 💰 GETTERS Y SETTERS PARA FACTURACIÓN ELECTRÓNICA
+
+    public String getCodigoProducto() {
+        return codigoProducto;
+    }
+
+    public void setCodigoProducto(String codigoProducto) {
+        this.codigoProducto = codigoProducto;
+    }
+
+    public String getCodigoBarras() {
+        return codigoBarras;
+    }
+
+    public void setCodigoBarras(String codigoBarras) {
+        this.codigoBarras = codigoBarras;
+    }
+
+    public String getTipoImpuesto() {
+        return tipoImpuesto;
+    }
+
+    public void setTipoImpuesto(String tipoImpuesto) {
+        this.tipoImpuesto = tipoImpuesto;
+    }
+
+    public double getPorcentajeImpuesto() {
+        return porcentajeImpuesto;
+    }
+
+    public void setPorcentajeImpuesto(double porcentajeImpuesto) {
+        if (porcentajeImpuesto < 0 || porcentajeImpuesto > 100) {
+            throw new IllegalArgumentException(
+                    "El porcentaje de impuesto debe estar entre 0 y 100");
+        }
+        this.porcentajeImpuesto = porcentajeImpuesto;
+        calcularValorImpuesto();
+    }
+
+    public double getValorImpuesto() {
+        return valorImpuesto;
+    }
+
+    public void setValorImpuesto(double valorImpuesto) {
+        this.valorImpuesto = valorImpuesto;
+    }
+
+    public double getPorcentajeDescuento() {
+        return porcentajeDescuento;
+    }
+
+    public void setPorcentajeDescuento(double porcentajeDescuento) {
+        if (porcentajeDescuento < 0 || porcentajeDescuento > 100) {
+            throw new IllegalArgumentException(
+                    "El porcentaje de descuento debe estar entre 0 y 100");
+        }
+        this.porcentajeDescuento = porcentajeDescuento;
+        calcularValorDescuento();
+    }
+
+    public double getValorDescuento() {
+        return valorDescuento;
+    }
+
+    public void setValorDescuento(double valorDescuento) {
+        this.valorDescuento = valorDescuento;
+    }
+
+    /**
+     * Calcula el valor del impuesto basado en el subtotal y porcentaje
+     */
+    public void calcularValorImpuesto() {
+        this.valorImpuesto = (getSubtotal() * porcentajeImpuesto) / 100.0;
+    }
+
+    /**
+     * Calcula el valor del descuento basado en el subtotal y porcentaje
+     */
+    public void calcularValorDescuento() {
+        this.valorDescuento = (getSubtotal() * porcentajeDescuento) / 100.0;
+    }
+
+    /**
+     * Valor total del item (incluye impuesto y descuento)
+     * 
+     * @return subtotal + valorImpuesto - valorDescuento
+     */
+    public double getValorTotal() {
+        return getSubtotal() + valorImpuesto - valorDescuento;
+    }
+
     // 🛠 MÉTODOS UTILITARIOS
     @Override
     public String toString() {

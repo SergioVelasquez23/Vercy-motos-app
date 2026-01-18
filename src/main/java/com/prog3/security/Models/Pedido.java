@@ -161,6 +161,37 @@ public class Pedido {
     // Campo para relacionar con el cuadre de caja
     private String cuadreCajaId; // ID del cuadre de caja al que pertenece este pedido
 
+    // 📋 CAMPOS PARA FACTURACIÓN ELECTRÓNICA (DIAN)
+
+    // --- INFORMACIÓN GENERAL DE FACTURA ---
+    private String descripcionFactura; // Descripción general de la factura
+    private List<String> archivosAdjuntos; // URLs de archivos adjuntos
+    private String tipoFactura = "POS"; // Tipo: "POS", "Electrónica", "Computarizada", "Manual"
+    private LocalDateTime fechaVencimiento; // Fecha de vencimiento (para crédito)
+    private String numeroFactura; // Número único de factura (FAC-0001, FE-2024-001)
+    private String codigoBarrasFactura; // CUFE para facturas electrónicas
+
+    // --- RETENCIONES Y TRIBUTOS ---
+    private double retencion = 0.0; // Porcentaje de retención en la fuente
+    private double valorRetencion = 0.0; // Valor calculado de retención
+    private double reteIVA = 0.0; // Porcentaje de ReteIVA
+    private double valorReteIVA = 0.0; // Valor calculado de ReteIVA
+    private double reteICA = 0.0; // Porcentaje de ReteICA
+    private double valorReteICA = 0.0; // Valor calculado de ReteICA
+    private java.util.Map<String, Object> aiu; // AIU para contratos de obra
+
+    // --- DESCUENTOS DETALLADOS ---
+    private String tipoDescuentoGeneral = "Valor"; // Tipo: "Valor" o "Porcentaje"
+    private double descuentoGeneral = 0.0; // Valor del descuento general
+    private double descuentoProductos = 0.0; // Suma de descuentos de items
+
+    // --- TOTALES CALCULADOS ---
+    private double subtotal = 0.0; // Suma de items sin impuestos ni descuentos
+    private double totalImpuestos = 0.0; // Total de impuestos
+    private double totalDescuentos = 0.0; // Total de descuentos (general + productos)
+    private double totalRetenciones = 0.0; // Total de retenciones
+    private double totalFinal = 0.0; // Total final a pagar
+
     public Pedido() {
         this.fecha = LocalDateTime.now();
         this.estado = "activo";
@@ -169,6 +200,7 @@ public class Pedido {
         this.incluyePropina = false;
         this.items = new ArrayList<>();
         this.itemsPagados = new ArrayList<>();
+        this.archivosAdjuntos = new ArrayList<>();
     }
 
     public Pedido(String tipo, List<ItemPedido> items) {
@@ -435,6 +467,218 @@ public class Pedido {
 
     public void setCuadreCajaId(String cuadreCajaId) {
         this.cuadreCajaId = cuadreCajaId;
+    }
+
+    // 📋 GETTERS Y SETTERS PARA FACTURACIÓN ELECTRÓNICA
+
+    public String getDescripcionFactura() {
+        return descripcionFactura;
+    }
+
+    public void setDescripcionFactura(String descripcionFactura) {
+        this.descripcionFactura = descripcionFactura;
+    }
+
+    public List<String> getArchivosAdjuntos() {
+        return archivosAdjuntos;
+    }
+
+    public void setArchivosAdjuntos(List<String> archivosAdjuntos) {
+        this.archivosAdjuntos = archivosAdjuntos;
+    }
+
+    public String getTipoFactura() {
+        return tipoFactura;
+    }
+
+    public void setTipoFactura(String tipoFactura) {
+        this.tipoFactura = tipoFactura;
+    }
+
+    public LocalDateTime getFechaVencimiento() {
+        return fechaVencimiento;
+    }
+
+    public void setFechaVencimiento(LocalDateTime fechaVencimiento) {
+        this.fechaVencimiento = fechaVencimiento;
+    }
+
+    public String getNumeroFactura() {
+        return numeroFactura;
+    }
+
+    public void setNumeroFactura(String numeroFactura) {
+        this.numeroFactura = numeroFactura;
+    }
+
+    public String getCodigoBarrasFactura() {
+        return codigoBarrasFactura;
+    }
+
+    public void setCodigoBarrasFactura(String codigoBarrasFactura) {
+        this.codigoBarrasFactura = codigoBarrasFactura;
+    }
+
+    public double getRetencion() {
+        return retencion;
+    }
+
+    public void setRetencion(double retencion) {
+        this.retencion = retencion;
+    }
+
+    public double getValorRetencion() {
+        return valorRetencion;
+    }
+
+    public void setValorRetencion(double valorRetencion) {
+        this.valorRetencion = valorRetencion;
+    }
+
+    public double getReteIVA() {
+        return reteIVA;
+    }
+
+    public void setReteIVA(double reteIVA) {
+        this.reteIVA = reteIVA;
+    }
+
+    public double getValorReteIVA() {
+        return valorReteIVA;
+    }
+
+    public void setValorReteIVA(double valorReteIVA) {
+        this.valorReteIVA = valorReteIVA;
+    }
+
+    public double getReteICA() {
+        return reteICA;
+    }
+
+    public void setReteICA(double reteICA) {
+        this.reteICA = reteICA;
+    }
+
+    public double getValorReteICA() {
+        return valorReteICA;
+    }
+
+    public void setValorReteICA(double valorReteICA) {
+        this.valorReteICA = valorReteICA;
+    }
+
+    public java.util.Map<String, Object> getAiu() {
+        return aiu;
+    }
+
+    public void setAiu(java.util.Map<String, Object> aiu) {
+        this.aiu = aiu;
+    }
+
+    public String getTipoDescuentoGeneral() {
+        return tipoDescuentoGeneral;
+    }
+
+    public void setTipoDescuentoGeneral(String tipoDescuentoGeneral) {
+        this.tipoDescuentoGeneral = tipoDescuentoGeneral;
+    }
+
+    public double getDescuentoGeneral() {
+        return descuentoGeneral;
+    }
+
+    public void setDescuentoGeneral(double descuentoGeneral) {
+        this.descuentoGeneral = descuentoGeneral;
+    }
+
+    public double getDescuentoProductos() {
+        return descuentoProductos;
+    }
+
+    public void setDescuentoProductos(double descuentoProductos) {
+        this.descuentoProductos = descuentoProductos;
+    }
+
+    public double getSubtotal() {
+        return subtotal;
+    }
+
+    public void setSubtotal(double subtotal) {
+        this.subtotal = subtotal;
+    }
+
+    public double getTotalImpuestos() {
+        return totalImpuestos;
+    }
+
+    public void setTotalImpuestos(double totalImpuestos) {
+        this.totalImpuestos = totalImpuestos;
+    }
+
+    public double getTotalDescuentos() {
+        return totalDescuentos;
+    }
+
+    public void setTotalDescuentos(double totalDescuentos) {
+        this.totalDescuentos = totalDescuentos;
+    }
+
+    public double getTotalRetenciones() {
+        return totalRetenciones;
+    }
+
+    public void setTotalRetenciones(double totalRetenciones) {
+        this.totalRetenciones = totalRetenciones;
+    }
+
+    public double getTotalFinal() {
+        return totalFinal;
+    }
+
+    public void setTotalFinal(double totalFinal) {
+        this.totalFinal = totalFinal;
+    }
+
+    /**
+     * 🧮 Calcula todos los totales de la factura Debe llamarse antes de guardar o actualizar el
+     * pedido
+     */
+    public void calcularTotales() {
+        // 1. Calcular valores de impuestos y descuentos de cada item
+        for (ItemPedido item : items) {
+            item.calcularValorImpuesto();
+            item.calcularValorDescuento();
+        }
+
+        // 2. Calcular subtotal (suma de items sin impuestos ni descuentos)
+        this.subtotal = items.stream().mapToDouble(ItemPedido::getSubtotal).sum();
+
+        // 3. Calcular total de impuestos
+        this.totalImpuestos = items.stream().mapToDouble(ItemPedido::getValorImpuesto).sum();
+
+        // 4. Calcular descuento de productos
+        this.descuentoProductos = items.stream().mapToDouble(ItemPedido::getValorDescuento).sum();
+
+        // 5. Calcular descuento general (si es porcentaje, convertir a valor)
+        if ("Porcentaje".equals(this.tipoDescuentoGeneral)) {
+            this.descuentoGeneral = (this.subtotal * this.descuentoGeneral) / 100.0;
+        }
+
+        // 6. Calcular total de descuentos
+        this.totalDescuentos = this.descuentoGeneral + this.descuentoProductos;
+
+        // 7. Calcular retenciones
+        this.valorRetencion = (this.subtotal * this.retencion) / 100.0;
+        this.valorReteIVA = (this.totalImpuestos * this.reteIVA) / 100.0;
+        this.valorReteICA = (this.subtotal * this.reteICA) / 100.0;
+        this.totalRetenciones = this.valorRetencion + this.valorReteIVA + this.valorReteICA;
+
+        // 8. Calcular total final
+        this.totalFinal =
+                this.subtotal + this.totalImpuestos - this.totalDescuentos - this.totalRetenciones;
+
+        // 9. Sincronizar con campo 'total' para compatibilidad con código existente
+        this.total = this.totalFinal;
     }
 
     // Métodos de utilidad
