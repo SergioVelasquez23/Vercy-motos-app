@@ -1216,9 +1216,40 @@ public class ProductosController extends BaseController<Producto, String> {
 
                 org.apache.poi.ss.usermodel.Sheet sheet = workbook.getSheetAt(0);
 
-                org.apache.poi.ss.usermodel.Row headerRow = sheet.getRow(0);
+                // Buscar la fila de encabezados (puede no ser la fila 0 si hay instrucciones)
+                int filaEncabezados = -1;
+                org.apache.poi.ss.usermodel.Row headerRow = null;
+
+                for (int rowNum = 0; rowNum <= Math.min(10, sheet.getLastRowNum()); rowNum++) {
+                    org.apache.poi.ss.usermodel.Row row = sheet.getRow(rowNum);
+                    if (row != null) {
+                        for (int colNum = 0; colNum < row.getLastCellNum(); colNum++) {
+                            org.apache.poi.ss.usermodel.Cell cell = row.getCell(colNum);
+                            if (cell != null) {
+                                String valor = obtenerValorCelda(cell).toLowerCase().trim()
+                                        .replace("*", "").replace(" ", "_").replace("á", "a")
+                                        .replace("é", "e").replace("í", "i").replace("ó", "o")
+                                        .replace("ú", "u");
+                                // Buscar columnas clave que indiquen la fila de encabezados
+                                if (valor.equals("codigo") || valor.equals("nombre_del_producto")
+                                        || valor.equals("precio_venta_principal")) {
+                                    filaEncabezados = rowNum;
+                                    headerRow = row;
+                                    System.out
+                                            .println("✅ Fila de encabezados encontrada en la fila: "
+                                                    + rowNum);
+                                    break;
+                                }
+                            }
+                        }
+                        if (filaEncabezados >= 0)
+                            break;
+                    }
+                }
+
                 if (headerRow == null) {
-                    return responseService.badRequest("El archivo Excel no tiene encabezados");
+                    return responseService.badRequest(
+                            "No se encontró la fila de encabezados. Asegúrate de que el Excel tenga columnas como 'CODIGO*', 'NOMBRE DEL PRODUCTO*', 'PRECIO VENTA PRINCIPAL*'");
                 }
 
                 // Mapear encabezados (normalizar a minúsculas, sin asteriscos, espacios a guion
@@ -1231,8 +1262,10 @@ public class ProductosController extends BaseController<Producto, String> {
                                 .replace("*", "").replace(" ", "_").replace("á", "a")
                                 .replace("é", "e").replace("í", "i").replace("ó", "o")
                                 .replace("ú", "u").replace("ñ", "n");
-                        columnas.put(header, i);
-                        System.out.println("📋 Columna " + i + ": '" + header + "'");
+                        if (!header.isEmpty()) {
+                            columnas.put(header, i);
+                            System.out.println("📋 Columna " + i + ": '" + header + "'");
+                        }
                     }
                 }
                 System.out.println("📋 Total columnas encontradas: " + columnas.keySet());
@@ -1315,8 +1348,12 @@ public class ProductosController extends BaseController<Producto, String> {
                             "El Excel debe contener la columna 'PRECIO VENTA PRINCIPAL' o 'precio'");
                 }
 
-                // Procesar cada fila
-                for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+                // Procesar cada fila (empezando después de la fila de encabezados)
+                int filaInicioDatos = filaEncabezados + 1;
+                System.out.println("📊 Procesando datos desde fila " + filaInicioDatos + " hasta "
+                        + sheet.getLastRowNum());
+
+                for (int i = filaInicioDatos; i <= sheet.getLastRowNum(); i++) {
                     org.apache.poi.ss.usermodel.Row row = sheet.getRow(i);
                     if (row == null)
                         continue;
@@ -1328,10 +1365,7 @@ public class ProductosController extends BaseController<Producto, String> {
                                 obtenerValorCeldaSeguro(row, columnasResueltas.get("nombre"));
 
                         if (nombre == null || nombre.trim().isEmpty()) {
-                            Map<String, Object> error = new HashMap<>();
-                            error.put("fila", i + 1);
-                            error.put("error", "El nombre del producto está vacío");
-                            errores.add(error);
+                            // Puede ser una fila vacía, solo ignorar sin agregar error
                             continue;
                         }
 
