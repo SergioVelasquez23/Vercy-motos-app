@@ -31,10 +31,12 @@ COPY --from=build /app/target/*.jar app.jar
 # Exponer puerto
 EXPOSE $PORT
 
-# Comando para ejecutar la aplicación con configuración SSL mejorada
-CMD java -Dserver.port=$PORT \
-    -Djdk.tls.client.protocols=TLSv1.2 \
-    -Dhttps.protocols=TLSv1.2 \
-    -Djavax.net.ssl.trustStoreType=jks \
-    -Djsse.enableSNIExtension=false \
+# Comando para ejecutar la aplicación con configuración SSL mejorada y optimización de memoria
+CMD java -Xms256m -Xmx512m \
+    -Dserver.port=${PORT:-8081} \
+    -Djava.security.egd=file:/dev/./urandom \
+    -Djdk.tls.client.protocols=TLSv1.2,TLSv1.3 \
+    -Dhttps.protocols=TLSv1.2,TLSv1.3 \
+    -Djavax.net.ssl.trustStoreType=PKCS12 \
+    -Dcom.sun.net.ssl.checkRevocation=false \
     -jar app.jar

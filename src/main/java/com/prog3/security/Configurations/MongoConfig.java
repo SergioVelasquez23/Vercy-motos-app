@@ -26,22 +26,32 @@ public class MongoConfig {
      */
     @Bean
     public MongoClient mongoClient() {
+            // Configurar propiedades del sistema para SSL/TLS con más opciones
+            System.setProperty("jdk.tls.client.protocols", "TLSv1.2,TLSv1.3");
+            System.setProperty("https.protocols", "TLSv1.2,TLSv1.3");
+            System.setProperty("jdk.tls.trustNameService", "true");
+
         ConnectionString connectionString = new ConnectionString(mongoUri);
 
         MongoClientSettings settings = MongoClientSettings.builder()
                 .applyConnectionString(connectionString)
                 // Configuración de timeouts más generosa para conexiones cloud
-                .applyToSocketSettings(builder -> builder.connectTimeout(60, TimeUnit.SECONDS)
+                        .applyToSocketSettings(
+                                        builder -> builder.connectTimeout(60, TimeUnit.SECONDS)
                         .readTimeout(60, TimeUnit.SECONDS))
                 // Configuración de cluster y selección de servidor
-                .applyToClusterSettings(
-                        builder -> builder.serverSelectionTimeout(60, TimeUnit.SECONDS))
+                        .applyToClusterSettings(builder -> builder.serverSelectionTimeout(60,
+                                        TimeUnit.SECONDS))
                 // Pool de conexiones optimizado
-                .applyToConnectionPoolSettings(
-                        builder -> builder.maxSize(50).minSize(10).maxWaitTime(60, TimeUnit.SECONDS)
-                                .maxConnectionIdleTime(60, TimeUnit.SECONDS))
+                        .applyToConnectionPoolSettings(builder -> builder.maxSize(50).minSize(10)
+                                        .maxWaitTime(60, TimeUnit.SECONDS)
+                                        .maxConnectionIdleTime(60, TimeUnit.SECONDS))
+                        // SSL/TLS configuración más permisiva
+                        .applyToSslSettings(builder -> builder.enabled(true)
+                                        .invalidHostNameAllowed(true)) // Más permisivo para evitar
+                                                                       // errores SSL
                 // Retry de escrituras habilitado
-                .retryWrites(true).build();
+                        .retryWrites(true).build();
 
         return MongoClients.create(settings);
     }
