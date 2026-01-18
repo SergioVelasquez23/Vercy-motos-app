@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -408,5 +409,301 @@ public class BodegaService {
         resumen.put("totalIngredientes", ingredientes);
 
         return resumen;
+    }
+
+    /**
+     * 📊 INVENTARIO CONSOLIDADO Muestra todos los productos con su stock en cada bodega
+     */
+    public Map<String, Object> getInventarioConsolidado(String tipoItem) {
+        Map<String, Object> resultado = new HashMap<>();
+        List<Map<String, Object>> itemsConsolidados = new ArrayList<>();
+        List<Bodega> bodegasActivas = getBodegasActivas();
+
+        // Obtener todos los items según el tipo
+        List<?> items;
+        if ("producto".equalsIgnoreCase(tipoItem)) {
+            items = productoRepository.findAll();
+        } else {
+            items = ingredienteRepository.findAll();
+        }
+
+        for (Object item : items) {
+            Map<String, Object> itemConsolidado = new HashMap<>();
+            String itemId;
+            String itemNombre;
+
+            if (item instanceof Producto) {
+                Producto p = (Producto) item;
+                itemId = p.get_id();
+                itemNombre = p.getNombre();
+                itemConsolidado.put("precio", p.getPrecio());
+                itemConsolidado.put("costo", p.getCosto());
+                itemConsolidado.put("categoriaId", p.getCategoriaId());
+            } else {
+                Ingrediente i = (Ingrediente) item;
+                itemId = i.get_id();
+                itemNombre = i.getNombre();
+                itemConsolidado.put("unidadMedida", i.getUnidadMedida());
+            }
+
+            itemConsolidado.put("itemId", itemId);
+            itemConsolidado.put("nombre", itemNombre);
+            itemConsolidado.put("tipoItem", tipoItem);
+
+            // Stock por bodega
+            List<Map<String, Object>> stockPorBodega = new ArrayList<>();
+            double stockTotal = 0;
+
+            for (Bodega bodega : bodegasActivas) {
+                Map<String, Object> stockBodega = new HashMap<>();
+                stockBodega.put("bodegaId", bodega.get_id());
+                stockBodega.put("bodegaNombre", bodega.getNombre());
+                stockBodega.put("bodegaTipo", bodega.getTipo());
+
+                Optional<InventarioBodega> invOpt =
+                        inventarioBodegaRepository.findByBodegaIdAndItemId(bodega.get_id(), itemId);
+
+                if (invOpt.isPresent()) {
+                    InventarioBodega inv = invOpt.get();
+                    stockBodega.put("stockActual", inv.getStockActual());
+                    stockBodega.put("stockMinimo", inv.getStockMinimo());
+                    stockBodega.put("stockMaximo", inv.getStockMaximo());
+                    stockBodega.put("ubicacionFisica", inv.getUbicacionFisica());
+                    stockBodega.put("stockBajo", inv.getStockActual() <= inv.getStockMinimo());
+                    stockTotal += inv.getStockActual();
+                } else {
+                    stockBodega.put("stockActual", 0);
+                    stockBodega.put("stockMinimo", 0);
+                    stockBodega.put("stockMaximo", 0);
+                    stockBodega.put("ubicacionFisica", null);
+                    stockBodega.put("stockBajo", false);
+                }
+
+                stockPorBodega.add(stockBodega);
+            }
+
+            itemConsolidado.put("stockPorBodega", stockPorBodega);
+            itemConsolidado.put("stockTotal", stockTotal);
+            itemConsolidado.put("enAlgunaBodega", stockTotal > 0);
+
+            itemsConsolidados.add(itemConsolidado);
+        }
+
+        resultado.put("items", itemsConsolidados);
+        resultado.put("totalItems", itemsConsolidados.size());
+        resultado.put("bodegas", bodegasActivas.stream().map(b -> {
+            Map<String, Object> bodegaInfo = new HashMap<>();
+            bodegaInfo.put("_id", b.get_id());
+            bodegaInfo.put("nombre", b.getNombre());
+            bodegaInfo.put("tipo", b.getTipo());
+            return bodegaInfo;
+        }).collect(Collectors.toList()));
+
+        return resultado;
+    }
+
+    /**
+     * 📦 ASIGNAR PRODUCTOS MASIVAMENTE A UNA BODEGA
+     */
+    @Transactional
+    public Map<String, Object> asignarProductosMasivo(String bodegaId,
+            List<Map<String, Object>> productos) {
+        getBodegaById(bodegaId); // Validar que existe
+
+        List<InventarioBodega> asignados = new ArrayList<>();
+        List<Map<String, Object>> errores = new ArrayList<>();
+
+        for (Map<String, Object> prod : productos) {
+            try {
+                String itemId = (String) prod.get("itemId");
+                String tipoItem =
+                        prod.get("tipoItem") != null ? (String) prod.get("tipoItem") : "producto";
+                double cantidad =
+                        prod.get("cantidad") != null ? ((Number) prod.get("cantidad")).doubleValue()
+                                : 0;
+                double stockMinimo = prod.get("stockMinimo") != null
+                        ? ((Number) prod.get("stockMinimo")).doubleValue()
+                        : 0;
+                double stockMaximo = prod.get("stockMaximo") != null
+                        ? ((Number) prod.get("stockMaximo")).doubleValue()
+                        : 0;
+                String ubicacionFisica = (String) prod.get("ubicacionFisica");
+
+                // Verificar si ya existe
+                Optional<InventarioBodega> existente =
+                        inventarioBodegaRepository.findByBodegaIdAndItemId(bodegaId, itemId);
+
+                InventarioBodega inventario;
+                if (existente.isPresent()) {
+                    inventario = existente.get();
+                    inventario.setStockActual(inventario.getStockActual() + cantidad);
+                } else {
+                    inventario = new InventarioBodega();
+                    inventario.setBodegaId(bodegaId);
+                    inventario.setItemId(itemId);
+                    inventario.setTipoItem(tipoItem);
+                    inventario.setStockActual(cantidad);
+                }
+
+                inventario.setStockMinimo(stockMinimo);
+                inventario.setStockMaximo(stockMaximo);
+                if (ubicacionFisica != null) {
+                    inventario.setUbicacionFisica(ubicacionFisica);
+                }
+                inventario.setUltimoMovimiento(LocalDateTime.now());
+                inventario.setFechaActualizacion(LocalDateTime.now());
+
+                asignados.add(inventarioBodegaRepository.save(inventario));
+
+                // Registrar movimiento si hay cantidad
+                if (cantidad != 0) {
+                    MovimientoInventario movimiento = new MovimientoInventario();
+                    movimiento.setProductoId(itemId);
+                    movimiento.setTipoMovimiento(cantidad > 0 ? "ENTRADA" : "SALIDA");
+                    movimiento.setCantidadMovimiento(cantidad);
+                    movimiento.setCantidadAnterior(
+                            existente.isPresent() ? existente.get().getStockActual() : 0);
+                    movimiento.setCantidadNueva(inventario.getStockActual());
+                    movimiento.setMotivo("Asignación masiva a bodega");
+                    movimiento.setFecha(LocalDateTime.now());
+                    movimiento.setObservaciones("Bodega: " + bodegaId);
+                    movimientoInventarioRepository.save(movimiento);
+                }
+
+            } catch (Exception e) {
+                Map<String, Object> error = new HashMap<>();
+                error.put("item", prod);
+                error.put("error", e.getMessage());
+                errores.add(error);
+            }
+        }
+
+        Map<String, Object> resultado = new HashMap<>();
+        resultado.put("success", true);
+        resultado.put("asignados", asignados.size());
+        resultado.put("errores", errores);
+        resultado.put("inventarios", asignados);
+
+        return resultado;
+    }
+
+    /**
+     * 📈 RESUMEN GENERAL DE TODAS LAS BODEGAS
+     */
+    public Map<String, Object> getResumenGeneralBodegas() {
+        List<Bodega> bodegasActivas = getBodegasActivas();
+        List<Map<String, Object>> resumenBodegas = new ArrayList<>();
+
+        int totalProductosGlobal = 0;
+        int totalItemsStockBajoGlobal = 0;
+        double valorInventarioGlobal = 0;
+
+        for (Bodega bodega : bodegasActivas) {
+            Map<String, Object> resumenBodega = getResumenInventarioBodega(bodega.get_id());
+            resumenBodega.put("bodegaTipo", bodega.getTipo());
+            resumenBodega.put("bodegaUbicacion", bodega.getUbicacion());
+
+            // Calcular valor del inventario (solo productos)
+            List<InventarioBodega> inventarios = inventarioBodegaRepository
+                    .findByBodegaIdAndTipoItem(bodega.get_id(), "producto");
+
+            double valorBodega = 0;
+            for (InventarioBodega inv : inventarios) {
+                productoRepository.findById(inv.getItemId()).ifPresent(p -> {
+                    // El valor es mutable, necesitamos usar un array
+                });
+                Optional<Producto> prodOpt = productoRepository.findById(inv.getItemId());
+                if (prodOpt.isPresent()) {
+                    valorBodega += inv.getStockActual() * prodOpt.get().getCosto();
+                }
+            }
+            resumenBodega.put("valorInventario", valorBodega);
+            valorInventarioGlobal += valorBodega;
+
+            totalProductosGlobal += ((Number) resumenBodega.get("totalItems")).intValue();
+            totalItemsStockBajoGlobal += ((Number) resumenBodega.get("itemsStockBajo")).intValue();
+
+            resumenBodegas.add(resumenBodega);
+        }
+
+        Map<String, Object> resultado = new HashMap<>();
+        resultado.put("totalBodegas", bodegasActivas.size());
+        resultado.put("totalProductosGlobal", totalProductosGlobal);
+        resultado.put("totalItemsStockBajo", totalItemsStockBajoGlobal);
+        resultado.put("valorInventarioTotal", valorInventarioGlobal);
+        resultado.put("bodegas", resumenBodegas);
+
+        return resultado;
+    }
+
+    /**
+     * 🔄 MOVER TODO EL STOCK DE UN PRODUCTO A OTRA BODEGA
+     */
+    @Transactional
+    public Map<String, Object> moverTodoStock(String itemId, String tipoItem, String bodegaOrigenId,
+            String bodegaDestinoId, String motivo) {
+
+        // Validar bodegas
+        getBodegaById(bodegaOrigenId);
+        getBodegaById(bodegaDestinoId);
+
+        if (bodegaOrigenId.equals(bodegaDestinoId)) {
+            throw new BusinessException("La bodega origen y destino no pueden ser la misma");
+        }
+
+        // Obtener stock en origen
+        InventarioBodega origen =
+                inventarioBodegaRepository.findByBodegaIdAndItemId(bodegaOrigenId, itemId)
+                        .orElseThrow(() -> new BusinessException(
+                                "No hay inventario de este item en la bodega origen"));
+
+        double cantidadAMover = origen.getStockActual();
+        if (cantidadAMover <= 0) {
+            throw new BusinessException("No hay stock disponible para mover");
+        }
+
+        // Mover stock
+        ajustarStockBodega(bodegaOrigenId, itemId, tipoItem, -cantidadAMover,
+                motivo != null ? motivo : "Movimiento total a otra bodega");
+        ajustarStockBodega(bodegaDestinoId, itemId, tipoItem, cantidadAMover,
+                motivo != null ? motivo : "Recepción de movimiento total");
+
+        Map<String, Object> resultado = new HashMap<>();
+        resultado.put("success", true);
+        resultado.put("cantidadMovida", cantidadAMover);
+        resultado.put("bodegaOrigenId", bodegaOrigenId);
+        resultado.put("bodegaDestinoId", bodegaDestinoId);
+        resultado.put("itemId", itemId);
+
+        return resultado;
+    }
+
+    /**
+     * 📋 PRODUCTOS SIN ASIGNAR A NINGUNA BODEGA
+     */
+    public List<Map<String, Object>> getProductosSinBodega() {
+        List<Producto> todosProductos = productoRepository.findAll();
+        List<Map<String, Object>> productosSinBodega = new ArrayList<>();
+
+        for (Producto producto : todosProductos) {
+            List<InventarioBodega> inventarios = inventarioBodegaRepository
+                    .findByItemIdAndTipoItem(producto.get_id(), "producto");
+
+            // Si no tiene inventario en ninguna bodega, o todos tienen stock 0
+            boolean tieneStock = inventarios.stream().anyMatch(inv -> inv.getStockActual() > 0);
+
+            if (!tieneStock) {
+                Map<String, Object> prod = new HashMap<>();
+                prod.put("_id", producto.get_id());
+                prod.put("nombre", producto.getNombre());
+                prod.put("precio", producto.getPrecio());
+                prod.put("costo", producto.getCosto());
+                prod.put("categoriaId", producto.getCategoriaId());
+                prod.put("estado", producto.getEstado());
+                productosSinBodega.add(prod);
+            }
+        }
+
+        return productosSinBodega;
     }
 }

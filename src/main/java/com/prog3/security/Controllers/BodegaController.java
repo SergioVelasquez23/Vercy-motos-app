@@ -284,4 +284,104 @@ public class BodegaController {
     public ResponseEntity<Map<String, Object>> getResumenInventario(@PathVariable String id) {
         return ResponseEntity.ok(bodegaService.getResumenInventarioBodega(id));
     }
+
+    /**
+     * 📊 INVENTARIO CONSOLIDADO DE TODOS LOS PRODUCTOS Muestra cada producto con su stock
+     * desglosado por bodega
+     */
+    @GetMapping("/inventario-consolidado")
+    @Operation(summary = "Inventario consolidado",
+            description = "Lista todos los productos con su stock desglosado por cada bodega")
+    public ResponseEntity<Map<String, Object>> getInventarioConsolidado(
+            @RequestParam(defaultValue = "producto") String tipoItem) {
+        try {
+            Map<String, Object> resultado = bodegaService.getInventarioConsolidado(tipoItem);
+            return ResponseEntity.ok(resultado);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("mensaje", "Error al obtener inventario consolidado: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    /**
+     * 📦 ASIGNAR PRODUCTOS MASIVAMENTE A UNA BODEGA Permite agregar múltiples productos a una
+     * bodega con su stock inicial
+     */
+    @PostMapping("/{bodegaId}/asignar-productos-masivo")
+    @Operation(summary = "Asignar productos masivamente",
+            description = "Agrega múltiples productos a una bodega con stock inicial")
+    public ResponseEntity<Map<String, Object>> asignarProductosMasivo(@PathVariable String bodegaId,
+            @RequestBody List<Map<String, Object>> productos) {
+        try {
+            Map<String, Object> resultado =
+                    bodegaService.asignarProductosMasivo(bodegaId, productos);
+            return ResponseEntity.ok(resultado);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("mensaje", "Error al asignar productos: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+    }
+
+    /**
+     * 📈 RESUMEN GENERAL DE TODAS LAS BODEGAS Dashboard con estadísticas de todas las bodegas
+     */
+    @GetMapping("/resumen-general")
+    @Operation(summary = "Resumen general de bodegas",
+            description = "Estadísticas consolidadas de todas las bodegas activas")
+    public ResponseEntity<Map<String, Object>> getResumenGeneral() {
+        try {
+            Map<String, Object> resultado = bodegaService.getResumenGeneralBodegas();
+            return ResponseEntity.ok(resultado);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("mensaje", "Error al obtener resumen: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    /**
+     * 🔄 MOVER TODO EL STOCK DE UN PRODUCTO A OTRA BODEGA
+     */
+    @PostMapping("/mover-todo-stock")
+    @Operation(summary = "Mover todo el stock",
+            description = "Mueve todo el stock de un producto de una bodega a otra")
+    public ResponseEntity<Map<String, Object>> moverTodoStock(
+            @RequestBody Map<String, Object> request) {
+        try {
+            String itemId = (String) request.get("itemId");
+            String tipoItem = (String) request.get("tipoItem");
+            String bodegaOrigenId = (String) request.get("bodegaOrigenId");
+            String bodegaDestinoId = (String) request.get("bodegaDestinoId");
+            String motivo = (String) request.get("motivo");
+
+            Map<String, Object> resultado = bodegaService.moverTodoStock(itemId, tipoItem,
+                    bodegaOrigenId, bodegaDestinoId, motivo);
+
+            return ResponseEntity.ok(resultado);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("mensaje", "Error al mover stock: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+    }
+
+    /**
+     * 📋 PRODUCTOS SIN ASIGNAR A NINGUNA BODEGA
+     */
+    @GetMapping("/productos-sin-bodega")
+    @Operation(summary = "Productos sin bodega",
+            description = "Lista productos que no están asignados a ninguna bodega")
+    public ResponseEntity<List<Map<String, Object>>> getProductosSinBodega() {
+        try {
+            return ResponseEntity.ok(bodegaService.getProductosSinBodega());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(List.of());
+        }
+    }
 }

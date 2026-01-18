@@ -1078,4 +1078,309 @@ public class ProductosController extends BaseController<Producto, String> {
         }
     }
 
+    /**
+     * 📊 CARGA MASIVA DE PRODUCTOS DESDE EXCEL Formato esperado del Excel: | nombre | precio |
+     * costo | cantidad | categoriaId | descripcion | codigoBarras | codigoInterno |
+     */
+    @PostMapping("/carga-masiva")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> cargarProductosDesdeExcel(
+            @RequestParam("archivo") org.springframework.web.multipart.MultipartFile archivo) {
+        try {
+            System.out.println("📊 CARGA MASIVA - Iniciando procesamiento de Excel");
+            long startTime = System.currentTimeMillis();
+
+            // Validar que el archivo no esté vacío
+            if (archivo.isEmpty()) {
+                return responseService.badRequest("El archivo está vacío");
+            }
+
+            // Validar extensión del archivo
+            String nombreArchivo = archivo.getOriginalFilename();
+            if (nombreArchivo == null
+                    || (!nombreArchivo.endsWith(".xlsx") && !nombreArchivo.endsWith(".xls"))) {
+                return responseService.badRequest("El archivo debe ser un Excel (.xlsx o .xls)");
+            }
+
+            List<Producto> productosCreados = new ArrayList<>();
+            List<Map<String, Object>> errores = new ArrayList<>();
+            int filasProcesadas = 0;
+
+            try (org.apache.poi.ss.usermodel.Workbook workbook =
+                    org.apache.poi.ss.usermodel.WorkbookFactory.create(archivo.getInputStream())) {
+
+                org.apache.poi.ss.usermodel.Sheet sheet = workbook.getSheetAt(0);
+
+                // Obtener encabezados de la primera fila
+                org.apache.poi.ss.usermodel.Row headerRow = sheet.getRow(0);
+                if (headerRow == null) {
+                    return responseService.badRequest("El archivo Excel no tiene encabezados");
+                }
+
+                Map<String, Integer> columnas = new HashMap<>();
+                for (int i = 0; i < headerRow.getLastCellNum(); i++) {
+                    org.apache.poi.ss.usermodel.Cell cell = headerRow.getCell(i);
+                    if (cell != null) {
+                        String header = obtenerValorCelda(cell).toLowerCase().trim();
+                        columnas.put(header, i);
+                    }
+                }
+
+                // Validar columnas requeridas
+                if (!columnas.containsKey("nombre")) {
+                    return responseService.badRequest("El Excel debe contener la columna 'nombre'");
+                }
+                if (!columnas.containsKey("precio")) {
+                    return responseService.badRequest("El Excel debe contener la columna 'precio'");
+                }
+
+                // Procesar cada fila (desde la fila 1, saltando encabezados)
+                for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+                    org.apache.poi.ss.usermodel.Row row = sheet.getRow(i);
+                    if (row == null)
+                        continue;
+
+                    filasProcesadas++;
+
+                    try {
+                        // Obtener valores de las columnas
+                        String nombre = obtenerValorCeldaSeguro(row, columnas.get("nombre"));
+
+                        if (nombre == null || nombre.trim().isEmpty()) {
+                            Map<String, Object> error = new HashMap<>();
+                            error.put("fila", i + 1);
+                            error.put("error", "El nombre del producto está vacío");
+                            errores.add(error);
+                            continue;
+                        }
+
+                        // Verificar si ya existe un producto con ese nombre
+                        if (this.theProductoRepository.existsByNombre(nombre.trim())) {
+                            Map<String, Object> error = new HashMap<>();
+                            error.put("fila", i + 1);
+                            error.put("nombre", nombre);
+                            error.put("error", "Ya existe un producto con este nombre");
+                            errores.add(error);
+                            continue;
+                        }
+
+                        double precio = obtenerValorNumerico(row, columnas.get("precio"), 0.0);
+                        if (precio <= 0) {
+                            Map<String, Object> error = new HashMap<>();
+                            error.put("fila", i + 1);
+                            error.put("nombre", nombre);
+                            error.put("error", "El precio debe ser mayor a 0");
+                            errores.add(error);
+                            continue;
+                        }
+
+                        // Crear el producto
+                        Producto producto = new Producto();
+                        producto.setNombre(nombre.trim());
+                        producto.setPrecio(precio);
+                        producto.setCosto(obtenerValorNumerico(row, columnas.get("costo"), 0.0));
+                        producto.setCantidad(
+                                (int) obtenerValorNumerico(row, columnas.get("cantidad"), 1.0));
+                        producto.setImpuestos(
+                                obtenerValorNumerico(row, columnas.get("impuestos"), 0.0));
+
+                        // Campos opcionales
+                        if (columnas.containsKey("categoriaid")) {
+                            producto.setCategoriaId(
+                                    obtenerValorCeldaSeguro(row, columnas.get("categoriaid")));
+                        }
+                        if (columnas.containsKey("descripcion")) {
+                            producto.setDescripcion(
+                                    obtenerValorCeldaSeguro(row, columnas.get("descripcion")));
+                        }
+                        if (columnas.containsKey("codigobarras")) {
+                            producto.setCodigoBarras(
+                                    obtenerValorCeldaSeguro(row, columnas.get("codigobarras")));
+                        }
+                        if (columnas.containsKey("codigointerno")) {
+                            producto.setCodigoInterno(
+                                    obtenerValorCeldaSeguro(row, columnas.get("codigointerno")));
+                        }
+                        if (columnas.containsKey("nota")) {
+                            producto.setNota(obtenerValorCeldaSeguro(row, columnas.get("nota")));
+                        }
+                        if (columnas.containsKey("estado")) {
+                            String estado = obtenerValorCeldaSeguro(row, columnas.get("estado"));
+                            producto.setEstado(
+                                    estado != null && !estado.isEmpty() ? estado : "Activo");
+                        }
+
+                        // Calcular utilidad
+                        double utilidad = producto.getPrecio() - producto.getCosto()
+                                - producto.getImpuestos();
+                        producto.setUtilidad(utilidad);
+
+                        // Guardar producto
+                        Producto saved = this.theProductoRepository.save(producto);
+                        productosCreados.add(saved);
+
+                    } catch (Exception e) {
+                        Map<String, Object> error = new HashMap<>();
+                        error.put("fila", i + 1);
+                        error.put("error", "Error procesando fila: " + e.getMessage());
+                        errores.add(error);
+                    }
+                }
+            }
+
+            long endTime = System.currentTimeMillis();
+
+            Map<String, Object> resultado = new HashMap<>();
+            resultado.put("productosCreados", productosCreados.size());
+            resultado.put("filasProcesadas", filasProcesadas);
+            resultado.put("errores", errores);
+            resultado.put("tiempoMs", endTime - startTime);
+            resultado.put("productos", productosCreados);
+
+            System.out.println("✅ CARGA MASIVA completada en " + (endTime - startTime) + "ms");
+            System.out.println("📦 Productos creados: " + productosCreados.size());
+            System.out.println("⚠️ Errores: " + errores.size());
+
+            if (productosCreados.isEmpty() && !errores.isEmpty()) {
+                return responseService
+                        .badRequest("No se pudieron crear productos. Errores: " + errores.size());
+            }
+
+            return responseService.success(resultado, "Carga masiva completada. Productos creados: "
+                    + productosCreados.size() + ", Errores: " + errores.size());
+
+        } catch (Exception e) {
+            System.err.println("❌ ERROR en carga masiva: " + e.getMessage());
+            e.printStackTrace();
+            return responseService
+                    .internalError("Error al procesar archivo Excel: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 📥 DESCARGAR PLANTILLA EXCEL Genera una plantilla Excel vacía con los encabezados correctos
+     */
+    @GetMapping("/plantilla-excel")
+    public ResponseEntity<byte[]> descargarPlantillaExcel() {
+        try {
+            org.apache.poi.xssf.usermodel.XSSFWorkbook workbook =
+                    new org.apache.poi.xssf.usermodel.XSSFWorkbook();
+            org.apache.poi.ss.usermodel.Sheet sheet = workbook.createSheet("Productos");
+
+            // Crear estilo para encabezados
+            org.apache.poi.ss.usermodel.CellStyle headerStyle = workbook.createCellStyle();
+            org.apache.poi.ss.usermodel.Font headerFont = workbook.createFont();
+            headerFont.setBold(true);
+            headerStyle.setFont(headerFont);
+            headerStyle.setFillForegroundColor(
+                    org.apache.poi.ss.usermodel.IndexedColors.LIGHT_BLUE.getIndex());
+            headerStyle
+                    .setFillPattern(org.apache.poi.ss.usermodel.FillPatternType.SOLID_FOREGROUND);
+
+            // Crear encabezados
+            org.apache.poi.ss.usermodel.Row headerRow = sheet.createRow(0);
+            String[] headers = {"nombre", "precio", "costo", "cantidad", "impuestos", "categoriaId",
+                    "descripcion", "codigoBarras", "codigoInterno", "nota", "estado"};
+
+            for (int i = 0; i < headers.length; i++) {
+                org.apache.poi.ss.usermodel.Cell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(headerStyle);
+                sheet.setColumnWidth(i, 4000);
+            }
+
+            // Agregar fila de ejemplo
+            org.apache.poi.ss.usermodel.Row exampleRow = sheet.createRow(1);
+            exampleRow.createCell(0).setCellValue("Producto Ejemplo");
+            exampleRow.createCell(1).setCellValue(10000);
+            exampleRow.createCell(2).setCellValue(5000);
+            exampleRow.createCell(3).setCellValue(10);
+            exampleRow.createCell(4).setCellValue(0);
+            exampleRow.createCell(5).setCellValue("");
+            exampleRow.createCell(6).setCellValue("Descripción del producto");
+            exampleRow.createCell(7).setCellValue("");
+            exampleRow.createCell(8).setCellValue("PRD-001");
+            exampleRow.createCell(9).setCellValue("");
+            exampleRow.createCell(10).setCellValue("Activo");
+
+            // Convertir a bytes
+            java.io.ByteArrayOutputStream outputStream = new java.io.ByteArrayOutputStream();
+            workbook.write(outputStream);
+            workbook.close();
+
+            byte[] bytes = outputStream.toByteArray();
+
+            return ResponseEntity.ok()
+                    .header("Content-Disposition", "attachment; filename=plantilla_productos.xlsx")
+                    .header("Content-Type",
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                    .body(bytes);
+
+        } catch (Exception e) {
+            System.err.println("❌ ERROR generando plantilla: " + e.getMessage());
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    // ==================== MÉTODOS AUXILIARES PARA EXCEL ====================
+
+    private String obtenerValorCelda(org.apache.poi.ss.usermodel.Cell cell) {
+        if (cell == null)
+            return "";
+
+        switch (cell.getCellType()) {
+            case STRING:
+                return cell.getStringCellValue();
+            case NUMERIC:
+                if (org.apache.poi.ss.usermodel.DateUtil.isCellDateFormatted(cell)) {
+                    return cell.getLocalDateTimeCellValue().toString();
+                }
+                return String.valueOf((long) cell.getNumericCellValue());
+            case BOOLEAN:
+                return String.valueOf(cell.getBooleanCellValue());
+            case FORMULA:
+                try {
+                    return String.valueOf(cell.getNumericCellValue());
+                } catch (Exception e) {
+                    return cell.getStringCellValue();
+                }
+            default:
+                return "";
+        }
+    }
+
+    private String obtenerValorCeldaSeguro(org.apache.poi.ss.usermodel.Row row, Integer colIndex) {
+        if (colIndex == null || row == null)
+            return null;
+        org.apache.poi.ss.usermodel.Cell cell = row.getCell(colIndex);
+        if (cell == null)
+            return null;
+        String valor = obtenerValorCelda(cell);
+        return valor.isEmpty() ? null : valor;
+    }
+
+    private double obtenerValorNumerico(org.apache.poi.ss.usermodel.Row row, Integer colIndex,
+            double defaultValue) {
+        if (colIndex == null || row == null)
+            return defaultValue;
+        org.apache.poi.ss.usermodel.Cell cell = row.getCell(colIndex);
+        if (cell == null)
+            return defaultValue;
+
+        try {
+            switch (cell.getCellType()) {
+                case NUMERIC:
+                    return cell.getNumericCellValue();
+                case STRING:
+                    String valor = cell.getStringCellValue().trim().replace(",", ".");
+                    return valor.isEmpty() ? defaultValue : Double.parseDouble(valor);
+                case FORMULA:
+                    return cell.getNumericCellValue();
+                default:
+                    return defaultValue;
+            }
+        } catch (Exception e) {
+            return defaultValue;
+        }
+    }
+
 }

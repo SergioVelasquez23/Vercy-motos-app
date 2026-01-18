@@ -29,11 +29,14 @@ public class Factura {
     // Información básica de la factura
     private String numero;
     private LocalDateTime fecha;
+    private LocalDateTime fechaVencimiento; // Fecha de vencimiento de la factura
     private String tipoFactura; // "venta" o "compra"
 
     // Información del cliente (para facturas de venta)
     private String nit;
+    private String clienteNombre; // Nombre completo del cliente
     private String clienteTelefono;
+    private String clienteEmail; // Email del cliente
     private String clienteDireccion;
     private String atendidoPor;
 
@@ -51,7 +54,12 @@ public class Factura {
     private String medioPago;  // "Efectivo", "Transferencia", etc.
     private String formaPago;  // "Contado", "Crédito"
 
-    // Totales
+    // Totales calculados
+    private double subtotal = 0.0; // Suma sin impuestos ni descuentos
+    private double totalImpuestos = 0.0; // Total de impuestos
+    private double totalDescuentos = 0.0; // Total de descuentos aplicados
+    private String tipoDescuento = "Valor"; // "Valor" o "Porcentaje"
+    private double descuentoGeneral = 0.0; // Descuento general aplicado
     private double total;
 
     // Control de pago (especialmente para facturas de compras)
@@ -105,6 +113,14 @@ public class Factura {
         this.tipoFactura = tipoFactura;
     }
 
+    public LocalDateTime getFechaVencimiento() {
+        return fechaVencimiento;
+    }
+
+    public void setFechaVencimiento(LocalDateTime fechaVencimiento) {
+        this.fechaVencimiento = fechaVencimiento;
+    }
+
     // Getters y setters para información del cliente
     public String getNit() {
         return nit;
@@ -114,12 +130,28 @@ public class Factura {
         this.nit = nit;
     }
 
+    public String getClienteNombre() {
+        return clienteNombre;
+    }
+
+    public void setClienteNombre(String clienteNombre) {
+        this.clienteNombre = clienteNombre;
+    }
+
     public String getClienteTelefono() {
         return clienteTelefono;
     }
 
     public void setClienteTelefono(String clienteTelefono) {
         this.clienteTelefono = clienteTelefono;
+    }
+
+    public String getClienteEmail() {
+        return clienteEmail;
+    }
+
+    public void setClienteEmail(String clienteEmail) {
+        this.clienteEmail = clienteEmail;
     }
 
     public String getClienteDireccion() {
@@ -206,6 +238,47 @@ public class Factura {
         this.formaPago = formaPago;
     }
 
+    // Getters y setters para totales calculados
+    public double getSubtotal() {
+        return subtotal;
+    }
+
+    public void setSubtotal(double subtotal) {
+        this.subtotal = subtotal;
+    }
+
+    public double getTotalImpuestos() {
+        return totalImpuestos;
+    }
+
+    public void setTotalImpuestos(double totalImpuestos) {
+        this.totalImpuestos = totalImpuestos;
+    }
+
+    public double getTotalDescuentos() {
+        return totalDescuentos;
+    }
+
+    public void setTotalDescuentos(double totalDescuentos) {
+        this.totalDescuentos = totalDescuentos;
+    }
+
+    public String getTipoDescuento() {
+        return tipoDescuento;
+    }
+
+    public void setTipoDescuento(String tipoDescuento) {
+        this.tipoDescuento = tipoDescuento;
+    }
+
+    public double getDescuentoGeneral() {
+        return descuentoGeneral;
+    }
+
+    public void setDescuentoGeneral(double descuentoGeneral) {
+        this.descuentoGeneral = descuentoGeneral;
+    }
+
     public double getTotal() {
         return total;
     }
@@ -242,6 +315,7 @@ public class Factura {
     public void calcularTotal() {
         double totalVenta = 0.0;
         double totalCompra = 0.0;
+        double impuestosCalculados = 0.0;
 
         // Calcular total de items de venta
         if (this.items != null) {
@@ -257,7 +331,20 @@ public class Factura {
                     .sum();
         }
 
-        this.total = totalVenta + totalCompra;
+        // Calcular subtotal (antes de impuestos y descuentos)
+        this.subtotal = totalVenta + totalCompra;
+
+        // Calcular descuento
+        double descuentoAplicado = 0.0;
+        if ("Porcentaje".equals(this.tipoDescuento) && this.descuentoGeneral > 0) {
+            descuentoAplicado = this.subtotal * (this.descuentoGeneral / 100);
+        } else {
+            descuentoAplicado = this.descuentoGeneral;
+        }
+        this.totalDescuentos = descuentoAplicado;
+
+        // Total final = subtotal + impuestos - descuentos
+        this.total = this.subtotal + this.totalImpuestos - this.totalDescuentos;
     }
 
     // Métodos para facturas de venta
