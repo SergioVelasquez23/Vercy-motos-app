@@ -27,12 +27,9 @@ public class WebConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
-            .allowedOrigins(
-                "http://10.112.216.36:5300",
+                .allowedOrigins(
                 "http://192.168.20.24:5300",
-                "http://192.168.20.24:8081",
-                                        "https://vercy-motos.netlify.app",
-                "https://zingy-kitsune-66762f.netlify.app",
+                        "http://192.168.20.24:8081",
                                         "https://vercy-motos-app.web.app", // 🔥 Firebase frontend
                         "https://vercy-motos.web.app" // 🏍️ Vercy Motos frontend
             )

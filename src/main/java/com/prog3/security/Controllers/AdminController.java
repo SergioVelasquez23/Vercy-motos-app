@@ -30,9 +30,6 @@ import com.prog3.security.Repositories.*;
 @RequestMapping("/api/admin")
 //permite solicitudes CORS con credenciales desde localhost y Firebase
 @CrossOrigin(origins = {
-    "http://localhost:3000", 
-    "http://localhost:8080", 
-    "http://127.0.0.1:3000",
         "https://vercy-motos-app.web.app"
 }, allowCredentials = "true")
 

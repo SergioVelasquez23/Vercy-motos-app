@@ -40,11 +40,9 @@ public class SwaggerConfig {
                     - **Gestión completa de pedidos** con validación de caja abierta
                     - **Control de inventario** automático
                     - **Sistema de pagos** múltiple (efectivo, transferencia, tarjeta)
-                    - **Mesas especiales** con pedidos nombrados
                     - **Cuadre de caja** integrado
                     - **Reportes y dashboard** en tiempo real
                     - **WebSocket** para notificaciones
-                    - **Cancelación selectiva** de ingredientes
                     
                     ## Tipos de pago soportados:
                     - **Pagado**: Pago normal con propina opcional

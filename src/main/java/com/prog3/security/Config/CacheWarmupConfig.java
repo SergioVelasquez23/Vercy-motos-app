@@ -8,8 +8,9 @@ import org.springframework.stereotype.Component;
 import com.prog3.security.Services.CacheOptimizationService;
 
 /**
- * Configuración para precalentar los caches críticos al iniciar la aplicación
- * Esto elimina el "cold start" y mejora dramáticamente la primera carga
+ * En resumen: este código mejora el rendimiento inicial de la aplicación
+ *  precargando datos críticos
+ * en caché justo después de arrancar, sin bloquear el inicio del sistema.
  */
 @Component
 public class CacheWarmupConfig {
