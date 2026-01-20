@@ -19,7 +19,6 @@ import java.util.Optional;
  */
 @RestController
 @RequestMapping("/api/cotizaciones")
-@CrossOrigin(origins = "*")
 public class CotizacionController {
 
     @Autowired

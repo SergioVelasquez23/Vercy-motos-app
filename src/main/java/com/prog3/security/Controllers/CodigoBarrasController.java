@@ -22,7 +22,6 @@ import java.util.Map;
 @RequestMapping("/api/codigos-barras")
 @Tag(name = "Códigos de Barras",
         description = "Gestión de códigos de barras para productos e ingredientes")
-@CrossOrigin(origins = "*")
 public class CodigoBarrasController {
 
     @Autowired

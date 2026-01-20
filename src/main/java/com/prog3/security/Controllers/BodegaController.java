@@ -20,7 +20,6 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/bodegas")
 @Tag(name = "Bodegas", description = "Gestión de múltiples bodegas/almacenes")
-@CrossOrigin(origins = "*")
 public class BodegaController {
 
     @Autowired

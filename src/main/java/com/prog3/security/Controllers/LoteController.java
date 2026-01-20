@@ -16,7 +16,6 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/lotes")
 @Tag(name = "Lotes", description = "Gestión de lotes y fechas de vencimiento")
-@CrossOrigin(origins = "*")
 public class LoteController {
 
     @Autowired
