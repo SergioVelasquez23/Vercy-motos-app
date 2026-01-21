@@ -182,6 +182,9 @@ public class PedidosController {
     @Autowired
     private PedidoService pedidoService;
 
+    @Autowired
+    private com.prog3.security.Services.PedidoCalculosService pedidoCalculosService;
+
     @Operation(summary = "Obtener todos los pedidos", description = "Retorna la lista completa de pedidos en el sistema")
     @ApiResponses(value = {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Lista de pedidos obtenida exitosamente"),
@@ -2005,58 +2008,41 @@ public class PedidosController {
     // 💰 MÉTODOS UTILITARIOS PARA CÁLCULO DE TOTALES
 
     /**
-     * 💰 Recalcula el total final de un pedido aplicando descuentos Este método asegura que todos
-     * los cálculos de totales sean consistentes
+     * 💰 Recalcula el total del pedido aplicando descuentos, impuestos y
+     * retenciones
+     * Usa el PedidoCalculosService para cálculos completos según DIAN
      * 
      * @param pedido El pedido a recalcular
      */
     private void recalcularTotalConDescuentos(Pedido pedido) {
-        // Calcular total de items
-        double totalItems = 0;
-        if (pedido.getItems() != null && !pedido.getItems().isEmpty()) {
-            totalItems = pedido.getItems().stream().mapToDouble(ItemPedido::getSubtotal).sum();
+        try {
+            // Usar el servicio de cálculos para obtener todos los valores correctamente
+            pedidoCalculosService.calcularPedido(pedido);
+
+            System.out.println("💰 Total recalculado para pedido " + pedido.get_id() + ":");
+            System.out.println("   - Subtotal: $" + pedido.getSubtotal());
+            System.out.println("   - Descuentos: $" + pedido.getTotalDescuentos());
+            System.out.println("   - Impuestos: $" + pedido.getTotalImpuestos());
+            System.out.println("   - Retenciones: $" + pedido.getTotalRetenciones());
+            System.out.println("   - Total final: $" + pedido.getTotalFinal());
+
+            // Mantener campo 'total' para compatibilidad con código legacy
+            pedido.setTotal(pedido.getTotalFinal());
+        } catch (Exception e) {
+            System.err.println("Error al recalcular totales del pedido: " + e.getMessage());
+            e.printStackTrace();
         }
-
-        // Aplicar descuentos
-        double totalConDescuento = totalItems - pedido.getDescuento();
-
-        // Asegurar que el total no sea negativo después del descuento
-        if (totalConDescuento < 0) {
-            totalConDescuento = 0;
-        }
-
-        pedido.setTotal(totalConDescuento);
-
-        System.out.println("💰 Total recalculado para pedido " + pedido.get_id() + ":");
-        System.out.println("   - Total items: $" + totalItems);
-        System.out.println("   - Descuento aplicado: $" + pedido.getDescuento());
-        System.out.println("   - Total final: $" + totalConDescuento);
     }
 
     /**
      * 💰 Calcula el total final que se debe pagar incluyendo propinas
      * 
      * @param pedido El pedido
-     * @return Total final a pagar (total + propina)
+     * @return Total final a pagar (totalFinal + propina)
      */
     private double calcularTotalAPagar(Pedido pedido) {
-        double totalBase = pedido.getTotal(); // Ya incluye descuentos aplicados
+        double totalBase = pedido.getTotalFinal(); // Total con impuestos y retenciones
         double propina = pedido.isIncluyePropina() ? pedido.getPropina() : 0.0;
         return totalBase + propina;
-    }
-
-    /**
-     * ✅ Calcula el total final aplicando descuentos y propinas correctamente
-     * 
-     * @param pedido El pedido
-     * @return Total final (total - descuento + propina)
-     */
-    private double calcularTotalConDescuentos(Pedido pedido) {
-        double totalItems = pedido.getTotal(); // Total base de items
-        double descuento = pedido.getDescuento(); // Descuento aplicado
-        double propina = pedido.getPropina(); // Propina añadida
-
-        double totalConDescuento = Math.max(totalItems - descuento, 0.0); // Nunca negativo
-        return totalConDescuento + propina; // Total final
     }
 }

@@ -62,6 +62,16 @@ public class Factura {
     private double descuentoGeneral = 0.0; // Descuento general aplicado
     private double total;
 
+    // 💰 Campos adicionales para retenciones según DIAN
+    private double baseGravable = 0.0; // Base sobre la que se calculan impuestos
+    private double totalRetenciones = 0.0; // Total de retenciones aplicadas
+    private double porcentajeRetencion = 0.0; // % Retención en la fuente
+    private double valorRetencion = 0.0; // Valor de retención en la fuente
+    private double porcentajeReteIva = 0.0; // % Retención de IVA
+    private double valorReteIva = 0.0; // Valor de retención de IVA
+    private double porcentajeReteIca = 0.0; // % Retención de ICA
+    private double valorReteIca = 0.0; // Valor de retención de ICA
+
     // Control de pago (especialmente para facturas de compras)
     private boolean pagadoDesdeCaja;    // Indica si el pago sale de la caja registradora
 
@@ -285,6 +295,71 @@ public class Factura {
 
     public void setTotal(double total) {
         this.total = total;
+    }
+
+    // 💰 Getters y Setters para campos de retenciones
+    public double getBaseGravable() {
+        return baseGravable;
+    }
+
+    public void setBaseGravable(double baseGravable) {
+        this.baseGravable = baseGravable;
+    }
+
+    public double getTotalRetenciones() {
+        return totalRetenciones;
+    }
+
+    public void setTotalRetenciones(double totalRetenciones) {
+        this.totalRetenciones = totalRetenciones;
+    }
+
+    public double getPorcentajeRetencion() {
+        return porcentajeRetencion;
+    }
+
+    public void setPorcentajeRetencion(double porcentajeRetencion) {
+        this.porcentajeRetencion = porcentajeRetencion;
+    }
+
+    public double getValorRetencion() {
+        return valorRetencion;
+    }
+
+    public void setValorRetencion(double valorRetencion) {
+        this.valorRetencion = valorRetencion;
+    }
+
+    public double getPorcentajeReteIva() {
+        return porcentajeReteIva;
+    }
+
+    public void setPorcentajeReteIva(double porcentajeReteIva) {
+        this.porcentajeReteIva = porcentajeReteIva;
+    }
+
+    public double getValorReteIva() {
+        return valorReteIva;
+    }
+
+    public void setValorReteIva(double valorReteIva) {
+        this.valorReteIva = valorReteIva;
+    }
+
+    public double getPorcentajeReteIca() {
+        return porcentajeReteIca;
+    }
+
+    public void setPorcentajeReteIca(double porcentajeReteIca) {
+        this.porcentajeReteIca = porcentajeReteIca;
+    }
+
+    public double getValorReteIca() {
+        return valorReteIca;
+    }
+
+    public void setValorReteIca(double valorReteIca) {
+        this.valorReteIca = valorReteIca;
     }
 
     public String getRegistradoPor() {

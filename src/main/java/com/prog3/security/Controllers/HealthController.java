@@ -4,6 +4,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.prog3.security.Utils.ApiResponse;
@@ -11,12 +12,12 @@ import com.prog3.security.Utils.ApiResponse;
 import java.util.HashMap;
 import java.util.Map;
 
-@CrossOrigin
+@CrossOrigin(origins = "*")
 @RestController
-@RequestMapping("api/health")
 public class HealthController {
     
-    @GetMapping
+    // Endpoint principal con prefijo /api
+    @GetMapping("api/health")
     public ResponseEntity<ApiResponse<Map<String, Object>>> healthCheck() {
         Map<String, Object> health = new HashMap<>();
         health.put("status", "UP");
@@ -30,8 +31,25 @@ public class HealthController {
                 .build());
     }
     
-    @GetMapping("/ping")
+    // Ping con prefijo /api - soporta GET y HEAD
+    @RequestMapping(value = "api/health/ping", method = { RequestMethod.GET, RequestMethod.HEAD })
     public ResponseEntity<String> ping() {
+        return ResponseEntity.ok("pong");
+    }
+
+    // ============================================
+    // 🏥 ENDPOINTS SIN PREFIJO /api PARA UPTIMEROBOT
+    // ============================================
+
+    // Health check sin prefijo /api
+    @GetMapping("health")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> healthCheckNoPrefix() {
+        return healthCheck();
+    }
+
+    // Ping sin prefijo /api - soporta GET y HEAD (para UptimeRobot)
+    @RequestMapping(value = "health/ping", method = { RequestMethod.GET, RequestMethod.HEAD })
+    public ResponseEntity<String> pingNoPrefix() {
         return ResponseEntity.ok("pong");
     }
 }

@@ -2,6 +2,10 @@ package com.prog3.security.Controllers;
 
 import java.util.Set;
 import com.prog3.security.Models.ItemPedido;
+import com.prog3.security.Models.Traslado;
+import com.prog3.security.Models.Bodega;
+import com.prog3.security.DTOs.TrasladoRequestDTO;
+import com.prog3.security.DTOs.TrasladoAprobacionDTO;
 
 import java.util.Map;
 import java.time.LocalDateTime;
@@ -70,6 +74,15 @@ public class InventarioController {
 
     @Autowired
     private com.prog3.security.Repositories.ProductoRepository productoRepository;
+
+    @Autowired
+    private com.prog3.security.Repositories.TrasladoRepository trasladoRepository;
+
+    @Autowired
+    private com.prog3.security.Repositories.BodegaRepository bodegaRepository;
+
+    @Autowired
+    private com.prog3.security.Repositories.InventarioBodegaRepository inventarioBodegaRepository;
 
     // Endpoint de diagnóstico - ELIMINAR EN PRODUCCIÓN
     @PostMapping("/diagnostico-descuento")
@@ -979,6 +992,297 @@ public class InventarioController {
     // DEBUG ENDPOINTS - DIAGNOSTICAR PRODUCTOS
     // ==============================
     
+    // ==================== ENDPOINTS DE TRASLADOS ====================
+
+    /**
+     * Crear una solicitud de traslado entre bodegas
+     * POST /api/inventario/traslados
+     */
+    @PostMapping("/traslados")
+    public ResponseEntity<?> crearTraslado(@RequestBody TrasladoRequestDTO request) {
+        try {
+            // Validar datos de entrada
+            if (request.getProductoId() == null || request.getOrigenBodegaId() == null ||
+                    request.getDestinoBodegaId() == null || request.getCantidad() <= 0) {
+                return responseService.badRequest("Datos incompletos para crear el traslado");
+            }
+
+            // Validar que origen y destino no sean iguales
+            if (request.getOrigenBodegaId().equals(request.getDestinoBodegaId())) {
+                return responseService.badRequest("La bodega de origen y destino no pueden ser la misma");
+            }
+
+            // Buscar el producto
+            Optional<Producto> productoOpt = productoRepository.findById(request.getProductoId());
+            if (!productoOpt.isPresent()) {
+                return responseService.notFound("Producto no encontrado");
+            }
+            Producto producto = productoOpt.get();
+
+            // Buscar bodegas
+            Optional<Bodega> origenOpt = bodegaRepository.findById(request.getOrigenBodegaId());
+            Optional<Bodega> destinoOpt = bodegaRepository.findById(request.getDestinoBodegaId());
+
+            if (!origenOpt.isPresent() || !destinoOpt.isPresent()) {
+                return responseService.notFound("Bodega de origen o destino no encontrada");
+            }
+
+            Bodega bodegaOrigen = origenOpt.get();
+            Bodega bodegaDestino = destinoOpt.get();
+
+            // Verificar stock disponible en origen
+            Optional<com.prog3.security.Models.InventarioBodega> inventarioOrigenOpt = inventarioBodegaRepository
+                    .findByBodegaIdAndItemId(request.getOrigenBodegaId(), request.getProductoId());
+
+            if (!inventarioOrigenOpt.isPresent()) {
+                return responseService.notFound("No hay stock del producto en la bodega de origen");
+            }
+
+            com.prog3.security.Models.InventarioBodega inventarioOrigen = inventarioOrigenOpt.get();
+
+            if (inventarioOrigen.getStockActual() < request.getCantidad()) {
+                return responseService.badRequest(
+                        "Stock insuficiente. Disponible: " + inventarioOrigen.getStockActual() +
+                                ", solicitado: " + request.getCantidad());
+            }
+
+            // Generar número de traslado
+            String numeroTraslado = generarNumeroTraslado();
+
+            // Crear traslado
+            Traslado traslado = new Traslado();
+            traslado.setNumero(numeroTraslado);
+            traslado.setProductoId(producto.get_id());
+            traslado.setProductoNombre(producto.getNombre());
+            traslado.setOrigenBodegaId(bodegaOrigen.get_id());
+            traslado.setOrigenBodegaNombre(bodegaOrigen.getNombre());
+            traslado.setDestinoBodegaId(bodegaDestino.get_id());
+            traslado.setDestinoBodegaNombre(bodegaDestino.getNombre());
+            traslado.setCantidad(request.getCantidad());
+            traslado.setUnidad(producto.getUnidadMedida() != null ? producto.getUnidadMedida() : "unidad");
+            traslado.setSolicitante(request.getSolicitante());
+            traslado.setObservaciones(request.getObservaciones());
+            traslado.setFechaSolicitud(LocalDateTime.now());
+            traslado.setEstado("PENDIENTE");
+
+            Traslado trasladoGuardado = trasladoRepository.save(traslado);
+
+            return responseService.created(trasladoGuardado, "Traslado creado exitosamente");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return responseService.internalError("Error al crear traslado: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Listar todos los traslados o filtrar por estado
+     * GET /api/inventario/traslados
+     * GET /api/inventario/traslados?estado=PENDIENTE
+     */
+    @GetMapping("/traslados")
+    public ResponseEntity<?> listarTraslados(
+            @RequestParam(required = false) String estado,
+            @RequestParam(required = false) String bodegaId) {
+        try {
+            List<Traslado> traslados;
+
+            if (estado != null && !estado.isEmpty()) {
+                traslados = trasladoRepository.findByEstado(estado);
+            } else if (bodegaId != null && !bodegaId.isEmpty()) {
+                // Buscar traslados donde la bodega sea origen o destino
+                List<Traslado> trasladosOrigen = trasladoRepository.findByOrigenBodegaId(bodegaId);
+                List<Traslado> trasladosDestino = trasladoRepository.findByDestinoBodegaId(bodegaId);
+                traslados = new ArrayList<>();
+                traslados.addAll(trasladosOrigen);
+                traslados.addAll(trasladosDestino);
+                // Eliminar duplicados
+                traslados = traslados.stream().distinct().collect(Collectors.toList());
+            } else {
+                traslados = trasladoRepository.findAll();
+            }
+
+            return responseService.success(traslados, "Traslados obtenidos exitosamente");
+
+        } catch (Exception e) {
+            return responseService.internalError("Error al obtener traslados: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Obtener un traslado por ID
+     * GET /api/inventario/traslados/{id}
+     */
+    @GetMapping("/traslados/{id}")
+    public ResponseEntity<?> obtenerTraslado(@PathVariable String id) {
+        try {
+            Optional<Traslado> trasladoOpt = trasladoRepository.findById(id);
+
+            if (!trasladoOpt.isPresent()) {
+                return responseService.notFound("Traslado no encontrado");
+            }
+
+            return responseService.success(trasladoOpt.get(), "Traslado obtenido exitosamente");
+
+        } catch (Exception e) {
+            return responseService.internalError("Error al obtener traslado: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Aprobar o rechazar un traslado
+     * PUT /api/inventario/traslados/procesar
+     */
+    @PutMapping("/traslados/procesar")
+    public ResponseEntity<?> procesarTraslado(@RequestBody TrasladoAprobacionDTO aprobacion) {
+        try {
+            // Validar datos
+            if (aprobacion.getTrasladoId() == null || aprobacion.getAccion() == null) {
+                return responseService.badRequest("Datos incompletos para procesar el traslado");
+            }
+
+            Optional<Traslado> trasladoOpt = trasladoRepository.findById(aprobacion.getTrasladoId());
+
+            if (!trasladoOpt.isPresent()) {
+                return responseService.notFound("Traslado no encontrado");
+            }
+
+            Traslado traslado = trasladoOpt.get();
+
+            // Verificar que el traslado esté pendiente
+            if (!"PENDIENTE".equals(traslado.getEstado())) {
+                return responseService.badRequest("El traslado ya fue procesado");
+            }
+
+            if ("ACEPTAR".equalsIgnoreCase(aprobacion.getAccion())) {
+                // Verificar stock disponible nuevamente
+                Optional<com.prog3.security.Models.InventarioBodega> inventarioOrigenOpt = inventarioBodegaRepository
+                        .findByBodegaIdAndItemId(
+                                traslado.getOrigenBodegaId(),
+                                traslado.getProductoId());
+
+                if (!inventarioOrigenOpt.isPresent()
+                        || inventarioOrigenOpt.get().getStockActual() < traslado.getCantidad()) {
+                    return responseService.badRequest(
+                            "Stock insuficiente en bodega origen para completar el traslado");
+                }
+
+                com.prog3.security.Models.InventarioBodega inventarioOrigen = inventarioOrigenOpt.get();
+
+                // Descontar del origen
+                inventarioOrigen.setStockActual(inventarioOrigen.getStockActual() - traslado.getCantidad());
+                inventarioOrigen.setFechaActualizacion(LocalDateTime.now());
+                inventarioBodegaRepository.save(inventarioOrigen);
+
+                // Agregar al destino
+                Optional<com.prog3.security.Models.InventarioBodega> inventarioDestinoOpt = inventarioBodegaRepository
+                        .findByBodegaIdAndItemId(
+                                traslado.getDestinoBodegaId(),
+                                traslado.getProductoId());
+
+                com.prog3.security.Models.InventarioBodega inventarioDestino;
+                if (!inventarioDestinoOpt.isPresent()) {
+                    // Crear nuevo registro en destino
+                    inventarioDestino = new com.prog3.security.Models.InventarioBodega();
+                    inventarioDestino.setBodegaId(traslado.getDestinoBodegaId());
+                    inventarioDestino.setItemId(traslado.getProductoId());
+                    inventarioDestino.setTipoItem("producto");
+                    inventarioDestino.setStockActual(traslado.getCantidad());
+                } else {
+                    inventarioDestino = inventarioDestinoOpt.get();
+                    inventarioDestino.setStockActual(inventarioDestino.getStockActual() + traslado.getCantidad());
+                }
+
+                inventarioDestino.setFechaActualizacion(LocalDateTime.now());
+                inventarioBodegaRepository.save(inventarioDestino);
+
+                // Actualizar traslado
+                traslado.setEstado("ACEPTADO");
+                traslado.setAprobador(aprobacion.getAprobador());
+                traslado.setFechaAprobacion(LocalDateTime.now());
+                traslado.setFechaCompletado(LocalDateTime.now());
+                if (aprobacion.getObservaciones() != null) {
+                    traslado.setObservaciones(
+                            traslado.getObservaciones() + " | " + aprobacion.getObservaciones());
+                }
+
+                // Registrar movimientos de inventario
+                registrarMovimientoTraslado(traslado, "SALIDA", inventarioOrigen);
+                registrarMovimientoTraslado(traslado, "ENTRADA", inventarioDestino);
+
+            } else if ("RECHAZAR".equalsIgnoreCase(aprobacion.getAccion())) {
+                traslado.setEstado("RECHAZADO");
+                traslado.setAprobador(aprobacion.getAprobador());
+                traslado.setFechaAprobacion(LocalDateTime.now());
+                if (aprobacion.getObservaciones() != null) {
+                    traslado.setObservaciones(
+                            traslado.getObservaciones() + " | RECHAZADO: " + aprobacion.getObservaciones());
+                }
+            } else {
+                return responseService.badRequest("Acción no válida. Use ACEPTAR o RECHAZAR");
+            }
+
+            Traslado trasladoActualizado = trasladoRepository.save(traslado);
+
+            return responseService.success(
+                    trasladoActualizado,
+                    "Traslado " + aprobacion.getAccion().toLowerCase() + " exitosamente");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return responseService.internalError("Error al procesar traslado: " + e.getMessage());
+        }
+    }
+
+    // ==================== MÉTODOS AUXILIARES PARA TRASLADOS ====================
+
+    /**
+     * Generar número consecutivo de traslado (T1856, T1857, etc.)
+     */
+    private String generarNumeroTraslado() {
+        try {
+            Traslado ultimoTraslado = trasladoRepository.findTopByOrderByFechaCreacionDesc();
+
+            if (ultimoTraslado != null && ultimoTraslado.getNumero() != null) {
+                String ultimoNumero = ultimoTraslado.getNumero().substring(1); // Quitar la "T"
+                int numero = Integer.parseInt(ultimoNumero) + 1;
+                return "T" + numero;
+            } else {
+                return "T1000"; // Número inicial
+            }
+        } catch (Exception e) {
+            // Si hay error, generar con timestamp
+            return "T" + System.currentTimeMillis() % 100000;
+        }
+    }
+
+    /**
+     * Registrar movimiento de inventario para el traslado
+     */
+    private void registrarMovimientoTraslado(Traslado traslado, String tipoMovimiento,
+            com.prog3.security.Models.InventarioBodega inventario) {
+        try {
+            MovimientoInventario movimiento = new MovimientoInventario();
+            movimiento.setInventarioId(inventario.get_id());
+            movimiento.setProductoId(traslado.getProductoId());
+            movimiento.setProductoNombre(traslado.getProductoNombre());
+            movimiento.setTipoMovimiento(tipoMovimiento);
+            movimiento.setCantidadMovimiento(traslado.getCantidad());
+            movimiento.setMotivo("TRASLADO");
+            movimiento.setReferencia("Traslado " + traslado.getNumero() +
+                    " - " + traslado.getOrigenBodegaNombre() + " → " + traslado.getDestinoBodegaNombre());
+            movimiento.setResponsable(traslado.getAprobador());
+            movimiento.setObservaciones(traslado.getObservaciones());
+            movimiento.setFecha(LocalDateTime.now());
+
+            movimientoRepository.save(movimiento);
+        } catch (Exception e) {
+            System.err.println("Error al registrar movimiento de traslado: " + e.getMessage());
+        }
+    }
+
+    // ==================== FIN ENDPOINTS DE TRASLADOS ====================
+
     @GetMapping("/debug/producto/{productoId}")
     public ResponseEntity<Map<String, Object>> debugProducto(@PathVariable String productoId) {
         try {

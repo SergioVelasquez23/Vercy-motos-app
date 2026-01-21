@@ -106,6 +106,9 @@ public class CuadreCajaService {
     @Autowired
     private GastoRepository gastoRepository;
 
+    @Autowired
+    private PedidoCalculosService pedidoCalculosService;
+
     /**
      * Calcula el efectivo esperado en base al fondo inicial más los pedidos
      * pagados en efectivo desde el último cuadre de caja o desde el inicio del
@@ -218,6 +221,22 @@ public class CuadreCajaService {
         System.out.println("Tarjetas: " + totalTarjetas);
         System.out.println("Otros: " + totalOtros);
         System.out.println("Total ventas: " + totalVentas);
+
+        // ✅ CALCULAR TOTALES DE IMPUESTOS, DESCUENTOS Y RETENCIONES
+        Map<String, Object> totalesCalculados = pedidoCalculosService.calcularTotalesLista(pedidosPagados);
+
+        double subtotalVentas = (double) totalesCalculados.get("subtotal");
+        double totalImpuestosVentas = (double) totalesCalculados.get("totalImpuestos");
+        double totalDescuentosVentas = (double) totalesCalculados.get("totalDescuentos");
+        double totalRetencionesVentas = (double) totalesCalculados.get("totalRetenciones");
+        double totalPropinasPedidos = (double) totalesCalculados.get("totalPropinas");
+
+        System.out.println("📊 DETALLE DE VENTAS CON IMPUESTOS:");
+        System.out.println("  Subtotal (sin impuestos): $" + subtotalVentas);
+        System.out.println("  Total descuentos: $" + totalDescuentosVentas);
+        System.out.println("  Total impuestos: $" + totalImpuestosVentas);
+        System.out.println("  Total retenciones: $" + totalRetencionesVentas);
+        System.out.println("  Total propinas: $" + totalPropinasPedidos);
 
         // Filtrar por período y por cuadreCajaId
         LocalDateTime fechaInicio = cuadreActivo.getFechaApertura();
@@ -382,6 +401,13 @@ public class CuadreCajaService {
         resultado.put("totalEfectivoEnCaja", fondoInicial + efectivoEsperadoPorVentas);
         resultado.put("fechaReferencia", inicioDia);
 
+        // ✅ NUEVOS: Campos de impuestos, descuentos y retenciones
+        resultado.put("subtotalVentas", subtotalVentas);
+        resultado.put("totalImpuestosVentas", totalImpuestosVentas);
+        resultado.put("totalDescuentosVentas", totalDescuentosVentas);
+        resultado.put("totalRetencionesVentas", totalRetencionesVentas);
+        resultado.put("totalPropinasPedidos", totalPropinasPedidos);
+
         return resultado;
     }
 
@@ -412,6 +438,12 @@ public class CuadreCajaService {
         resultado.put("efectivoEsperadoPorVentas", 0.0);
         resultado.put("totalEfectivoEnCaja", 0.0);
         resultado.put("fechaReferencia", LocalDateTime.now());
+        // ✅ NUEVOS: Campos de impuestos vacíos
+        resultado.put("subtotalVentas", 0.0);
+        resultado.put("totalImpuestosVentas", 0.0);
+        resultado.put("totalDescuentosVentas", 0.0);
+        resultado.put("totalRetencionesVentas", 0.0);
+        resultado.put("totalPropinasPedidos", 0.0);
         return resultado;
     }
 
@@ -500,6 +532,13 @@ public class CuadreCajaService {
         cuadreCaja.setTotalVentas(request.getTotalVentas());
         cuadreCaja.setVentasDesglosadas(request.getVentasDesglosadas());
         cuadreCaja.setTotalPropinas(request.getTotalPropinas());
+
+        // ✅ NUEVO: Establecer información de impuestos y descuentos
+        Map<String, Object> detallesVentas = calcularDetallesVentas();
+        cuadreCaja.setSubtotalVentas((double) detallesVentas.getOrDefault("subtotalVentas", 0.0));
+        cuadreCaja.setTotalImpuestosVentas((double) detallesVentas.getOrDefault("totalImpuestosVentas", 0.0));
+        cuadreCaja.setTotalDescuentosVentas((double) detallesVentas.getOrDefault("totalDescuentosVentas", 0.0));
+        cuadreCaja.setTotalRetencionesVentas((double) detallesVentas.getOrDefault("totalRetencionesVentas", 0.0));
 
         // Establecer información de gastos
         cuadreCaja.setTotalGastos(request.getTotalGastos());
@@ -632,6 +671,13 @@ public class CuadreCajaService {
         cuadre.setTotalVentas(request.getTotalVentas());
         cuadre.setVentasDesglosadas(request.getVentasDesglosadas());
         cuadre.setTotalPropinas(request.getTotalPropinas());
+
+        // ✅ NUEVO: Actualizar información de impuestos y descuentos
+        Map<String, Object> detallesVentas = calcularDetallesVentas();
+        cuadre.setSubtotalVentas((double) detallesVentas.getOrDefault("subtotalVentas", 0.0));
+        cuadre.setTotalImpuestosVentas((double) detallesVentas.getOrDefault("totalImpuestosVentas", 0.0));
+        cuadre.setTotalDescuentosVentas((double) detallesVentas.getOrDefault("totalDescuentosVentas", 0.0));
+        cuadre.setTotalRetencionesVentas((double) detallesVentas.getOrDefault("totalRetencionesVentas", 0.0));
 
         // Actualizar información de gastos
         cuadre.setTotalGastos(request.getTotalGastos());

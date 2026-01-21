@@ -48,6 +48,9 @@ public class FacturaComprasController {
     @Autowired
     private ProveedorRepository proveedorRepository;
 
+    @Autowired
+    private com.prog3.security.Services.FacturaCalculosService facturaCalculosService;
+
     /**
      * Crear una nueva factura de compras de ingredientes
      */
@@ -127,8 +130,8 @@ public class FacturaComprasController {
                 }
             }
 
-            // Calcular totales
-            factura.calcularTotales();
+            // Calcular totales con el nuevo servicio de cálculos
+            facturaCalculosService.calcularFactura(factura);
 
             // Procesar la factura (actualizar stocks si corresponde)
             Factura facturaGuardada = facturaComprasService.procesarFacturaCompras(factura);

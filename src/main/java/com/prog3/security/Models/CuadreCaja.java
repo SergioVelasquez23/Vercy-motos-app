@@ -23,6 +23,12 @@ public class CuadreCaja {
     private Map<String, Double> ventasDesglosadas = new HashMap<>(); // Ventas desglosadas por medio de pago
     private double totalPropinas; // Total de propinas
 
+    // Nuevos campos para cálculos con impuestos
+    private double subtotalVentas; // Subtotal sin impuestos ni descuentos
+    private double totalImpuestosVentas; // Total de impuestos cobrados
+    private double totalDescuentosVentas; // Total de descuentos aplicados
+    private double totalRetencionesVentas; // Total de retenciones
+
     // Gastos
     private double totalGastos; // Total de gastos
     private Map<String, Double> gastosDesglosados = new HashMap<>(); // Gastos desglosados por tipo
@@ -297,5 +303,39 @@ public class CuadreCaja {
     
     public void setEfectivoDeclarado(Double efectivoDeclarado) {
         this.efectivoDeclarado = efectivoDeclarado;
+    }
+
+    // Getters y Setters para campos de impuestos
+
+    public double getSubtotalVentas() {
+        return subtotalVentas;
+    }
+
+    public void setSubtotalVentas(double subtotalVentas) {
+        this.subtotalVentas = subtotalVentas;
+    }
+
+    public double getTotalImpuestosVentas() {
+        return totalImpuestosVentas;
+    }
+
+    public void setTotalImpuestosVentas(double totalImpuestosVentas) {
+        this.totalImpuestosVentas = totalImpuestosVentas;
+    }
+
+    public double getTotalDescuentosVentas() {
+        return totalDescuentosVentas;
+    }
+
+    public void setTotalDescuentosVentas(double totalDescuentosVentas) {
+        this.totalDescuentosVentas = totalDescuentosVentas;
+    }
+
+    public double getTotalRetencionesVentas() {
+        return totalRetencionesVentas;
+    }
+
+    public void setTotalRetencionesVentas(double totalRetencionesVentas) {
+        this.totalRetencionesVentas = totalRetencionesVentas;
     }
 }
