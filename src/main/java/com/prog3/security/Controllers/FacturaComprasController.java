@@ -1,6 +1,8 @@
 package com.prog3.security.Controllers;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -63,7 +65,15 @@ public class FacturaComprasController {
             Factura factura = new Factura();
 
             // Datos básicos
+            // Número interno de la factura (generado por el sistema)
             factura.setNumero(facturaComprasService.generarNumeroFactura());
+
+            // Número de factura del proveedor (campo "factura" en el formulario)
+            Object numeroFacturaProveedorObj = datos.getOrDefault("numeroFacturaProveedor",
+                    datos.getOrDefault("factura", null));
+            if (numeroFacturaProveedorObj != null && !numeroFacturaProveedorObj.toString().trim().isEmpty()) {
+                factura.setNumeroFacturaProveedor(numeroFacturaProveedorObj.toString().trim());
+            }
             factura.setTipoFactura("compra"); // Establecer como factura de compra
 
             // Datos del proveedor (opcionales)
@@ -105,17 +115,63 @@ public class FacturaComprasController {
             String formaPago = formaPagoObj != null ? formaPagoObj.toString() : "Contado";
             factura.setFormaPago(formaPago);
 
-            // Fechas y usuario
-            factura.setFecha(LocalDateTime.now());
+            // Fechas
+            // Fecha de la compra
+            Object fechaObj = datos.getOrDefault("fecha", null);
+            if (fechaObj != null && !fechaObj.toString().trim().isEmpty()) {
+                try {
+                    LocalDate fechaCompra = LocalDate.parse(fechaObj.toString().trim());
+                    factura.setFecha(fechaCompra.atStartOfDay());
+                } catch (Exception e) {
+                    factura.setFecha(LocalDateTime.now());
+                }
+            } else {
+                factura.setFecha(LocalDateTime.now());
+            }
 
+            // Fecha de vencimiento
+            Object fechaVencimientoObj = datos.getOrDefault("fechaVencimiento", null);
+            if (fechaVencimientoObj != null && !fechaVencimientoObj.toString().trim().isEmpty()) {
+                try {
+                    LocalDate fechaVenc = LocalDate.parse(fechaVencimientoObj.toString().trim());
+                    factura.setFechaVencimiento(fechaVenc.atStartOfDay());
+                } catch (Exception e) {
+                    // Si falla el parseo, dejar null
+                    System.out.println("⚠️ No se pudo parsear fecha de vencimiento: " + fechaVencimientoObj);
+                }
+            }
+
+            // Usuario que registra
             Object registradoPorObj = datos.getOrDefault("registradoPor", "admin");
             String registradoPor = registradoPorObj != null ? registradoPorObj.toString() : "admin";
             factura.setRegistradoPor(registradoPor);
 
-            // Observaciones generales de forma segura
-            Object observacionesObj = datos.getOrDefault("observaciones", "");
+            // Observaciones/Descripción generales
+            Object observacionesObj = datos.getOrDefault("descripcion", datos.getOrDefault("observaciones", ""));
             String observaciones = observacionesObj != null ? observacionesObj.toString() : "";
             factura.setObservaciones(observaciones);
+
+            // 💰 Porcentajes de retenciones (Retención, Reteiva, Reteica)
+            Object porcentajeRetencionObj = datos.getOrDefault("porcentajeRetencion", "0");
+            double porcentajeRetencion = parseDoubleSeguro(porcentajeRetencionObj);
+            factura.setPorcentajeRetencion(porcentajeRetencion);
+
+            Object porcentajeReteIvaObj = datos.getOrDefault("porcentajeReteIva", "0");
+            double porcentajeReteIva = parseDoubleSeguro(porcentajeReteIvaObj);
+            factura.setPorcentajeReteIva(porcentajeReteIva);
+
+            Object porcentajeReteIcaObj = datos.getOrDefault("porcentajeReteIca", "0");
+            double porcentajeReteIca = parseDoubleSeguro(porcentajeReteIcaObj);
+            factura.setPorcentajeReteIca(porcentajeReteIca);
+
+            // 💸 Descuento general
+            Object tipoDescuentoObj = datos.getOrDefault("tipoDescuento", "Valor");
+            String tipoDescuento = tipoDescuentoObj != null ? tipoDescuentoObj.toString() : "Valor";
+            factura.setTipoDescuento(tipoDescuento);
+
+            Object descuentoGeneralObj = datos.getOrDefault("descuentoGeneral", "0");
+            double descuentoGeneral = parseDoubleSeguro(descuentoGeneralObj);
+            factura.setDescuentoGeneral(descuentoGeneral);
 
             // Procesar items de ingredientes
             @SuppressWarnings("unchecked")
@@ -184,17 +240,39 @@ public class FacturaComprasController {
             item.setIngredienteId(ingredienteId);
             item.setIngredienteNombre(ingrediente.getNombre());
 
+            // Código interno del producto
+            Object codigoObj = itemData.getOrDefault("codigo", ingrediente.get_id());
+            String codigo = codigoObj != null ? codigoObj.toString() : "";
+            item.setCodigo(codigo);
+
+            // Código de barras del producto
+            Object codigoBarrasObj = itemData.getOrDefault("codigoBarras", "");
+            String codigoBarras = codigoBarrasObj != null ? codigoBarrasObj.toString() : "";
+            item.setCodigoBarras(codigoBarras);
+
             // Manejar cantidad de forma segura
-            Object cantidadObj = itemData.getOrDefault("cantidad", "0");
-            String cantidadStr = cantidadObj != null ? cantidadObj.toString() : "0";
-            item.setCantidad(Double.parseDouble(cantidadStr));
+            double cantidad = parseDoubleSeguro(itemData.getOrDefault("cantidad", "0"));
+            item.setCantidad(cantidad);
 
             item.setUnidad(ingrediente.getUnidad());
 
-            // Manejar precio unitario de forma segura
-            Object precioObj = itemData.getOrDefault("precioUnitario", "0");
-            String precioStr = precioObj != null ? precioObj.toString() : "0";
-            item.setPrecioUnitario(Double.parseDouble(precioStr));
+            // Manejar precio unitario (valor unitario)
+            double precioUnitario = parseDoubleSeguro(itemData.getOrDefault("precioUnitario",
+                    itemData.getOrDefault("valorUnitario", "0")));
+            item.setPrecioUnitario(precioUnitario);
+
+            // Porcentaje de impuesto (% Imp.)
+            double porcentajeImpuesto = parseDoubleSeguro(itemData.getOrDefault("porcentajeImpuesto", "0"));
+            item.setPorcentajeImpuesto(porcentajeImpuesto);
+
+            // Tipo de impuesto ("%" por defecto)
+            Object tipoImpuestoObj = itemData.getOrDefault("tipoImpuesto", "%");
+            String tipoImpuesto = tipoImpuestoObj != null ? tipoImpuestoObj.toString() : "%";
+            item.setTipoImpuesto(tipoImpuesto);
+
+            // Porcentaje de descuento (% Descu)
+            double porcentajeDescuento = parseDoubleSeguro(itemData.getOrDefault("porcentajeDescuento", "0"));
+            item.setPorcentajeDescuento(porcentajeDescuento);
 
             // Determinar si es descontable (por defecto usar el valor del ingrediente)
             Object descontableObj = itemData.getOrDefault("descontable", Boolean.toString(ingrediente.isDescontable()));
@@ -207,19 +285,40 @@ public class FacturaComprasController {
             String observacionesStr = observacionesObj != null ? observacionesObj.toString() : "";
             item.setObservaciones(observacionesStr);
 
-            // Calcular precio total
+            // Calcular precio total (incluye impuestos y descuentos)
             item.calcularPrecioTotal();
 
             System.out.println("✅ Item creado: " + ingrediente.getNombre()
-                    + " (" + item.getCantidad() + " " + item.getUnidad()
-                    + ") - Descontable: " + item.isDescontable()
-                    + " - Precio: $" + item.getPrecioTotal());
+                    + " | Código: " + item.getCodigo()
+                    + " | Cantidad: " + item.getCantidad() + " " + item.getUnidad()
+                    + " | Precio Unit: $" + item.getPrecioUnitario()
+                    + " | % Imp: " + item.getPorcentajeImpuesto() + "%"
+                    + " | % Desc: " + item.getPorcentajeDescuento() + "%"
+                    + " | Descontable: " + item.isDescontable()
+                    + " | Total: $" + item.getPrecioTotal());
 
             return item;
 
         } catch (Exception e) {
             System.err.println("❌ Error al crear item de ingrediente: " + e.getMessage());
+            e.printStackTrace();
             return null;
+        }
+    }
+
+    /**
+     * Método auxiliar para parsear double de forma segura
+     */
+    private double parseDoubleSeguro(Object valor) {
+        if (valor == null)
+            return 0.0;
+        try {
+            String valorStr = valor.toString().trim();
+            if (valorStr.isEmpty())
+                return 0.0;
+            return Double.parseDouble(valorStr);
+        } catch (NumberFormatException e) {
+            return 0.0;
         }
     }
 

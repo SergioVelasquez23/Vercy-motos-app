@@ -1,23 +1,40 @@
 package com.prog3.security.DTOs;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import com.prog3.security.Models.ItemGasto;
 
 public class GastoRequest {
 
     private String cuadreCajaId;
     private String tipoGastoId;
     private String tipoGastoNombre;
-    private String concepto;
+    private String concepto; // Descripción general
     private double monto;
     private String responsable;
     private LocalDateTime fechaGasto;
+    private LocalDateTime fechaVencimiento; // Nueva: Fecha de vencimiento
     private String numeroRecibo;
     private String numeroFactura;
     private String proveedor;
+    private String proveedorId; // Nueva: ID del proveedor
     private String formaPago;
     private boolean pagadoDesdeCaja;
+    private boolean documentoSoporte; // Nueva: Toggle documento soporte
+
+    // Items del gasto (para gastos con múltiples líneas)
+    private List<ItemGasto> items;
+
+    // Campos de cálculo
     private double subtotal;
-    private double impuestos;
+    private double totalDescuentos;
+    private double impuestos; // Legacy
+    private double totalImpuestos;
+
+    // 💰 Campos de retenciones
+    private double porcentajeRetencion;
+    private double porcentajeReteIva;
+    private double porcentajeReteIca;
 
     public GastoRequest() {
     }
@@ -133,5 +150,79 @@ public class GastoRequest {
 
     public void setPagadoDesdeCaja(boolean pagadoDesdeCaja) {
         this.pagadoDesdeCaja = pagadoDesdeCaja;
+    }
+
+    // Nuevos getters y setters
+
+    public LocalDateTime getFechaVencimiento() {
+        return fechaVencimiento;
+    }
+
+    public void setFechaVencimiento(LocalDateTime fechaVencimiento) {
+        this.fechaVencimiento = fechaVencimiento;
+    }
+
+    public String getProveedorId() {
+        return proveedorId;
+    }
+
+    public void setProveedorId(String proveedorId) {
+        this.proveedorId = proveedorId;
+    }
+
+    public boolean isDocumentoSoporte() {
+        return documentoSoporte;
+    }
+
+    public void setDocumentoSoporte(boolean documentoSoporte) {
+        this.documentoSoporte = documentoSoporte;
+    }
+
+    public List<ItemGasto> getItems() {
+        return items;
+    }
+
+    public void setItems(List<ItemGasto> items) {
+        this.items = items;
+    }
+
+    public double getTotalDescuentos() {
+        return totalDescuentos;
+    }
+
+    public void setTotalDescuentos(double totalDescuentos) {
+        this.totalDescuentos = totalDescuentos;
+    }
+
+    public double getTotalImpuestos() {
+        return totalImpuestos;
+    }
+
+    public void setTotalImpuestos(double totalImpuestos) {
+        this.totalImpuestos = totalImpuestos;
+    }
+
+    public double getPorcentajeRetencion() {
+        return porcentajeRetencion;
+    }
+
+    public void setPorcentajeRetencion(double porcentajeRetencion) {
+        this.porcentajeRetencion = porcentajeRetencion;
+    }
+
+    public double getPorcentajeReteIva() {
+        return porcentajeReteIva;
+    }
+
+    public void setPorcentajeReteIva(double porcentajeReteIva) {
+        this.porcentajeReteIva = porcentajeReteIva;
+    }
+
+    public double getPorcentajeReteIca() {
+        return porcentajeReteIca;
+    }
+
+    public void setPorcentajeReteIca(double porcentajeReteIca) {
+        this.porcentajeReteIca = porcentajeReteIca;
     }
 }

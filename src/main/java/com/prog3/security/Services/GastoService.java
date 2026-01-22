@@ -2,11 +2,13 @@ package com.prog3.security.Services;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import com.prog3.security.Models.Gasto;
+import com.prog3.security.Models.ItemGasto;
 import com.prog3.security.Models.TipoGasto;
 import com.prog3.security.Models.CuadreCaja;
 import com.prog3.security.Repositories.GastoRepository;
@@ -54,10 +56,10 @@ public class GastoService {
      * Crea un nuevo gasto
      */
     public Gasto crearGasto(GastoRequest request) {
-        // Verificar que el tipo de gasto exista
+        // Verificar que el tipo de gasto exista (categoría)
         TipoGasto tipoGasto = tipoGastoRepository.findById(request.getTipoGastoId()).orElse(null);
         if (tipoGasto == null) {
-            throw new RuntimeException("Tipo de gasto no encontrado");
+            throw new RuntimeException("Tipo de gasto (categoría) no encontrado");
         }
 
         // Verificar que el cuadre exista y no esté cerrado
@@ -70,9 +72,15 @@ public class GastoService {
             throw new RuntimeException("No se pueden agregar gastos a un cuadre cerrado");
         }
 
-        // ✅ NUEVA FUNCIONALIDAD: Validar si se puede pagar desde caja
+        // Calcular monto total si hay items
+        double montoTotal = request.getMonto();
+        if (request.getItems() != null && !request.getItems().isEmpty()) {
+            montoTotal = calcularMontoDesdeItems(request);
+        }
+
+        // ✅ Validar si se puede pagar desde caja
         if (request.isPagadoDesdeCaja()) {
-            validarPagoDesdeEfectivoCaja(cuadreCaja, request.getMonto());
+            validarPagoDesdeEfectivoCaja(cuadreCaja, montoTotal);
         }
 
         Gasto gasto = new Gasto(
@@ -80,13 +88,16 @@ public class GastoService {
                 request.getTipoGastoId(),
                 tipoGasto.getNombre(), // Guardar también el nombre para facilitar consultas
                 request.getConcepto(),
-                request.getMonto(),
+                montoTotal,
                 request.getResponsable()
         );
 
-        // Establecer campos opcionales
+        // Establecer campos básicos opcionales
         if (request.getFechaGasto() != null) {
             gasto.setFechaGasto(request.getFechaGasto());
+        }
+        if (request.getFechaVencimiento() != null) {
+            gasto.setFechaVencimiento(request.getFechaVencimiento());
         }
         if (request.getNumeroRecibo() != null) {
             gasto.setNumeroRecibo(request.getNumeroRecibo());
@@ -97,17 +108,44 @@ public class GastoService {
         if (request.getProveedor() != null) {
             gasto.setProveedor(request.getProveedor());
         }
+        if (request.getProveedorId() != null) {
+            gasto.setProveedorId(request.getProveedorId());
+        }
         if (request.getFormaPago() != null) {
             gasto.setFormaPago(request.getFormaPago());
         }
+
+        // Documento soporte
+        gasto.setDocumentoSoporte(request.isDocumentoSoporte());
+
+        // Items del gasto (múltiples líneas de concepto)
+        if (request.getItems() != null && !request.getItems().isEmpty()) {
+            gasto.setItems(new ArrayList<>(request.getItems()));
+        }
+
+        // Campos de cálculo
         if (request.getSubtotal() > 0) {
             gasto.setSubtotal(request.getSubtotal());
+        }
+        if (request.getTotalDescuentos() > 0) {
+            gasto.setTotalDescuentos(request.getTotalDescuentos());
         }
         if (request.getImpuestos() > 0) {
             gasto.setImpuestos(request.getImpuestos());
         }
+        if (request.getTotalImpuestos() > 0) {
+            gasto.setTotalImpuestos(request.getTotalImpuestos());
+        }
 
-        // ✅ NUEVA FUNCIONALIDAD: Establecer pagadoDesdeCaja
+        // 💰 Porcentajes de retenciones
+        gasto.setPorcentajeRetencion(request.getPorcentajeRetencion());
+        gasto.setPorcentajeReteIva(request.getPorcentajeReteIva());
+        gasto.setPorcentajeReteIca(request.getPorcentajeReteIca());
+
+        // Calcular totales (incluye retenciones)
+        gasto.calcularTotales();
+
+        // ✅ Establecer pagadoDesdeCaja
         gasto.setPagadoDesdeCaja(request.isPagadoDesdeCaja());
 
         // ✅ Si se paga desde caja, forzar forma de pago a efectivo
@@ -141,34 +179,43 @@ public class GastoService {
             throw new RuntimeException("No se pueden modificar gastos de un cuadre cerrado");
         }
 
-        // ✅ NUEVA FUNCIONALIDAD: Validar cambio en pagadoDesdeCaja
-        boolean cambiaAPagadoDesdeCaja = !gasto.isPagadoDesdeCaja() && request.isPagadoDesdeCaja();
-        if (cambiaAPagadoDesdeCaja) {
-            validarPagoDesdeEfectivoCaja(cuadreCaja, request.getMonto() > 0 ? request.getMonto() : gasto.getMonto());
+        // Calcular monto total si hay items
+        double montoTotal = request.getMonto();
+        if (request.getItems() != null && !request.getItems().isEmpty()) {
+            montoTotal = calcularMontoDesdeItems(request);
         }
 
-        // Actualizar tipo de gasto si cambió
+        // Validar cambio en pagadoDesdeCaja
+        boolean cambiaAPagadoDesdeCaja = !gasto.isPagadoDesdeCaja() && request.isPagadoDesdeCaja();
+        if (cambiaAPagadoDesdeCaja) {
+            validarPagoDesdeEfectivoCaja(cuadreCaja, montoTotal > 0 ? montoTotal : gasto.getMonto());
+        }
+
+        // Actualizar tipo de gasto (categoría) si cambió
         if (request.getTipoGastoId() != null && !request.getTipoGastoId().equals(gasto.getTipoGastoId())) {
             TipoGasto tipoGasto = tipoGastoRepository.findById(request.getTipoGastoId()).orElse(null);
             if (tipoGasto == null) {
-                throw new RuntimeException("Tipo de gasto no encontrado");
+                throw new RuntimeException("Tipo de gasto (categoría) no encontrado");
             }
             gasto.setTipoGastoId(request.getTipoGastoId());
             gasto.setTipoGastoNombre(tipoGasto.getNombre());
         }
 
-        // Actualizar resto de campos
+        // Actualizar campos básicos
         if (request.getConcepto() != null) {
             gasto.setConcepto(request.getConcepto());
         }
-        if (request.getMonto() > 0) {
-            gasto.setMonto(request.getMonto());
+        if (montoTotal > 0) {
+            gasto.setMonto(montoTotal);
         }
         if (request.getResponsable() != null) {
             gasto.setResponsable(request.getResponsable());
         }
         if (request.getFechaGasto() != null) {
             gasto.setFechaGasto(request.getFechaGasto());
+        }
+        if (request.getFechaVencimiento() != null) {
+            gasto.setFechaVencimiento(request.getFechaVencimiento());
         }
         if (request.getNumeroRecibo() != null) {
             gasto.setNumeroRecibo(request.getNumeroRecibo());
@@ -179,20 +226,47 @@ public class GastoService {
         if (request.getProveedor() != null) {
             gasto.setProveedor(request.getProveedor());
         }
+        if (request.getProveedorId() != null) {
+            gasto.setProveedorId(request.getProveedorId());
+        }
         if (request.getFormaPago() != null) {
             gasto.setFormaPago(request.getFormaPago());
         }
+
+        // Documento soporte
+        gasto.setDocumentoSoporte(request.isDocumentoSoporte());
+
+        // Items del gasto
+        if (request.getItems() != null) {
+            gasto.setItems(new ArrayList<>(request.getItems()));
+        }
+
+        // Campos de cálculo
         if (request.getSubtotal() > 0) {
             gasto.setSubtotal(request.getSubtotal());
+        }
+        if (request.getTotalDescuentos() > 0) {
+            gasto.setTotalDescuentos(request.getTotalDescuentos());
         }
         if (request.getImpuestos() > 0) {
             gasto.setImpuestos(request.getImpuestos());
         }
+        if (request.getTotalImpuestos() > 0) {
+            gasto.setTotalImpuestos(request.getTotalImpuestos());
+        }
 
-        // ✅ NUEVA FUNCIONALIDAD: Actualizar pagadoDesdeCaja
+        // 💰 Actualizar porcentajes de retenciones
+        gasto.setPorcentajeRetencion(request.getPorcentajeRetencion());
+        gasto.setPorcentajeReteIva(request.getPorcentajeReteIva());
+        gasto.setPorcentajeReteIca(request.getPorcentajeReteIca());
+
+        // Recalcular totales
+        gasto.calcularTotales();
+
+        // Actualizar pagadoDesdeCaja
         gasto.setPagadoDesdeCaja(request.isPagadoDesdeCaja());
 
-        // ✅ Si se paga desde caja, forzar forma de pago a efectivo
+        // Si se paga desde caja, forzar forma de pago a efectivo
         if (request.isPagadoDesdeCaja()) {
             gasto.setFormaPago("efectivo");
             System.out.println("💰 Gasto actualizado como pagado desde caja - Forma de pago establecida en 'efectivo'");
@@ -207,6 +281,39 @@ public class GastoService {
         }
 
         return gastoActualizado;
+    }
+
+    /**
+     * Calcula el monto total desde los items del request
+     * Incluye cálculo de descuentos, impuestos y retenciones
+     */
+    private double calcularMontoDesdeItems(GastoRequest request) {
+        if (request.getItems() == null || request.getItems().isEmpty()) {
+            return request.getMonto();
+        }
+
+        double subtotal = 0.0;
+        double totalDescuentos = 0.0;
+        double totalImpuestos = 0.0;
+
+        for (ItemGasto item : request.getItems()) {
+            item.calcularTotales();
+            subtotal += item.getValor();
+            totalDescuentos += item.getValorDescuento();
+            totalImpuestos += item.getValorImpuesto();
+        }
+
+        // Base gravable
+        double baseGravable = subtotal - totalDescuentos + totalImpuestos;
+
+        // Calcular retenciones
+        double valorRetencion = baseGravable * (request.getPorcentajeRetencion() / 100.0);
+        double valorReteIva = totalImpuestos * (request.getPorcentajeReteIva() / 100.0);
+        double valorReteIca = baseGravable * (request.getPorcentajeReteIca() / 100.0);
+        double totalRetenciones = valorRetencion + valorReteIva + valorReteIca;
+
+        // Monto total = baseGravable - retenciones
+        return baseGravable - totalRetenciones;
     }
 
     /**

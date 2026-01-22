@@ -1208,6 +1208,7 @@ public class ProductosController extends BaseController<Producto, String> {
             }
 
             List<Producto> productosCreados = new ArrayList<>();
+            List<Producto> productosActualizados = new ArrayList<>();
             List<Map<String, Object>> errores = new ArrayList<>();
             int filasProcesadas = 0;
 
@@ -1373,23 +1374,87 @@ public class ProductosController extends BaseController<Producto, String> {
                                 obtenerValorCeldaSeguro(row, columnasResueltas.get("codigo"));
 
                         // Verificar si ya existe un producto con ese código o nombre
-                        if (codigo != null && !codigo.isEmpty()
-                                && this.theProductoRepository.existsByCodigo(codigo.trim())) {
-                            Map<String, Object> error = new HashMap<>();
-                            error.put("fila", i + 1);
-                            error.put("codigo", codigo);
-                            error.put("error", "Ya existe un producto con este código");
-                            errores.add(error);
-                            continue;
+                        Producto productoExistente = null;
+
+                        if (codigo != null && !codigo.isEmpty()) {
+                            productoExistente = this.theProductoRepository.findByCodigo(codigo.trim()).orElse(null);
                         }
 
-                        if (this.theProductoRepository.existsByNombre(nombre.trim())) {
-                            Map<String, Object> error = new HashMap<>();
-                            error.put("fila", i + 1);
-                            error.put("nombre", nombre);
-                            error.put("error", "Ya existe un producto con este nombre");
-                            errores.add(error);
-                            continue;
+                        if (productoExistente == null) {
+                            productoExistente = this.theProductoRepository.findByNombre(nombre.trim());
+                        }
+
+                        // Si el producto ya existe, actualizar stock y campos relevantes
+                        if (productoExistente != null) {
+                            boolean actualizado = false;
+
+                            // Actualizar stock/cantidades
+                            int almacenNuevo = (int) obtenerValorNumerico(row, columnasResueltas.get("almacen"), -1);
+                            int bodegaNuevo = (int) obtenerValorNumerico(row, columnasResueltas.get("bodega"), -1);
+
+                            if (almacenNuevo >= 0) {
+                                productoExistente.setCantidadAlmacen(almacenNuevo);
+                                actualizado = true;
+                            }
+                            if (bodegaNuevo >= 0) {
+                                productoExistente.setCantidadBodega(bodegaNuevo);
+                                actualizado = true;
+                            }
+
+                            // Recalcular cantidad total
+                            if (actualizado) {
+                                productoExistente.setCantidad(
+                                        productoExistente.getCantidadAlmacen() + productoExistente.getCantidadBodega());
+                            }
+
+                            // Actualizar precio si viene en el Excel
+                            double precioNuevo = obtenerValorNumerico(row, columnasResueltas.get("precio"), -1);
+                            if (precioNuevo > 0) {
+                                productoExistente.setPrecio(precioNuevo);
+                                productoExistente.calcularPrecioConIva();
+                                productoExistente.calcularUtilidad();
+                                actualizado = true;
+                            }
+
+                            // Actualizar costo si viene en el Excel
+                            double costoNuevo = obtenerValorNumerico(row, columnasResueltas.get("costo"), -1);
+                            if (costoNuevo > 0) {
+                                productoExistente.setCosto(costoNuevo);
+                                productoExistente.calcularUtilidad();
+                                actualizado = true;
+                            }
+
+                            // Actualizar stock mínimo/óptimo si vienen
+                            int stockMinimoNuevo = (int) obtenerValorNumerico(row, columnasResueltas.get("stockminimo"),
+                                    -1);
+                            int stockOptimoNuevo = (int) obtenerValorNumerico(row, columnasResueltas.get("stockoptimo"),
+                                    -1);
+
+                            if (stockMinimoNuevo >= 0) {
+                                productoExistente.setStockMinimo(stockMinimoNuevo);
+                                actualizado = true;
+                            }
+                            if (stockOptimoNuevo >= 0) {
+                                productoExistente.setStockOptimo(stockOptimoNuevo);
+                                actualizado = true;
+                            }
+
+                            // Actualizar ubicaciones si vienen
+                            String localizacionNueva = obtenerValorCeldaSeguro(row,
+                                    columnasResueltas.get("localizacion"));
+                            if (localizacionNueva != null && !localizacionNueva.isEmpty()) {
+                                productoExistente.setLocalizacion(localizacionNueva);
+                                actualizado = true;
+                            }
+
+                            if (actualizado) {
+                                this.theProductoRepository.save(productoExistente);
+                                productosActualizados.add(productoExistente);
+                                System.out.println("🔄 Producto actualizado: " + productoExistente.getNombre() +
+                                        " | Stock: " + productoExistente.getCantidad());
+                            }
+
+                            continue; // Pasar al siguiente producto
                         }
 
                         double precio =
@@ -1518,22 +1583,26 @@ public class ProductosController extends BaseController<Producto, String> {
 
             Map<String, Object> resultado = new HashMap<>();
             resultado.put("productosCreados", productosCreados.size());
+            resultado.put("productosActualizados", productosActualizados.size());
             resultado.put("filasProcesadas", filasProcesadas);
             resultado.put("errores", errores);
             resultado.put("tiempoMs", endTime - startTime);
             resultado.put("productos", productosCreados);
+            resultado.put("actualizados", productosActualizados);
 
             System.out.println("✅ CARGA MASIVA completada en " + (endTime - startTime) + "ms");
             System.out.println("📦 Productos creados: " + productosCreados.size());
+            System.out.println("🔄 Productos actualizados: " + productosActualizados.size());
             System.out.println("⚠️ Errores: " + errores.size());
 
-            if (productosCreados.isEmpty() && !errores.isEmpty()) {
+            if (productosCreados.isEmpty() && productosActualizados.isEmpty() && !errores.isEmpty()) {
                 return responseService
-                        .badRequest("No se pudieron crear productos. Errores: " + errores.size());
+                        .badRequest("No se pudieron procesar productos. Errores: " + errores.size());
             }
 
-            return responseService.success(resultado, "Carga masiva completada. Productos creados: "
-                    + productosCreados.size() + ", Errores: " + errores.size());
+            return responseService.success(resultado, "Carga masiva completada. Creados: "
+                    + productosCreados.size() + ", Actualizados: " + productosActualizados.size()
+                    + ", Errores: " + errores.size());
 
         } catch (Exception e) {
             System.err.println("❌ ERROR en carga masiva: " + e.getMessage());

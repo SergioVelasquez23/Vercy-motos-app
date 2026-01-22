@@ -28,6 +28,7 @@ public class Factura {
 
     // Información básica de la factura
     private String numero;
+    private String numeroFacturaProveedor; // Número de factura del proveedor (para compras)
     private LocalDateTime fecha;
     private LocalDateTime fechaVencimiento; // Fecha de vencimiento de la factura
     private String tipoFactura; // "venta" o "compra"
@@ -58,6 +59,7 @@ public class Factura {
     private double subtotal = 0.0; // Suma sin impuestos ni descuentos
     private double totalImpuestos = 0.0; // Total de impuestos
     private double totalDescuentos = 0.0; // Total de descuentos aplicados
+    private double totalDescuentosProductos = 0.0; // Total de descuentos por producto individual
     private String tipoDescuento = "Valor"; // "Valor" o "Porcentaje"
     private double descuentoGeneral = 0.0; // Descuento general aplicado
     private double total;
@@ -105,6 +107,14 @@ public class Factura {
 
     public void setNumero(String numero) {
         this.numero = numero;
+    }
+
+    public String getNumeroFacturaProveedor() {
+        return numeroFacturaProveedor;
+    }
+
+    public void setNumeroFacturaProveedor(String numeroFacturaProveedor) {
+        this.numeroFacturaProveedor = numeroFacturaProveedor;
     }
 
     public LocalDateTime getFecha() {
@@ -273,6 +283,14 @@ public class Factura {
         this.totalDescuentos = totalDescuentos;
     }
 
+    public double getTotalDescuentosProductos() {
+        return totalDescuentosProductos;
+    }
+
+    public void setTotalDescuentosProductos(double totalDescuentosProductos) {
+        this.totalDescuentosProductos = totalDescuentosProductos;
+    }
+
     public String getTipoDescuento() {
         return tipoDescuento;
     }
@@ -390,7 +408,8 @@ public class Factura {
     public void calcularTotal() {
         double totalVenta = 0.0;
         double totalCompra = 0.0;
-        double impuestosCalculados = 0.0;
+        double impuestosProductos = 0.0;
+        double descuentosProductos = 0.0;
 
         // Calcular total de items de venta
         if (this.items != null) {
@@ -399,27 +418,57 @@ public class Factura {
                     .sum();
         }
 
-        // Calcular total de items de compra
+        // Calcular total de items de compra (incluye impuestos y descuentos por
+        // producto)
         if (this.itemsIngredientes != null) {
+            // Subtotal de productos (sin impuestos ni descuentos)
             totalCompra = this.itemsIngredientes.stream()
-                    .mapToDouble(ItemFacturaIngrediente::getPrecioTotal)
+                    .mapToDouble(ItemFacturaIngrediente::getValorTotal)
+                    .sum();
+
+            // Total de impuestos por producto
+            impuestosProductos = this.itemsIngredientes.stream()
+                    .mapToDouble(ItemFacturaIngrediente::getValorImpuesto)
+                    .sum();
+
+            // Total de descuentos por producto
+            descuentosProductos = this.itemsIngredientes.stream()
+                    .mapToDouble(ItemFacturaIngrediente::getValorDescuento)
                     .sum();
         }
 
-        // Calcular subtotal (antes de impuestos y descuentos)
+        // Calcular subtotal (valor base de productos sin impuestos ni descuentos)
         this.subtotal = totalVenta + totalCompra;
 
-        // Calcular descuento
-        double descuentoAplicado = 0.0;
-        if ("Porcentaje".equals(this.tipoDescuento) && this.descuentoGeneral > 0) {
-            descuentoAplicado = this.subtotal * (this.descuentoGeneral / 100);
-        } else {
-            descuentoAplicado = this.descuentoGeneral;
-        }
-        this.totalDescuentos = descuentoAplicado;
+        // Guardar descuentos por producto
+        this.totalDescuentosProductos = descuentosProductos;
 
-        // Total final = subtotal + impuestos - descuentos
-        this.total = this.subtotal + this.totalImpuestos - this.totalDescuentos;
+        // Guardar impuestos de productos
+        this.totalImpuestos = impuestosProductos;
+
+        // Calcular descuento general (adicional a descuentos por producto)
+        double descuentoGeneralAplicado = 0.0;
+        double baseParaDescuentoGeneral = this.subtotal - descuentosProductos;
+        if ("Porcentaje".equals(this.tipoDescuento) && this.descuentoGeneral > 0) {
+            descuentoGeneralAplicado = baseParaDescuentoGeneral * (this.descuentoGeneral / 100);
+        } else {
+            descuentoGeneralAplicado = this.descuentoGeneral;
+        }
+
+        // Total de descuentos = descuentos por producto + descuento general
+        this.totalDescuentos = descuentosProductos + descuentoGeneralAplicado;
+
+        // Base gravable para retenciones
+        this.baseGravable = this.subtotal - this.totalDescuentos + this.totalImpuestos;
+
+        // Calcular retenciones
+        this.valorRetencion = this.baseGravable * (this.porcentajeRetencion / 100);
+        this.valorReteIva = this.totalImpuestos * (this.porcentajeReteIva / 100);
+        this.valorReteIca = this.baseGravable * (this.porcentajeReteIca / 100);
+        this.totalRetenciones = this.valorRetencion + this.valorReteIva + this.valorReteIca;
+
+        // Total final = subtotal + impuestos - descuentos - retenciones
+        this.total = this.baseGravable - this.totalRetenciones;
     }
 
     // Métodos para facturas de venta
