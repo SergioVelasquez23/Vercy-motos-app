@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 
 import com.prog3.security.Models.Factura;
 import com.prog3.security.Models.ItemFacturaIngrediente;
@@ -199,9 +200,16 @@ public class FacturaComprasController {
                     ItemFacturaIngrediente item = crearItemIngrediente(itemData);
                     if (item != null) {
                         factura.agregarItemIngrediente(item);
-                        System.out.println("✅ Item agregado: " + item.getIngredienteNombre());
+                        System.out.println("✅ Item agregado: " + item.getIngredienteNombre()
+                                + " | ID: " + item.getIngredienteId() + " | Cantidad: "
+                                + item.getCantidad());
+                    } else {
+                        System.out.println(
+                                "❌ Error: crearItemIngrediente devolvió null para: " + itemData);
                     }
                 }
+                System.out.println("📊 Total items agregados a factura: "
+                        + factura.getItemsIngredientes().size());
             } else {
                 System.out.println("⚠️ No se recibieron items en la factura. Datos recibidos: "
                         + datos.keySet());
@@ -234,35 +242,45 @@ public class FacturaComprasController {
     }
 
     /**
-     * Crear un item de ingrediente desde los datos del request
+     * Crear un item de ingrediente desde los datos del request NOTA: Ahora acepta items incluso si
+     * el ingrediente no existe en la BD, usando los datos que vienen del frontend directamente.
      */
     private ItemFacturaIngrediente crearItemIngrediente(Map<String, Object> itemData) {
         try {
-            // Verificar que el ingredienteId no sea null
-            Object ingredienteIdObj = itemData.get("ingredienteId");
-            if (ingredienteIdObj == null) {
-                System.err.println("⚠️ ingredienteId es null en itemData: " + itemData);
-                return null;
-            }
-
-            String ingredienteId = ingredienteIdObj.toString();
-
-            // Obtener el ingrediente
-            Optional<Ingrediente> ingredienteOpt = ingredienteRepository.findById(ingredienteId);
-            if (!ingredienteOpt.isPresent()) {
-                System.err.println("⚠️ Ingrediente no encontrado: " + ingredienteId);
-                return null;
-            }
-
-            Ingrediente ingrediente = ingredienteOpt.get();
+            System.out.println("📋 Creando item desde datos: " + itemData);
 
             // Crear el item
             ItemFacturaIngrediente item = new ItemFacturaIngrediente();
+
+            // Obtener ingredienteId (puede ser null para items manuales)
+            Object ingredienteIdObj = itemData.get("ingredienteId");
+            String ingredienteId = ingredienteIdObj != null ? ingredienteIdObj.toString() : null;
             item.setIngredienteId(ingredienteId);
-            item.setIngredienteNombre(ingrediente.getNombre());
+
+            // Intentar obtener el ingrediente de la BD para datos adicionales
+            Ingrediente ingrediente = null;
+            if (ingredienteId != null && !ingredienteId.isEmpty()) {
+                Optional<Ingrediente> ingredienteOpt =
+                        ingredienteRepository.findById(ingredienteId);
+                if (ingredienteOpt.isPresent()) {
+                    ingrediente = ingredienteOpt.get();
+                    System.out
+                            .println("✅ Ingrediente encontrado en BD: " + ingrediente.getNombre());
+                } else {
+                    System.out.println(
+                            "⚠️ Ingrediente no encontrado en BD, usando datos del request");
+                }
+            }
+
+            // Nombre del ingrediente: usar del request o de la BD
+            Object nombreObj = itemData.get("ingredienteNombre");
+            String nombre = nombreObj != null ? nombreObj.toString()
+                    : (ingrediente != null ? ingrediente.getNombre() : "Producto sin nombre");
+            item.setIngredienteNombre(nombre);
 
             // Código interno del producto
-            Object codigoObj = itemData.getOrDefault("codigo", ingrediente.get_id());
+            Object codigoObj = itemData.getOrDefault("codigo",
+                    ingrediente != null ? ingrediente.get_id() : ingredienteId);
             String codigo = codigoObj != null ? codigoObj.toString() : "";
             item.setCodigo(codigo);
 
@@ -275,7 +293,11 @@ public class FacturaComprasController {
             double cantidad = parseDoubleSeguro(itemData.getOrDefault("cantidad", "0"));
             item.setCantidad(cantidad);
 
-            item.setUnidad(ingrediente.getUnidad());
+            // Unidad: usar del request o de la BD
+            Object unidadObj = itemData.get("unidad");
+            String unidad = unidadObj != null ? unidadObj.toString()
+                    : (ingrediente != null ? ingrediente.getUnidad() : "UND");
+            item.setUnidad(unidad);
 
             // Manejar precio unitario (valor unitario)
             double precioUnitario = parseDoubleSeguro(itemData.getOrDefault("precioUnitario",
@@ -295,9 +317,10 @@ public class FacturaComprasController {
             double porcentajeDescuento = parseDoubleSeguro(itemData.getOrDefault("porcentajeDescuento", "0"));
             item.setPorcentajeDescuento(porcentajeDescuento);
 
-            // Determinar si es descontable (por defecto usar el valor del ingrediente)
-            Object descontableObj = itemData.getOrDefault("descontable", Boolean.toString(ingrediente.isDescontable()));
-            String descontableStr = descontableObj != null ? descontableObj.toString() : "false";
+            // Determinar si es descontable
+            Object descontableObj = itemData.getOrDefault("descontable",
+                    ingrediente != null ? Boolean.toString(ingrediente.isDescontable()) : "true");
+            String descontableStr = descontableObj != null ? descontableObj.toString() : "true";
             boolean descontableItem = Boolean.parseBoolean(descontableStr);
             item.setDescontable(descontableItem);
 
@@ -306,14 +329,41 @@ public class FacturaComprasController {
             String observacionesStr = observacionesObj != null ? observacionesObj.toString() : "";
             item.setObservaciones(observacionesStr);
 
-            // Calcular precio total (incluye impuestos y descuentos)
-            item.calcularPrecioTotal();
+            // Si vienen valores calculados del frontend, usarlos
+            Object subtotalObj = itemData.get("subtotal");
+            Object precioTotalObj = itemData.get("precioTotal");
+            Object valorImpuestoObj = itemData.get("valorImpuesto");
+            Object valorDescuentoObj = itemData.get("valorDescuento");
 
-            System.out.println("✅ Item creado: " + ingrediente.getNombre()
+            if (subtotalObj != null || precioTotalObj != null) {
+                // Usar valores del frontend
+                double subtotal =
+                        parseDoubleSeguro(subtotalObj != null ? subtotalObj : precioTotalObj);
+                item.setValorTotal(subtotal);
+
+                if (valorImpuestoObj != null) {
+                    item.setValorImpuesto(parseDoubleSeguro(valorImpuestoObj));
+                }
+                if (valorDescuentoObj != null) {
+                    item.setValorDescuento(parseDoubleSeguro(valorDescuentoObj));
+                }
+
+                // Calcular precio total final
+                double valorImpuesto = item.getValorImpuesto();
+                double valorDescuento = item.getValorDescuento();
+                item.setPrecioTotal(subtotal - valorDescuento + valorImpuesto);
+            } else {
+                // Calcular precio total si no viene del frontend
+                item.calcularPrecioTotal();
+            }
+
+            System.out.println("✅ Item creado: " + item.getIngredienteNombre()
                     + " | Código: " + item.getCodigo()
                     + " | Cantidad: " + item.getCantidad() + " " + item.getUnidad()
                     + " | Precio Unit: $" + item.getPrecioUnitario()
+                    + " | Subtotal: $" + item.getValorTotal()
                     + " | % Imp: " + item.getPorcentajeImpuesto() + "%"
+                    + " | Valor Imp: $" + item.getValorImpuesto()
                     + " | % Desc: " + item.getPorcentajeDescuento() + "%"
                     + " | Descontable: " + item.isDescontable()
                     + " | Total: $" + item.getPrecioTotal());
@@ -565,6 +615,171 @@ public class FacturaComprasController {
             Map<String, String> errorResponse = new HashMap<>();
             errorResponse.put("error", "Error al eliminar factura de compra: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
+    }
+
+    /**
+     * Actualizar una factura de compras existente. Ajusta el stock de los ingredientes según los
+     * cambios en los items.
+     */
+    @PutMapping("/{id}")
+    public ResponseEntity<?> actualizarFacturaCompras(@PathVariable String id,
+            @RequestBody Map<String, Object> datos) {
+        try {
+            System.out.println("✏️ Actualizando factura de compras ID: " + id);
+            System.out.println("📋 Datos recibidos: " + datos.keySet());
+
+            // Buscar la factura existente
+            Optional<Factura> facturaExistenteOpt = facturaComprasService.buscarFacturaPorId(id);
+            if (!facturaExistenteOpt.isPresent()) {
+                Map<String, Object> error = new HashMap<>();
+                error.put("success", false);
+                error.put("message", "Factura no encontrada con ID: " + id);
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+            }
+
+            Factura facturaExistente = facturaExistenteOpt.get();
+
+            // Revertir el stock de los items anteriores antes de actualizar
+            facturaComprasService.revertirStockFactura(facturaExistente);
+
+            // Actualizar datos básicos
+            Object numeroFacturaProveedorObj = datos.getOrDefault("numeroFacturaProveedor",
+                    datos.getOrDefault("factura", facturaExistente.getNumeroFacturaProveedor()));
+            if (numeroFacturaProveedorObj != null
+                    && !numeroFacturaProveedorObj.toString().trim().isEmpty()) {
+                facturaExistente
+                        .setNumeroFacturaProveedor(numeroFacturaProveedorObj.toString().trim());
+            }
+
+            // Datos del proveedor
+            Object proveedorNitObj = datos.get("proveedorNit");
+            if (proveedorNitObj != null) {
+                facturaExistente.setProveedorNit(proveedorNitObj.toString().trim());
+            }
+
+            Object proveedorNombreObj = datos.get("proveedorNombre");
+            if (proveedorNombreObj != null) {
+                facturaExistente.setProveedorNombre(proveedorNombreObj.toString().trim());
+            }
+
+            Object telefonoObj = datos.get("proveedorTelefono");
+            if (telefonoObj != null) {
+                facturaExistente.setProveedorTelefono(telefonoObj.toString().trim());
+            }
+
+            Object direccionObj = datos.get("proveedorDireccion");
+            if (direccionObj != null) {
+                facturaExistente.setProveedorDireccion(direccionObj.toString().trim());
+            }
+
+            // Forma y medio de pago
+            Object medioPagoObj = datos.get("medioPago");
+            if (medioPagoObj != null) {
+                facturaExistente.setMedioPago(medioPagoObj.toString());
+            }
+
+            Object formaPagoObj = datos.get("formaPago");
+            if (formaPagoObj != null) {
+                facturaExistente.setFormaPago(formaPagoObj.toString());
+            }
+
+            Object pagadoDesdeCajaObj = datos.get("pagadoDesdeCaja");
+            if (pagadoDesdeCajaObj != null) {
+                facturaExistente
+                        .setPagadoDesdeCaja(Boolean.parseBoolean(pagadoDesdeCajaObj.toString()));
+            }
+
+            // Registrado por
+            Object registradoPorObj = datos.get("registradoPor");
+            if (registradoPorObj != null) {
+                facturaExistente.setRegistradoPor(registradoPorObj.toString());
+            }
+
+            // Observaciones
+            Object observacionesObj = datos.getOrDefault("descripcion", datos.get("observaciones"));
+            if (observacionesObj != null) {
+                facturaExistente.setObservaciones(observacionesObj.toString());
+            }
+
+            // Retenciones
+            Object porcentajeRetencionObj = datos.get("porcentajeRetencion");
+            if (porcentajeRetencionObj != null) {
+                facturaExistente.setPorcentajeRetencion(parseDoubleSeguro(porcentajeRetencionObj));
+            }
+
+            Object porcentajeReteIvaObj = datos.get("porcentajeReteIva");
+            if (porcentajeReteIvaObj != null) {
+                facturaExistente.setPorcentajeReteIva(parseDoubleSeguro(porcentajeReteIvaObj));
+            }
+
+            Object porcentajeReteIcaObj = datos.get("porcentajeReteIca");
+            if (porcentajeReteIcaObj != null) {
+                facturaExistente.setPorcentajeReteIca(parseDoubleSeguro(porcentajeReteIcaObj));
+            }
+
+            // Descuento general
+            Object tipoDescuentoObj = datos.get("tipoDescuento");
+            if (tipoDescuentoObj != null) {
+                facturaExistente.setTipoDescuento(tipoDescuentoObj.toString());
+            }
+
+            Object descuentoGeneralObj = datos.get("descuentoGeneral");
+            if (descuentoGeneralObj != null) {
+                facturaExistente.setDescuentoGeneral(parseDoubleSeguro(descuentoGeneralObj));
+            }
+
+            // Limpiar items anteriores y procesar nuevos items
+            facturaExistente.getItemsIngredientes().clear();
+
+            // Procesar items de ingredientes
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> itemsData = (List<Map<String, Object>>) datos.get("items");
+
+            if (itemsData == null || itemsData.isEmpty()) {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> itemsIngredientesData =
+                        (List<Map<String, Object>>) datos.get("itemsIngredientes");
+                itemsData = itemsIngredientesData;
+            }
+
+            System.out.println("📦 Items recibidos para actualización: "
+                    + (itemsData != null ? itemsData.size() : 0) + " items");
+
+            if (itemsData != null && !itemsData.isEmpty()) {
+                for (Map<String, Object> itemData : itemsData) {
+                    ItemFacturaIngrediente item = crearItemIngrediente(itemData);
+                    if (item != null) {
+                        facturaExistente.agregarItemIngrediente(item);
+                        System.out.println("✅ Item actualizado: " + item.getIngredienteNombre());
+                    }
+                }
+            }
+
+            // Calcular totales
+            facturaCalculosService.calcularFactura(facturaExistente);
+
+            // Procesar la factura (actualizar stocks con los nuevos items)
+            Factura facturaActualizada =
+                    facturaComprasService.procesarFacturaCompras(facturaExistente);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Factura de compras actualizada exitosamente");
+            response.put("factura", facturaActualizada);
+            response.put("numeroFactura", facturaActualizada.getNumero());
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            System.err.println("❌ Error al actualizar factura de compras: " + e.getMessage());
+            e.printStackTrace();
+
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("message", "Error al actualizar la factura de compras: " + e.getMessage());
+
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
         }
     }
 }

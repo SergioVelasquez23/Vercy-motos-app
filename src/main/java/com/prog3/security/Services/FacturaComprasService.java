@@ -171,6 +171,15 @@ public class FacturaComprasService {
     }
 
     /**
+     * Revierte el stock de los ingredientes de una factura. Se usa al actualizar una factura para
+     * primero revertir el stock anterior y luego aplicar el nuevo stock.
+     */
+    public void revertirStockFactura(Factura factura) {
+        System.out.println("🔄 Revirtiendo stock para factura: " + factura.getNumero());
+        revertirCambiosInventario(factura);
+    }
+
+    /**
      * Genera un número de factura único
      */
     public String generarNumeroFactura() {
