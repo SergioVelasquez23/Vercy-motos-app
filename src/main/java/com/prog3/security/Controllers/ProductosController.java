@@ -149,6 +149,9 @@ public class ProductosController extends BaseController<Producto, String> {
                 ligero.put("_id", p.get_id());
                 ligero.put("nombre", p.getNombre());
                 ligero.put("precio", p.getPrecio());
+                ligero.put("costo", p.getCosto());
+                ligero.put("almacen", p.getCantidadAlmacen());
+                ligero.put("bodega", p.getCantidadBodega());
                 ligero.put("imagenUrl", p.getImagenUrl());
                 ligero.put("categoriaId", p.getCategoriaId());
                 ligero.put("estado", p.getEstado());
@@ -322,6 +325,9 @@ public class ProductosController extends BaseController<Producto, String> {
                     productoLigero.put("_id", p.get_id());
                     productoLigero.put("nombre", p.getNombre());
                     productoLigero.put("precio", p.getPrecio());
+                    productoLigero.put("costo", p.getCosto());
+                    productoLigero.put("almacen", p.getCantidadAlmacen());
+                    productoLigero.put("bodega", p.getCantidadBodega());
                     productoLigero.put("imagenUrl", p.getImagenUrl());
                     productoLigero.put("tieneIngredientes", p.isTieneIngredientes());
                     productoLigero.put("tipoProducto", p.getTipoProducto());
@@ -361,8 +367,9 @@ public class ProductosController extends BaseController<Producto, String> {
             // Aggregation sin campo imagenUrl (el campo más pesado)
             Aggregation aggregation = Aggregation.newAggregation(
                     Aggregation.match(Criteria.where("estado").regex("^activo$", "i")),
-                    Aggregation.project("_id", "nombre", "precio", "categoriaId",
-                            "tieneIngredientes", "tipoProducto", "estado"));
+                    Aggregation.project("_id", "nombre", "precio", "costo", "categoriaId",
+                            "tieneIngredientes", "tipoProducto", "estado", "cantidadAlmacen",
+                            "cantidadBodega"));
 
             List<Producto> productos = mongoTemplate
                     .aggregate(aggregation, "producto", Producto.class).getMappedResults();
