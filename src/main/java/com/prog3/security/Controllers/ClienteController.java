@@ -465,13 +465,18 @@ public class ClienteController {
      * REG, USUARIO SISTEMA, FECHA CREACION, ZONA, PLAZO, CUPO, CONCEPTO, OBSERVACIONES, BLOQUEADO,
      * VENDEDOR, NOMBRE ALTERNATIVO
      */
-    @PostMapping("/carga-masiva")
-    public ResponseEntity<?> cargaMasivaClientes(@RequestParam("file") MultipartFile file,
+    @PostMapping(value = "/carga-masiva", consumes = "multipart/form-data")
+    public ResponseEntity<?> cargaMasivaClientes(
+            @RequestPart(value = "file", required = false) MultipartFile file,
+            @RequestParam(value = "file", required = false) MultipartFile fileParam,
             @RequestHeader(value = "X-Usuario-Id", required = false,
                     defaultValue = "sistema") String usuarioId) {
 
         long startTime = System.currentTimeMillis();
         System.out.println("📊 CARGA MASIVA CLIENTES - Iniciando procesamiento de Excel");
+
+        // Usar el archivo que venga (puede venir como RequestPart o RequestParam)
+        MultipartFile archivoFinal = file != null ? file : fileParam;
 
         int creados = 0;
         int actualizados = 0;
@@ -480,18 +485,23 @@ public class ClienteController {
 
         try {
             // Validar archivo
-            if (file.isEmpty()) {
+            if (archivoFinal == null || archivoFinal.isEmpty()) {
+                System.out.println("❌ Archivo no recibido o vacío");
                 return ResponseEntity.badRequest()
-                        .body(Map.of("success", false, "message", "El archivo está vacío"));
+                        .body(Map.of("success", false, "message",
+                                "El archivo está vacío o no fue enviado"));
             }
 
-            String fileName = file.getOriginalFilename();
+            System.out.println("📦 Archivo recibido: " + archivoFinal.getOriginalFilename() + " ("
+                    + archivoFinal.getSize() + " bytes)");
+
+            String fileName = archivoFinal.getOriginalFilename();
             if (fileName == null || (!fileName.endsWith(".xlsx") && !fileName.endsWith(".xls"))) {
                 return ResponseEntity.badRequest().body(Map.of("success", false, "message",
                         "El archivo debe ser Excel (.xlsx o .xls)"));
             }
 
-            InputStream inputStream = file.getInputStream();
+            InputStream inputStream = archivoFinal.getInputStream();
             Workbook workbook = new XSSFWorkbook(inputStream);
             Sheet sheet = workbook.getSheetAt(0);
 
