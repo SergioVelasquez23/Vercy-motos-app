@@ -60,6 +60,10 @@ public class FacturaComprasController {
     public ResponseEntity<?> crearFacturaCompras(@RequestBody Map<String, Object> datos) {
         try {
             System.out.println("🧾 Creando factura de compras con datos: " + datos);
+            System.out.println("📋 Campos recibidos: " + datos.keySet());
+            System.out.println("📦 Campo 'items': " + datos.get("items"));
+            System.out.println("📦 Campo 'itemsIngredientes': " + datos.get("itemsIngredientes"));
+            System.out.println("💰 Campo 'total': " + datos.get("total"));
 
             // Crear la factura
             Factura factura = new Factura();
@@ -174,16 +178,33 @@ public class FacturaComprasController {
             factura.setDescuentoGeneral(descuentoGeneral);
 
             // Procesar items de ingredientes
+            // Aceptar tanto "items" como "itemsIngredientes" para compatibilidad con frontend
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> itemsData = (List<Map<String, Object>>) datos.get("items");
 
+            // Si no hay items, buscar en itemsIngredientes (campo usado por Flutter)
+            if (itemsData == null || itemsData.isEmpty()) {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> itemsIngredientesData =
+                        (List<Map<String, Object>>) datos.get("itemsIngredientes");
+                itemsData = itemsIngredientesData;
+            }
+
+            System.out.println(
+                    "📦 Items recibidos: " + (itemsData != null ? itemsData.size() : 0) + " items");
+
             if (itemsData != null && !itemsData.isEmpty()) {
                 for (Map<String, Object> itemData : itemsData) {
+                    System.out.println("📋 Procesando item: " + itemData);
                     ItemFacturaIngrediente item = crearItemIngrediente(itemData);
                     if (item != null) {
                         factura.agregarItemIngrediente(item);
+                        System.out.println("✅ Item agregado: " + item.getIngredienteNombre());
                     }
                 }
+            } else {
+                System.out.println("⚠️ No se recibieron items en la factura. Datos recibidos: "
+                        + datos.keySet());
             }
 
             // Calcular totales con el nuevo servicio de cálculos
