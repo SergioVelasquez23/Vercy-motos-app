@@ -121,7 +121,7 @@ public class TrasladoController {
     // ====================================
     // 📝 CREAR NUEVO TRASLADO
     // ====================================
-    @PostMapping({"", "/crear"})
+    @PostMapping
     @Operation(summary = "Crear nuevo traslado",
             description = "Crea una solicitud de traslado de un producto entre bodegas. "
                     + "El traslado queda en estado PENDIENTE hasta ser aprobado.")
