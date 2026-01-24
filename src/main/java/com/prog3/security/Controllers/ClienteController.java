@@ -524,19 +524,33 @@ public class ClienteController {
             }
 
             System.out.println("📋 Columnas encontradas: " + columnIndex.keySet());
+            System.out.println("📋 Índice de CEDULA: " + columnIndex.get("CEDULA"));
 
             // Procesar filas de datos (empezando desde la fila 1)
             int totalRows = sheet.getLastRowNum();
             System.out.println("📊 Total de filas a procesar: " + totalRows);
 
+            int filasSaltadas = 0;
+            int filasVacias = 0;
+
             for (int rowNum = 1; rowNum <= totalRows; rowNum++) {
                 Row row = sheet.getRow(rowNum);
-                if (row == null)
+                if (row == null) {
+                    filasVacias++;
                     continue;
+                }
 
                 try {
                     // Obtener cédula/documento (campo clave)
                     String cedula = getColumnValue(row, columnIndex, "CEDULA");
+
+                    // Log de las primeras 5 filas para diagnóstico
+                    if (rowNum <= 5) {
+                        System.out.println("🔍 Fila " + rowNum + " - CEDULA raw: '" + cedula + "'");
+                        String nombre = getColumnValue(row, columnIndex, "NOMBRE");
+                        System.out.println("🔍 Fila " + rowNum + " - NOMBRE: '" + nombre + "'");
+                    }
+
                     if (cedula == null || cedula.isEmpty()) {
                         cedula = getColumnValue(row, columnIndex, "DOCUMENTO");
                     }
@@ -546,13 +560,23 @@ public class ClienteController {
 
                     if (cedula == null || cedula.isEmpty()) {
                         // Fila vacía, saltar
+                        filasSaltadas++;
+                        if (filasSaltadas <= 5) {
+                            System.out.println("⚠️ Fila " + rowNum + " saltada: CEDULA vacía");
+                        }
                         continue;
                     }
 
                     // Limpiar cédula (quitar puntos, espacios, etc.)
+                    String cedulaOriginal = cedula;
                     cedula = cedula.replaceAll("[^0-9]", "");
 
                     if (cedula.isEmpty()) {
+                        filasSaltadas++;
+                        if (filasSaltadas <= 5) {
+                            System.out.println("⚠️ Fila " + rowNum + " saltada: CEDULA '"
+                                    + cedulaOriginal + "' quedó vacía después de limpiar");
+                        }
                         continue;
                     }
 
@@ -803,6 +827,13 @@ public class ClienteController {
             inputStream.close();
 
             long endTime = System.currentTimeMillis();
+            System.out.println("📊 RESUMEN CARGA MASIVA:");
+            System.out.println("   - Filas totales en Excel: " + totalRows);
+            System.out.println("   - Filas vacías (row null): " + filasVacias);
+            System.out.println("   - Filas saltadas (sin cédula válida): " + filasSaltadas);
+            System.out.println("   - Clientes creados: " + creados);
+            System.out.println("   - Clientes actualizados: " + actualizados);
+            System.out.println("   - Errores: " + errores);
             System.out.println(
                     "✅ CARGA MASIVA CLIENTES completada en " + (endTime - startTime) + "ms");
             System.out.println("   Creados: " + creados + ", Actualizados: " + actualizados
