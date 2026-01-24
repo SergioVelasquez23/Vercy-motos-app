@@ -4,7 +4,6 @@ import com.prog3.security.Models.Cliente;
 import com.prog3.security.Services.ClienteService;
 import com.prog3.security.Repositories.ClienteRepository;
 import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -502,7 +501,8 @@ public class ClienteController {
             }
 
             InputStream inputStream = archivoFinal.getInputStream();
-            Workbook workbook = new XSSFWorkbook(inputStream);
+            // WorkbookFactory detecta automáticamente si es .xls (HSSF) o .xlsx (XSSF)
+            Workbook workbook = WorkbookFactory.create(inputStream);
             Sheet sheet = workbook.getSheetAt(0);
 
             // Obtener encabezados de la primera fila
