@@ -505,35 +505,112 @@ public class ClienteController {
             Workbook workbook = WorkbookFactory.create(inputStream);
             Sheet sheet = workbook.getSheetAt(0);
 
-            // Obtener encabezados de la primera fila
-            Row headerRow = sheet.getRow(0);
-            if (headerRow == null) {
-                workbook.close();
-                return ResponseEntity.badRequest().body(
-                        Map.of("success", false, "message", "El archivo no tiene encabezados"));
-            }
+            // Buscar la fila de encabezados (puede no ser la fila 0 si hay instrucciones)
+            int filaEncabezados = -1;
+            Row headerRow = null;
 
-            // Mapear índices de columnas
-            Map<String, Integer> columnIndex = new HashMap<>();
-            for (int i = 0; i < headerRow.getLastCellNum(); i++) {
-                Cell cell = headerRow.getCell(i);
-                if (cell != null) {
-                    String header = getCellValueAsString(cell).toUpperCase().trim();
-                    columnIndex.put(header, i);
+            for (int rowNum = 0; rowNum <= Math.min(10, sheet.getLastRowNum()); rowNum++) {
+                Row row = sheet.getRow(rowNum);
+                if (row != null) {
+                    for (int colNum = 0; colNum < row.getLastCellNum(); colNum++) {
+                        Cell cell = row.getCell(colNum);
+                        if (cell != null) {
+                            String valor = getCellValueAsString(cell).toLowerCase().trim()
+                                    .replace(" ", "_").replace("á", "a").replace("é", "e")
+                                    .replace("í", "i").replace("ó", "o").replace("ú", "u");
+                            // Buscar columnas clave que indiquen la fila de encabezados
+                            if (valor.equals("cedula") || valor.equals("idcliente")
+                                    || valor.equals("nombre") || valor.equals("tipocliente")) {
+                                filaEncabezados = rowNum;
+                                headerRow = row;
+                                System.out.println(
+                                        "✅ Fila de encabezados encontrada en la fila: " + rowNum);
+                                break;
+                            }
+                        }
+                    }
+                    if (filaEncabezados >= 0)
+                        break;
                 }
             }
 
-            System.out.println("📋 Columnas encontradas: " + columnIndex.keySet());
-            System.out.println("📋 Índice de CEDULA: " + columnIndex.get("CEDULA"));
+            if (headerRow == null) {
+                workbook.close();
+                return ResponseEntity.badRequest().body(
+                        Map.of("success", false, "message",
+                                "No se encontró la fila de encabezados. Asegúrate de que el Excel tenga columnas como 'CEDULA', 'NOMBRE', 'TIPOCLIENTE'"));
+            }
 
-            // Procesar filas de datos (empezando desde la fila 1)
+            // Mapear encabezados (normalizar a minúsculas, sin espacios extra, sin tildes)
+            Map<String, Integer> columnas = new HashMap<>();
+            for (int i = 0; i < headerRow.getLastCellNum(); i++) {
+                Cell cell = headerRow.getCell(i);
+                if (cell != null) {
+                    String header = getCellValueAsString(cell).toLowerCase().trim()
+                            .replace(" ", "_").replace("á", "a").replace("é", "e").replace("í", "i")
+                            .replace("ó", "o").replace("ú", "u").replace("ñ", "n");
+                    if (!header.isEmpty()) {
+                        columnas.put(header, i);
+                        System.out.println("📋 Columna " + i + ": '" + header + "'");
+                    }
+                }
+            }
+            System.out.println("📋 Total columnas encontradas: " + columnas.size());
+
+            // Mapeo de alias de columnas para flexibilidad
+            Map<String, String[]> aliasColumnas = new HashMap<>();
+            aliasColumnas.put("cedula",
+                    new String[] {"cedula", "documento", "numero_identificacion", "nit", "cc"});
+            aliasColumnas.put("nombre",
+                    new String[] {"nombre", "nombres", "razon_social", "nombre_cliente"});
+            aliasColumnas.put("tipocliente",
+                    new String[] {"tipocliente", "tipo_cliente", "tipo_persona"});
+            aliasColumnas.put("tipdocumento",
+                    new String[] {"tipdocumento", "tipo_documento", "tipo_doc"});
+            aliasColumnas.put("digito_verificacion",
+                    new String[] {"digito_verificacion", "digito verificacion", "dv"});
+            aliasColumnas.put("dpto", new String[] {"dpto", "departamento", "depto"});
+            aliasColumnas.put("ciudad", new String[] {"ciudad", "municipio"});
+            aliasColumnas.put("direccion", new String[] {"direccion", "direccion_cliente"});
+            aliasColumnas.put("telefono", new String[] {"telefono", "tel", "celular", "movil"});
+            aliasColumnas.put("correo", new String[] {"correo", "email", "e-mail", "mail"});
+            aliasColumnas.put("responsable_iva", new String[] {"responsable_iva", "resp_iva"});
+            aliasColumnas.put("zona", new String[] {"zona", "zona_ventas"});
+            aliasColumnas.put("plazo", new String[] {"plazo", "dias_credito", "plazo_credito"});
+            aliasColumnas.put("cupo", new String[] {"cupo", "cupo_credito", "limite_credito"});
+            aliasColumnas.put("vendedor", new String[] {"vendedor", "asesor", "vendedor_asignado"});
+            aliasColumnas.put("observaciones",
+                    new String[] {"observaciones", "notas", "comentarios"});
+            aliasColumnas.put("bloqueado", new String[] {"bloqueado", "estado", "activo"});
+            aliasColumnas.put("cod_postal", new String[] {"cod_postal", "codigo_postal", "cp"});
+            aliasColumnas.put("telefono_envio", new String[] {"telefono_envio", "tel_envio"});
+            aliasColumnas.put("concepto", new String[] {"concepto"});
+            aliasColumnas.put("nom_com",
+                    new String[] {"nom_com", "nombre_comercial", "nombre_alternativo"});
+            aliasColumnas.put("usuario_sistema", new String[] {"usuario_sistema", "usuario"});
+
+            // Resolver columnas con alias
+            Map<String, Integer> columnasResueltas = new HashMap<>();
+            for (Map.Entry<String, String[]> entry : aliasColumnas.entrySet()) {
+                for (String alias : entry.getValue()) {
+                    if (columnas.containsKey(alias)) {
+                        columnasResueltas.put(entry.getKey(), columnas.get(alias));
+                        break;
+                    }
+                }
+            }
+            System.out.println("✅ Columnas resueltas: " + columnasResueltas.keySet());
+
+            // Procesar cada fila (empezando después de la fila de encabezados)
+            int filaInicioDatos = filaEncabezados + 1;
             int totalRows = sheet.getLastRowNum();
-            System.out.println("📊 Total de filas a procesar: " + totalRows);
+            System.out.println(
+                    "📊 Procesando datos desde fila " + filaInicioDatos + " hasta " + totalRows);
 
             int filasSaltadas = 0;
             int filasVacias = 0;
 
-            for (int rowNum = 1; rowNum <= totalRows; rowNum++) {
+            for (int rowNum = filaInicioDatos; rowNum <= totalRows; rowNum++) {
                 Row row = sheet.getRow(rowNum);
                 if (row == null) {
                     filasVacias++;
@@ -542,34 +619,25 @@ public class ClienteController {
 
                 try {
                     // Obtener cédula/documento (campo clave)
-                    String cedula = getColumnValue(row, columnIndex, "CEDULA");
+                    String cedula = obtenerValorCeldaSeguro(row, columnasResueltas.get("cedula"));
 
                     // Log de las primeras 5 filas para diagnóstico
-                    if (rowNum <= 5) {
-                        System.out.println("🔍 Fila " + rowNum + " - CEDULA raw: '" + cedula + "'");
-                        String nombre = getColumnValue(row, columnIndex, "NOMBRE");
-                        System.out.println("🔍 Fila " + rowNum + " - NOMBRE: '" + nombre + "'");
+                    if (rowNum <= filaInicioDatos + 4) {
+                        String nombre =
+                                obtenerValorCeldaSeguro(row, columnasResueltas.get("nombre"));
+                        System.out.println("🔍 Fila " + rowNum + " - CEDULA: '" + cedula
+                                + "', NOMBRE: '" + nombre + "'");
                     }
 
                     if (cedula == null || cedula.isEmpty()) {
-                        cedula = getColumnValue(row, columnIndex, "DOCUMENTO");
-                    }
-                    if (cedula == null || cedula.isEmpty()) {
-                        cedula = getColumnValue(row, columnIndex, "NUMERO IDENTIFICACION");
-                    }
-
-                    if (cedula == null || cedula.isEmpty()) {
-                        // Fila vacía, saltar
                         filasSaltadas++;
-                        if (filasSaltadas <= 5) {
-                            System.out.println("⚠️ Fila " + rowNum + " saltada: CEDULA vacía");
-                        }
                         continue;
                     }
 
-                    // Limpiar cédula (quitar puntos, espacios, etc.)
+                    // Limpiar cédula (quitar puntos, espacios, etc.) - pero permitir letras para
+                    // NIT
                     String cedulaOriginal = cedula;
-                    cedula = cedula.replaceAll("[^0-9]", "");
+                    cedula = cedula.replaceAll("[^0-9a-zA-Z]", "").trim();
 
                     if (cedula.isEmpty()) {
                         filasSaltadas++;
@@ -597,9 +665,8 @@ public class ClienteController {
                     // Mapear campos del Excel al modelo Cliente
 
                     // Tipo de persona/cliente
-                    String tipoCliente = getColumnValue(row, columnIndex, "TIPOCLIENTE");
-                    if (tipoCliente == null)
-                        tipoCliente = getColumnValue(row, columnIndex, "TIPO CLIENTE");
+                    String tipoCliente =
+                            obtenerValorCeldaSeguro(row, columnasResueltas.get("tipocliente"));
                     if (tipoCliente != null && !tipoCliente.isEmpty()) {
                         cliente.setTipoPersona(tipoCliente);
                     } else if (esNuevo) {
@@ -607,9 +674,8 @@ public class ClienteController {
                     }
 
                     // Tipo de documento
-                    String tipoDoc = getColumnValue(row, columnIndex, "TIPDOCUMENTO");
-                    if (tipoDoc == null)
-                        tipoDoc = getColumnValue(row, columnIndex, "TIPO DOCUMENTO");
+                    String tipoDoc =
+                            obtenerValorCeldaSeguro(row, columnasResueltas.get("tipdocumento"));
                     if (tipoDoc != null && !tipoDoc.isEmpty()) {
                         // Convertir a formato corto
                         if (tipoDoc.toLowerCase().contains("cedula")
@@ -629,19 +695,14 @@ public class ClienteController {
                     }
 
                     // Dígito de verificación
-                    String dv = getColumnValue(row, columnIndex, "DIGITO VERIFICACION");
-                    if (dv == null)
-                        dv = getColumnValue(row, columnIndex, "DV");
+                    String dv = obtenerValorCeldaSeguro(row,
+                            columnasResueltas.get("digito_verificacion"));
                     if (dv != null && !dv.isEmpty()) {
                         cliente.setDigitoVerificacion(dv);
                     }
 
                     // Nombre
-                    String nombre = getColumnValue(row, columnIndex, "NOMBRE");
-                    if (nombre == null)
-                        nombre = getColumnValue(row, columnIndex, "NOMBRES");
-                    if (nombre == null)
-                        nombre = getColumnValue(row, columnIndex, "RAZON SOCIAL");
+                    String nombre = obtenerValorCeldaSeguro(row, columnasResueltas.get("nombre"));
                     if (nombre != null && !nombre.isEmpty()) {
                         // Separar nombres y apellidos si es posible
                         String[] partes = nombre.trim().split("\\s+", 2);
@@ -655,61 +716,58 @@ public class ClienteController {
                     }
 
                     // Nombre alternativo
-                    String nombreAlt = getColumnValue(row, columnIndex, "NOMBRE ALTERNATIVO");
-                    if (nombreAlt == null)
-                        nombreAlt = getColumnValue(row, columnIndex, "NOM COM");
-                    // Se puede guardar en observaciones si no hay campo específico
+                    String nombreAlt =
+                            obtenerValorCeldaSeguro(row, columnasResueltas.get("nom_com"));
 
                     // Departamento
-                    String dpto = getColumnValue(row, columnIndex, "DPTO");
-                    if (dpto == null)
-                        dpto = getColumnValue(row, columnIndex, "DEPARTAMENTO");
+                    String dpto = obtenerValorCeldaSeguro(row, columnasResueltas.get("dpto"));
                     if (dpto != null && !dpto.isEmpty()) {
                         cliente.setDepartamento(dpto);
                     }
 
                     // Ciudad
-                    String ciudad = getColumnValue(row, columnIndex, "CIUDAD");
+                    String ciudad = obtenerValorCeldaSeguro(row, columnasResueltas.get("ciudad"));
                     if (ciudad != null && !ciudad.isEmpty()) {
                         cliente.setCiudad(ciudad);
                     }
 
                     // Dirección
-                    String direccion = getColumnValue(row, columnIndex, "DIRECCION");
+                    String direccion =
+                            obtenerValorCeldaSeguro(row, columnasResueltas.get("direccion"));
                     if (direccion != null && !direccion.isEmpty()) {
                         cliente.setDireccion(direccion);
                     }
 
                     // Teléfono
-                    String telefono = getColumnValue(row, columnIndex, "TELEFONO");
+                    String telefono =
+                            obtenerValorCeldaSeguro(row, columnasResueltas.get("telefono"));
                     if (telefono != null && !telefono.isEmpty()) {
                         cliente.setTelefono(telefono);
                     }
 
                     // Teléfono envío (como secundario)
-                    String telefonoEnvio = getColumnValue(row, columnIndex, "TELEFONO ENVIO");
+                    String telefonoEnvio =
+                            obtenerValorCeldaSeguro(row, columnasResueltas.get("telefono_envio"));
                     if (telefonoEnvio != null && !telefonoEnvio.isEmpty()) {
                         cliente.setTelefonoSecundario(telefonoEnvio);
                     }
 
                     // Correo
-                    String correo = getColumnValue(row, columnIndex, "CORREO");
-                    if (correo == null)
-                        correo = getColumnValue(row, columnIndex, "EMAIL");
+                    String correo = obtenerValorCeldaSeguro(row, columnasResueltas.get("correo"));
                     if (correo != null && !correo.isEmpty()) {
                         cliente.setCorreo(correo);
                     }
 
                     // Código postal
-                    String codPostal = getColumnValue(row, columnIndex, "COD POSTAL");
-                    if (codPostal == null)
-                        codPostal = getColumnValue(row, columnIndex, "CODIGO POSTAL");
+                    String codPostal =
+                            obtenerValorCeldaSeguro(row, columnasResueltas.get("cod_postal"));
                     if (codPostal != null && !codPostal.isEmpty()) {
                         cliente.setCodigoPostal(codPostal);
                     }
 
                     // Responsable IVA
-                    String respIva = getColumnValue(row, columnIndex, "RESPONSABLE IVA");
+                    String respIva =
+                            obtenerValorCeldaSeguro(row, columnasResueltas.get("responsable_iva"));
                     if (respIva != null && !respIva.isEmpty()) {
                         if (respIva.equalsIgnoreCase("SI") || respIva.equalsIgnoreCase("SÍ")
                                 || respIva.equals("1")) {
@@ -720,13 +778,13 @@ public class ClienteController {
                     }
 
                     // Zona
-                    String zona = getColumnValue(row, columnIndex, "ZONA");
+                    String zona = obtenerValorCeldaSeguro(row, columnasResueltas.get("zona"));
                     if (zona != null && !zona.isEmpty()) {
                         cliente.setZonaVentas(zona);
                     }
 
                     // Plazo (días de crédito)
-                    String plazo = getColumnValue(row, columnIndex, "PLAZO");
+                    String plazo = obtenerValorCeldaSeguro(row, columnasResueltas.get("plazo"));
                     if (plazo != null && !plazo.isEmpty()) {
                         try {
                             // Limpiar "Días", "días", etc.
@@ -740,7 +798,7 @@ public class ClienteController {
                     }
 
                     // Cupo de crédito
-                    String cupo = getColumnValue(row, columnIndex, "CUPO");
+                    String cupo = obtenerValorCeldaSeguro(row, columnasResueltas.get("cupo"));
                     if (cupo != null && !cupo.isEmpty()) {
                         try {
                             double cupoValue = Double.parseDouble(cupo.replaceAll("[^0-9.]", ""));
@@ -751,14 +809,17 @@ public class ClienteController {
                     }
 
                     // Vendedor
-                    String vendedor = getColumnValue(row, columnIndex, "VENDEDOR");
+                    String vendedor =
+                            obtenerValorCeldaSeguro(row, columnasResueltas.get("vendedor"));
                     if (vendedor != null && !vendedor.isEmpty()) {
                         cliente.setVendedorAsignado(vendedor);
                     }
 
                     // Observaciones
-                    String observaciones = getColumnValue(row, columnIndex, "OBSERVACIONES");
-                    String concepto = getColumnValue(row, columnIndex, "CONCEPTO");
+                    String observaciones =
+                            obtenerValorCeldaSeguro(row, columnasResueltas.get("observaciones"));
+                    String concepto =
+                            obtenerValorCeldaSeguro(row, columnasResueltas.get("concepto"));
                     StringBuilder obs = new StringBuilder();
                     if (observaciones != null && !observaciones.isEmpty()) {
                         obs.append(observaciones);
@@ -778,7 +839,8 @@ public class ClienteController {
                     }
 
                     // Estado (bloqueado)
-                    String bloqueado = getColumnValue(row, columnIndex, "BLOQUEADO");
+                    String bloqueado =
+                            obtenerValorCeldaSeguro(row, columnasResueltas.get("bloqueado"));
                     if (bloqueado != null && !bloqueado.isEmpty()) {
                         if (bloqueado.equalsIgnoreCase("SI") || bloqueado.equalsIgnoreCase("SÍ")
                                 || bloqueado.equals("1")) {
@@ -791,7 +853,8 @@ public class ClienteController {
                     }
 
                     // Usuario que crea/modifica
-                    String usuarioSistema = getColumnValue(row, columnIndex, "USUARIO SISTEMA");
+                    String usuarioSistema =
+                            obtenerValorCeldaSeguro(row, columnasResueltas.get("usuario_sistema"));
                     if (usuarioSistema == null || usuarioSistema.isEmpty()) {
                         usuarioSistema = usuarioId;
                     }
@@ -872,6 +935,18 @@ public class ClienteController {
     // ====================================
     // 🔧 MÉTODOS AUXILIARES PARA EXCEL
     // ====================================
+
+    /**
+     * Obtiene el valor de una celda de forma segura por índice
+     */
+    private String obtenerValorCeldaSeguro(Row row, Integer colIndex) {
+        if (colIndex == null || row == null)
+            return null;
+        Cell cell = row.getCell(colIndex);
+        if (cell == null)
+            return null;
+        return getCellValueAsString(cell);
+    }
 
     /**
      * Obtiene el valor de una columna por nombre
