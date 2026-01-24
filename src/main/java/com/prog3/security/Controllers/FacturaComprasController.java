@@ -26,9 +26,11 @@ import com.prog3.security.Models.Factura;
 import com.prog3.security.Models.ItemFacturaIngrediente;
 import com.prog3.security.Models.Ingrediente;
 import com.prog3.security.Models.Proveedor;
+import com.prog3.security.Models.CuadreCaja;
 import com.prog3.security.Repositories.FacturaRepository;
 import com.prog3.security.Repositories.IngredienteRepository;
 import com.prog3.security.Repositories.ProveedorRepository;
+import com.prog3.security.Repositories.CuadreCajaRepository;
 import com.prog3.security.Services.FacturaComprasService;
 
 /**
@@ -50,6 +52,9 @@ public class FacturaComprasController {
 
     @Autowired
     private ProveedorRepository proveedorRepository;
+
+    @Autowired
+    private CuadreCajaRepository cuadreCajaRepository;
 
     @Autowired
     private com.prog3.security.Services.FacturaCalculosService facturaCalculosService;
@@ -110,6 +115,20 @@ public class FacturaComprasController {
             String pagadoDesdeCajaStr = pagadoDesdeCajaObj != null ? pagadoDesdeCajaObj.toString() : "false";
             boolean pagadoDesdeCaja = Boolean.parseBoolean(pagadoDesdeCajaStr);
             factura.setPagadoDesdeCaja(pagadoDesdeCaja);
+
+            // ✅ Si se marca como pagado desde caja, asignar el cuadreCajaId activo
+            if (pagadoDesdeCaja) {
+                List<CuadreCaja> cajasAbiertas = cuadreCajaRepository.findByCerradaFalse();
+                if (!cajasAbiertas.isEmpty()) {
+                    CuadreCaja cajaActiva = cajasAbiertas.get(0);
+                    factura.setCuadreCajaId(cajaActiva.get_id());
+                    System.out.println(
+                            "✅ Factura de compra asignada a caja activa: " + cajaActiva.get_id());
+                } else {
+                    System.out.println(
+                            "⚠️ No hay caja activa para asignar factura de compra pagada desde caja");
+                }
+            }
 
             // Información de pago de forma segura
             Object medioPagoObj = datos.getOrDefault("medioPago", "Efectivo");
@@ -686,8 +705,23 @@ public class FacturaComprasController {
 
             Object pagadoDesdeCajaObj = datos.get("pagadoDesdeCaja");
             if (pagadoDesdeCajaObj != null) {
-                facturaExistente
-                        .setPagadoDesdeCaja(Boolean.parseBoolean(pagadoDesdeCajaObj.toString()));
+                boolean pagadoDesdeCaja = Boolean.parseBoolean(pagadoDesdeCajaObj.toString());
+                facturaExistente.setPagadoDesdeCaja(pagadoDesdeCaja);
+
+                // ✅ Si se marca como pagado desde caja, asignar el cuadreCajaId activo
+                if (pagadoDesdeCaja && facturaExistente.getCuadreCajaId() == null) {
+                    List<CuadreCaja> cajasAbiertas = cuadreCajaRepository.findByCerradaFalse();
+                    if (!cajasAbiertas.isEmpty()) {
+                        CuadreCaja cajaActiva = cajasAbiertas.get(0);
+                        facturaExistente.setCuadreCajaId(cajaActiva.get_id());
+                        System.out.println("✅ Factura de compra asignada a caja activa: "
+                                + cajaActiva.get_id());
+                    }
+                } else if (!pagadoDesdeCaja) {
+                    // Si se desmarca pagado desde caja, quitar el cuadreCajaId
+                    facturaExistente.setCuadreCajaId(null);
+                    System.out.println("ℹ️ Factura de compra desasignada de caja");
+                }
             }
 
             // Registrado por

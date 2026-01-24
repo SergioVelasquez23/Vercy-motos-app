@@ -359,6 +359,7 @@ public class ResumenCierreServiceUnificado {
 
         LocalDateTime fechaInicio = cuadre.getFechaApertura();
         LocalDateTime fechaFin = cuadre.getFechaCierre() != null ? cuadre.getFechaCierre() : LocalDateTime.now();
+        String cuadreCajaId = cuadre.get_id();
 
         // Obtener todas las facturas de compras del período
         List<Factura> todasLasFacturas = facturaRepository.findByFechaBetween(fechaInicio, fechaFin)
@@ -366,13 +367,37 @@ public class ResumenCierreServiceUnificado {
                 .filter(f -> "compra".equals(f.getTipoFactura()))
                 .collect(Collectors.toList());
 
-        // Separar facturas pagadas desde caja y las que no
+        System.out.println("🔍 DEBUG COMPRAS: Total facturas de compra en período: "
+                + todasLasFacturas.size());
+
+        // ✅ CORREGIDO: Filtrar por cuadreCajaId para facturas pagadas desde caja
+        // Las facturas deben tener cuadreCajaId asignado O ser del período y marcadas como
+        // pagadoDesdeCaja
         List<Factura> facturasDesdeCaja = todasLasFacturas.stream()
-                .filter(Factura::isPagadoDesdeCaja)
+                .filter(f -> {
+                    boolean isPagadoDesdeCaja = f.isPagadoDesdeCaja();
+                    String facturaCuadreCajaId = f.getCuadreCajaId();
+
+                    // Opción 1: La factura tiene el cuadreCajaId asignado correctamente
+                    boolean tieneIdCorrecto =
+                            facturaCuadreCajaId != null && facturaCuadreCajaId.equals(cuadreCajaId);
+
+                    // Opción 2: La factura está marcada como pagada desde caja pero no tiene
+                    // cuadreCajaId
+                    // (para compatibilidad con facturas antiguas)
+                    boolean sinIdPeroEnPeriodo = isPagadoDesdeCaja && facturaCuadreCajaId == null;
+
+                    System.out.println("📄 Factura " + f.get_id() + " | PagadoDesdeCaja: "
+                            + isPagadoDesdeCaja + " | CuadreCajaId: " + facturaCuadreCajaId
+                            + " | Incluir: " + (tieneIdCorrecto || sinIdPeroEnPeriodo));
+
+                    return tieneIdCorrecto || sinIdPeroEnPeriodo;
+                })
                 .collect(Collectors.toList());
 
         List<Factura> facturasNoDesdeCaja = todasLasFacturas.stream()
-                .filter(f -> !f.isPagadoDesdeCaja())
+                .filter(f -> !f.isPagadoDesdeCaja() || (f.getCuadreCajaId() != null
+                        && !f.getCuadreCajaId().equals(cuadreCajaId)))
                 .collect(Collectors.toList());
 
         // Resumen de facturas pagadas desde caja (estas afectan el flujo de efectivo)

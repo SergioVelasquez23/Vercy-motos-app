@@ -57,8 +57,56 @@ public class FacturaComprasService {
             procesarItemIngrediente(item, facturaGuardada.get_id(), factura.getRegistradoPor());
         }
 
+        // ✅ Si la factura se paga desde caja, descontar del efectivo esperado
+        if (factura.isPagadoDesdeCaja()) {
+            descontarPagoDeCaja(factura);
+        }
+
         System.out.println("✅ Factura procesada exitosamente: " + facturaGuardada.get_id());
         return facturaGuardada;
+    }
+
+    /**
+     * Descuenta el monto de la factura del efectivo esperado en caja Solo descuenta si fue pagada
+     * en efectivo
+     */
+    private void descontarPagoDeCaja(Factura factura) {
+        try {
+            System.out.println("💸 Descontando pago de caja para factura: " + factura.getNumero()
+                    + " - $" + factura.getTotal());
+
+            // Solo descontar efectivo si fue pagado EN EFECTIVO
+            if (!"efectivo".equalsIgnoreCase(factura.getMedioPago())) {
+                System.out.println("ℹ️ Factura pagada por " + factura.getMedioPago() + ": $"
+                        + factura.getTotal() + " - No afecta efectivo esperado");
+                return;
+            }
+
+            // Buscar el cuadre de caja activo
+            List<CuadreCaja> cuadresAbiertos = cuadreCajaRepository.findAll().stream()
+                    .filter(c -> !c.isCerrada())
+                    .sorted((c1, c2) -> c2.getFechaApertura().compareTo(c1.getFechaApertura()))
+                    .toList();
+
+            if (!cuadresAbiertos.isEmpty()) {
+                CuadreCaja cuadreActivo = cuadresAbiertos.get(0);
+                double efectivoActual = cuadreActivo.getEfectivoEsperado();
+                double nuevoEfectivo = efectivoActual - factura.getTotal();
+
+                cuadreActivo.setEfectivoEsperado(nuevoEfectivo);
+                cuadreCajaRepository.save(cuadreActivo);
+
+                System.out.println("✅ Efectivo EN EFECTIVO descontado de caja: $"
+                        + factura.getTotal() + ". Efectivo esperado antes: $" + efectivoActual
+                        + ", después: $" + nuevoEfectivo);
+            } else {
+                System.err.println(
+                        "⚠️ No se encontró un cuadre de caja abierto para descontar el dinero");
+            }
+
+        } catch (Exception e) {
+            System.err.println("❌ Error al descontar pago de caja: " + e.getMessage());
+        }
     }
 
     /**
