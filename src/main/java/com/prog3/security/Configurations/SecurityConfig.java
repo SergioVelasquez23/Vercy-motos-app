@@ -31,12 +31,14 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        // ✅ CORREGIDO: Usar orígenes específicos en lugar de "*" para permitir credenciales
-        config.addAllowedOrigin("https://vercy-motos-app.web.app"); // 🔥 Firebase frontend
-        config.addAllowedOrigin("https://vercy-motos.web.app"); // 🏍️ Vercy Motos frontend
+        // ✅ CORREGIDO: Usar allowedOriginPatterns en lugar de allowedOrigins para permitir "*" con
+        // credenciales
+        config.setAllowedOriginPatterns(List.of("*")); // Permite cualquier origen
         config.addAllowedMethod("*");
         config.addAllowedHeader("*");
-        config.setAllowCredentials(true); // ✅ Ahora puede ser true con orígenes específicos
+        config.setExposedHeaders(List.of("*"));
+        config.setAllowCredentials(true); // ✅ Ahora puede ser true con allowedOriginPatterns
+        config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);

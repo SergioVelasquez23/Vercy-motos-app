@@ -527,6 +527,130 @@ public class InventarioController {
         }
     }
 
+    /**
+     * ✅ NUEVO: Obtener historial de movimientos por producto (no inventario) Busca los ingresos y
+     * egresos de stock de un producto específico
+     */
+    @GetMapping("/producto/{productoId}/historial")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getHistorialProducto(
+            @PathVariable String productoId) {
+        try {
+            // Buscar movimientos por productoId
+            List<MovimientoInventario> movimientos =
+                    movimientoRepository.findByProductoId(productoId);
+
+            // Ordenar por fecha descendente (más recientes primero)
+            movimientos.sort((a, b) -> {
+                if (a.getFecha() == null)
+                    return 1;
+                if (b.getFecha() == null)
+                    return -1;
+                return b.getFecha().compareTo(a.getFecha());
+            });
+
+            // Calcular resumen
+            double totalEntradas = movimientos.stream()
+                    .filter(m -> "entrada".equalsIgnoreCase(m.getTipoMovimiento()))
+                    .mapToDouble(MovimientoInventario::getCantidadMovimiento).sum();
+
+            double totalSalidas = movimientos.stream()
+                    .filter(m -> "salida".equalsIgnoreCase(m.getTipoMovimiento()))
+                    .mapToDouble(m -> Math.abs(m.getCantidadMovimiento())).sum();
+
+            // Obtener información del producto
+            String nombreProducto = "Producto";
+            Optional<Producto> productoOpt = productoRepository.findById(productoId);
+            if (productoOpt.isPresent()) {
+                nombreProducto = productoOpt.get().getNombre();
+            } else {
+                // Intentar buscar como ingrediente
+                Optional<Ingrediente> ingredienteOpt = ingredienteRepository.findById(productoId);
+                if (ingredienteOpt.isPresent()) {
+                    nombreProducto = ingredienteOpt.get().getNombre();
+                }
+            }
+
+            Map<String, Object> resultado = new HashMap<>();
+            resultado.put("productoId", productoId);
+            resultado.put("nombreProducto", nombreProducto);
+            resultado.put("movimientos", movimientos);
+            resultado.put("totalMovimientos", movimientos.size());
+            resultado.put("totalEntradas", totalEntradas);
+            resultado.put("totalSalidas", totalSalidas);
+            resultado.put("balance", totalEntradas - totalSalidas);
+
+            return responseService.success(resultado,
+                    "Historial de movimientos del producto obtenido");
+        } catch (Exception e) {
+            return responseService
+                    .internalError("Error al obtener historial del producto: " + e.getMessage());
+        }
+    }
+
+    /**
+     * ✅ NUEVO: Obtener todos los movimientos de inventario con filtros Permite filtrar por tipo,
+     * fecha, etc.
+     */
+    @GetMapping("/movimientos/todos")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getTodosMovimientos(
+            @RequestParam(required = false) String tipo,
+            @RequestParam(required = false) String fechaInicio,
+            @RequestParam(required = false) String fechaFin) {
+        try {
+            List<MovimientoInventario> movimientos;
+
+            // Filtrar por tipo si se especifica
+            if (tipo != null && !tipo.isEmpty()) {
+                movimientos = movimientoRepository.findByTipoMovimiento(tipo);
+            } else {
+                movimientos = movimientoRepository.findAll();
+            }
+
+            // Filtrar por fechas si se especifican
+            if (fechaInicio != null && fechaFin != null) {
+                try {
+                    LocalDateTime inicio = LocalDateTime.parse(fechaInicio + "T00:00:00");
+                    LocalDateTime fin = LocalDateTime.parse(fechaFin + "T23:59:59");
+                    movimientos = movimientos
+                            .stream().filter(m -> m.getFecha() != null
+                                    && !m.getFecha().isBefore(inicio) && !m.getFecha().isAfter(fin))
+                            .collect(Collectors.toList());
+                } catch (Exception e) {
+                    System.err.println("Error parsing fechas: " + e.getMessage());
+                }
+            }
+
+            // Ordenar por fecha descendente
+            movimientos.sort((a, b) -> {
+                if (a.getFecha() == null)
+                    return 1;
+                if (b.getFecha() == null)
+                    return -1;
+                return b.getFecha().compareTo(a.getFecha());
+            });
+
+            // Calcular resumen
+            double totalEntradas = movimientos.stream()
+                    .filter(m -> "entrada".equalsIgnoreCase(m.getTipoMovimiento()))
+                    .mapToDouble(MovimientoInventario::getCantidadMovimiento).sum();
+
+            double totalSalidas = movimientos.stream()
+                    .filter(m -> "salida".equalsIgnoreCase(m.getTipoMovimiento()))
+                    .mapToDouble(m -> Math.abs(m.getCantidadMovimiento())).sum();
+
+            Map<String, Object> resultado = new HashMap<>();
+            resultado.put("movimientos", movimientos);
+            resultado.put("totalMovimientos", movimientos.size());
+            resultado.put("totalEntradas", totalEntradas);
+            resultado.put("totalSalidas", totalSalidas);
+            resultado.put("timestamp", LocalDateTime.now());
+
+            return responseService.success(resultado, "Movimientos de inventario obtenidos");
+        } catch (Exception e) {
+            return responseService.internalError("Error al obtener movimientos: " + e.getMessage());
+        }
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable String id) {
         try {
