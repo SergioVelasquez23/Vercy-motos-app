@@ -6,13 +6,19 @@ import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.Set;
 import java.util.HashSet;
+import java.util.Optional;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.aggregation.Aggregation;
 import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -1769,6 +1775,29 @@ public class ProductosController extends BaseController<Producto, String> {
             }
         } catch (Exception e) {
             return defaultValue;
+        }
+    }
+
+    /**
+     * Busca un producto por su código de barras
+     * 
+     * @param codigoBarras El código de barras del producto
+     * @return ResponseEntity con ApiResponse que contiene el producto encontrado
+     */
+    @GetMapping("/codigo-barras/{codigoBarras}")
+    public ResponseEntity<ApiResponse<Producto>> getProductoPorCodigoBarras(
+            @PathVariable String codigoBarras) {
+        try {
+            java.util.Optional<Producto> producto = theProductoRepository.findByCodigoBarras(codigoBarras);
+            if (producto.isPresent()) {
+                return responseService.success(producto.get(), "Producto encontrado");
+            } else {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(new ApiResponse<>(false, "Producto no encontrado", null));
+            }
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ApiResponse<>(false, "Error al buscar producto: " + e.getMessage(), null));
         }
     }
 
