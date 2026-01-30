@@ -1792,12 +1792,10 @@ public class ProductosController extends BaseController<Producto, String> {
             if (producto.isPresent()) {
                 return responseService.success(producto.get(), "Producto encontrado");
             } else {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(new ApiResponse<>(false, "Producto no encontrado", null));
+                return responseService.notFound("Producto no encontrado");
             }
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ApiResponse<>(false, "Error al buscar producto: " + e.getMessage(), null));
+            return responseService.internalError("Error al buscar producto: " + e.getMessage());
         }
     }
 
