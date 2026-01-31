@@ -21,6 +21,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/inventario/traslados")
 @CrossOrigin(originPatterns = {
+        "https://vercy-motos.web.app",
         "https://vercy-motos-app.web.app",
         "https://vercy-motos-app-048m.onrender.com",
         "http://localhost:*",

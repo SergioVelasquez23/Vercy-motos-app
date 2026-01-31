@@ -33,6 +33,7 @@ public class SecurityConfig {
         CorsConfiguration config = new CorsConfiguration();
         // ✅ SOLUCIONADO: Orígenes específicos para permitir credenciales
         config.setAllowedOriginPatterns(List.of(
+                "https://vercy-motos.web.app",
                 "https://vercy-motos-app.web.app",
                 "https://vercy-motos-app-048m.onrender.com",
                 "http://localhost:*",

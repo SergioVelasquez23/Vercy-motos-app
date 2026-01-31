@@ -28,6 +28,7 @@ public class WebConfig implements WebMvcConfigurer {
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
                         .allowedOriginPatterns(
+                                        "https://vercy-motos.web.app",
                                         "https://vercy-motos-app.web.app",
                                         "https://vercy-motos-app-048m.onrender.com",
                                         "http://localhost:*",
