@@ -50,6 +50,85 @@ public class TrasladoController {
     private BodegaService bodegaService;
 
     // ====================================
+    // 🔧 MÉTODOS AUXILIARES PARA MANEJO DE STOCK DIRECTO
+    // ====================================
+
+    /**
+     * Actualiza el stock de un producto entre bodega y almacén
+     * 
+     * @param productoId ID del producto
+     * @param origenTipo "BODEGA" o "ALMACEN"
+     * @param destinoTipo "BODEGA" o "ALMACEN"
+     * @param cantidad Cantidad a trasladar
+     * @return true si el traslado fue exitoso
+     */
+    private boolean trasladarStockProducto(String productoId, String origenTipo, String destinoTipo,
+            double cantidad) {
+        try {
+            Optional<Producto> productoOpt = productoRepository.findById(productoId);
+            if (!productoOpt.isPresent()) {
+                return false;
+            }
+
+            Producto producto = productoOpt.get();
+
+            // Verificar stock disponible en origen
+            int stockOrigen = origenTipo.equals("BODEGA") ? producto.getCantidadBodega()
+                    : producto.getCantidadAlmacen();
+
+            if (stockOrigen < cantidad) {
+                return false; // Stock insuficiente
+            }
+
+            // Realizar el traslado
+            if (origenTipo.equals("BODEGA")) {
+                producto.setCantidadBodega(producto.getCantidadBodega() - (int) cantidad);
+            } else {
+                producto.setCantidadAlmacen(producto.getCantidadAlmacen() - (int) cantidad);
+            }
+
+            if (destinoTipo.equals("BODEGA")) {
+                producto.setCantidadBodega(producto.getCantidadBodega() + (int) cantidad);
+            } else {
+                producto.setCantidadAlmacen(producto.getCantidadAlmacen() + (int) cantidad);
+            }
+
+            // Actualizar cantidad total
+            producto.setCantidad(producto.getCantidadBodega() + producto.getCantidadAlmacen());
+
+            // Guardar cambios
+            productoRepository.save(producto);
+            return true;
+
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Obtiene el stock disponible de un producto en una ubicación específica
+     * 
+     * @param productoId ID del producto
+     * @param ubicacion "BODEGA" o "ALMACEN"
+     * @return cantidad disponible
+     */
+    private int obtenerStockProducto(String productoId, String ubicacion) {
+        try {
+            Optional<Producto> productoOpt = productoRepository.findById(productoId);
+            if (!productoOpt.isPresent()) {
+                return 0;
+            }
+
+            Producto producto = productoOpt.get();
+            return ubicacion.equals("BODEGA") ? producto.getCantidadBodega()
+                    : producto.getCantidadAlmacen();
+
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    // ====================================
     // 📋 OBTENER TODOS LOS TRASLADOS
     // ====================================
     @GetMapping
@@ -214,17 +293,14 @@ public class TrasladoController {
             }
 
             // Validar stock disponible en bodega origen
-            Optional<InventarioBodega> inventarioOrigenOpt =
-                    inventarioBodegaRepository.findByBodegaIdAndItemId(origenBodegaId, productoId);
-
-            double stockDisponible = 0;
-            if (inventarioOrigenOpt.isPresent()) {
-                stockDisponible = inventarioOrigenOpt.get().getStockActual();
-            }
+            String tipoOrigenUbicacion =
+                    "PRINCIPAL".equals(bodegaOrigen.getTipo()) ? "BODEGA" : "ALMACEN";
+            int stockDisponible = obtenerStockProducto(productoId, tipoOrigenUbicacion);
 
             if (stockDisponible < cantidad) {
                 throw new IllegalArgumentException(
-                        "Stock insuficiente en bodega origen. Disponible: " + stockDisponible
+                        "Stock insuficiente en " + tipoOrigenUbicacion.toLowerCase()
+                                + " origen. Disponible: " + stockDisponible
                                 + ", Solicitado: " + cantidad);
             }
 
@@ -307,39 +383,52 @@ public class TrasladoController {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
             }
 
-            // Validar nuevamente el stock disponible
-            Optional<InventarioBodega> inventarioOrigenOpt =
-                    inventarioBodegaRepository.findByBodegaIdAndItemId(traslado.getOrigenBodegaId(),
-                            traslado.getProductoId());
+            // Validar y obtener bodegas
+            Optional<Bodega> bodegaOrigenOpt =
+                    bodegaRepository.findById(traslado.getOrigenBodegaId());
+            Optional<Bodega> bodegaDestinoOpt =
+                    bodegaRepository.findById(traslado.getDestinoBodegaId());
 
-            double stockDisponible =
-                    inventarioOrigenOpt.map(InventarioBodega::getStockActual).orElse(0.0);
+            if (!bodegaOrigenOpt.isPresent() || !bodegaDestinoOpt.isPresent()) {
+                Map<String, Object> error = new HashMap<>();
+                error.put("success", false);
+                error.put("message", "Una o ambas bodegas no encontradas");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+            }
+
+            Bodega bodegaOrigen = bodegaOrigenOpt.get();
+            Bodega bodegaDestino = bodegaDestinoOpt.get();
+
+            // Determinar tipos de ubicación según tipo de bodega
+            String tipoOrigenUbicacion =
+                    "PRINCIPAL".equals(bodegaOrigen.getTipo()) ? "BODEGA" : "ALMACEN";
+            String tipoDestinoUbicacion =
+                    "PRINCIPAL".equals(bodegaDestino.getTipo()) ? "BODEGA" : "ALMACEN";
+
+            // Validar nuevamente el stock disponible
+            int stockDisponible =
+                    obtenerStockProducto(traslado.getProductoId(), tipoOrigenUbicacion);
 
             if (stockDisponible < traslado.getCantidad()) {
                 Map<String, Object> error = new HashMap<>();
                 error.put("success", false);
-                error.put("message", "Stock insuficiente. Disponible: " + stockDisponible
-                        + ", Requerido: " + traslado.getCantidad());
+                error.put("message",
+                        "Stock insuficiente en " + tipoOrigenUbicacion.toLowerCase()
+                                + ". Disponible: " + stockDisponible + ", Requerido: "
+                                + traslado.getCantidad());
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
             }
 
-            // Determinar tipo de item
-            String tipoItem = "ingrediente"; // Por defecto
-            if (productoRepository.existsById(traslado.getProductoId())) {
-                tipoItem = "producto";
+            // Ejecutar el movimiento de stock directamente en el producto
+            boolean trasladorExitoso = trasladarStockProducto(traslado.getProductoId(),
+                    tipoOrigenUbicacion, tipoDestinoUbicacion, traslado.getCantidad());
+
+            if (!trasladorExitoso) {
+                Map<String, Object> error = new HashMap<>();
+                error.put("success", false);
+                error.put("message", "Error al ejecutar el traslado de stock");
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
             }
-
-            // Ejecutar el movimiento de stock
-            // 1. Descontar de bodega origen
-            bodegaService.ajustarStockBodega(traslado.getOrigenBodegaId(), traslado.getProductoId(),
-                    tipoItem, -traslado.getCantidad(), "Traslado " + traslado.getNumero()
-                            + " - Salida hacia " + traslado.getDestinoBodegaNombre());
-
-            // 2. Agregar a bodega destino
-            bodegaService.ajustarStockBodega(traslado.getDestinoBodegaId(),
-                    traslado.getProductoId(), tipoItem, traslado.getCantidad(),
-                    "Traslado " + traslado.getNumero() + " - Entrada desde "
-                            + traslado.getOrigenBodegaNombre());
 
             // Actualizar estado del traslado
             traslado.setEstado("COMPLETADO");
@@ -868,5 +957,127 @@ public class TrasladoController {
         }
 
         return "T" + String.format("%04d", siguienteNumero);
+    }
+
+    // ====================================
+    // 📊 NUEVOS ENDPOINTS PARA STOCK DIRECTO
+    // ====================================
+
+    /**
+     * Obtener stock de un producto específico en bodega y almacén
+     */
+    @GetMapping("/producto/{productoId}/stock")
+    @Operation(summary = "Stock de producto en bodega y almacén",
+            description = "Consulta el stock actual de un producto en bodega y almacén")
+    public ResponseEntity<Map<String, Object>> getStockProducto(@PathVariable String productoId) {
+        try {
+            Optional<Producto> productoOpt = productoRepository.findById(productoId);
+
+            if (!productoOpt.isPresent()) {
+                Map<String, Object> error = new HashMap<>();
+                error.put("success", false);
+                error.put("message", "Producto no encontrado");
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+            }
+
+            Producto producto = productoOpt.get();
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("productoId", productoId);
+            response.put("productoNombre", producto.getNombre());
+            response.put("cantidadBodega", producto.getCantidadBodega());
+            response.put("cantidadAlmacen", producto.getCantidadAlmacen());
+            response.put("cantidadTotal", producto.getCantidad());
+            response.put("unidadMedida", producto.getUnidadMedida());
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("message", "Error al obtener stock: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
+    }
+
+    /**
+     * Traslado rápido entre bodega y almacén (sin aprobación)
+     */
+    @PostMapping("/traslado-rapido")
+    @Operation(summary = "Traslado rápido bodega-almacén",
+            description = "Realiza un traslado inmediato entre bodega y almacén sin necesidad de aprobación")
+    public ResponseEntity<Map<String, Object>> trasladoRapido(
+            @RequestBody Map<String, Object> datos) {
+        try {
+            String productoId = (String) datos.get("productoId");
+            String origen = (String) datos.get("origen"); // "BODEGA" o "ALMACEN"
+            String destino = (String) datos.get("destino"); // "BODEGA" o "ALMACEN"
+            Object cantidadObj = datos.get("cantidad");
+
+            // Validaciones
+            if (productoId == null || productoId.isEmpty()) {
+                throw new IllegalArgumentException("El productoId es requerido");
+            }
+            if (origen == null || (!origen.equals("BODEGA") && !origen.equals("ALMACEN"))) {
+                throw new IllegalArgumentException("Origen debe ser 'BODEGA' o 'ALMACEN'");
+            }
+            if (destino == null || (!destino.equals("BODEGA") && !destino.equals("ALMACEN"))) {
+                throw new IllegalArgumentException("Destino debe ser 'BODEGA' o 'ALMACEN'");
+            }
+            if (origen.equals(destino)) {
+                throw new IllegalArgumentException("Origen y destino no pueden ser iguales");
+            }
+            if (cantidadObj == null) {
+                throw new IllegalArgumentException("La cantidad es requerida");
+            }
+
+            double cantidad = cantidadObj instanceof Number ? ((Number) cantidadObj).doubleValue()
+                    : Double.parseDouble(cantidadObj.toString());
+
+            if (cantidad <= 0) {
+                throw new IllegalArgumentException("La cantidad debe ser mayor a 0");
+            }
+
+            // Verificar que el producto existe
+            Optional<Producto> productoOpt = productoRepository.findById(productoId);
+            if (!productoOpt.isPresent()) {
+                throw new IllegalArgumentException("Producto no encontrado");
+            }
+
+            // Ejecutar el traslado
+            boolean trasladoExitoso = trasladarStockProducto(productoId, origen, destino, cantidad);
+
+            if (!trasladoExitoso) {
+                throw new RuntimeException(
+                        "Error al ejecutar el traslado (posiblemente stock insuficiente)");
+            }
+
+            // Obtener el producto actualizado
+            Producto productoActualizado = productoRepository.findById(productoId).get();
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", String.format("Traslado exitoso: %s → %s (%.0f unidades)",
+                    origen.toLowerCase(), destino.toLowerCase(), cantidad));
+            response.put("productoId", productoId);
+            response.put("productoNombre", productoActualizado.getNombre());
+            response.put("cantidadBodega", productoActualizado.getCantidadBodega());
+            response.put("cantidadAlmacen", productoActualizado.getCantidadAlmacen());
+            response.put("cantidadTotal", productoActualizado.getCantidad());
+
+            return ResponseEntity.ok(response);
+
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("message", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("message", "Error al realizar traslado: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
     }
 }
