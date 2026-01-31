@@ -29,8 +29,12 @@ import com.prog3.security.Repositories.*;
 //todas las rutas en este controlador comienzan con /api/admin
 @RequestMapping("/api/admin")
 //permite solicitudes CORS con credenciales desde localhost y Firebase
-@CrossOrigin(origins = {
-        "https://vercy-motos-app.web.app"
+@CrossOrigin(originPatterns = {
+        "https://vercy-motos-app.web.app",
+        "https://vercy-motos-app-048m.onrender.com",
+        "http://localhost:*",
+        "http://127.0.0.1:*",
+        "http://192.168.*.*:*"
 }, allowCredentials = "true")
 
 public class AdminController {

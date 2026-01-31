@@ -1312,7 +1312,7 @@ public class ProductosController extends BaseController<Producto, String> {
                 aliasColumnas.put("claseproducto", new String[] {"claseproducto",
                         "clase_producto_(nombre)", "clase_producto"});
                 aliasColumnas.put("codigobarras",
-                        new String[] {"codigobarras", "codigo_de_barras"});
+                        new String[] { "codigobarras", "codigo_de_barras", "codigodebarras", "barcode", "ean", "upc" });
                 aliasColumnas.put("localizacion", new String[] {"localizacion"});
                 aliasColumnas.put("proveedornombre",
                         new String[] {"proveedornombre", "nombre_proveedor"});
@@ -1352,6 +1352,25 @@ public class ProductosController extends BaseController<Producto, String> {
                 }
                 System.out.println("✅ Columnas resueltas: " + columnasResueltas.keySet());
 
+                // Análisis de posibles problemas en el mapeo de columnas
+                System.out.println("📋 Análisis de columnas:");
+                System.out.println("  - Código: " + (columnasResueltas.containsKey("codigo")
+                        ? "✅ Detectada en columna " + columnasResueltas.get("codigo")
+                        : "❌ No detectada"));
+                System.out.println("  - Código de Barras: " + (columnasResueltas.containsKey("codigobarras")
+                        ? "✅ Detectada en columna " + columnasResueltas.get("codigobarras")
+                        : "❌ No detectada"));
+
+                // Detectar posible confusión entre columnas
+                if (columnasResueltas.containsKey("codigo") && columnasResueltas.containsKey("codigobarras")) {
+                    Integer colCodigo = columnasResueltas.get("codigo");
+                    Integer colCodigoBarras = columnasResueltas.get("codigobarras");
+                    if (Math.abs(colCodigo - colCodigoBarras) > 10) {
+                        System.out.println("⚠️ Las columnas de código (" + colCodigo + ") y código de barras ("
+                                + colCodigoBarras + ") están muy separadas. Verificar Excel.");
+                    }
+                }
+
                 // Validar columnas obligatorias
                 if (!columnasResueltas.containsKey("nombre")) {
                     return responseService.badRequest(
@@ -1360,6 +1379,14 @@ public class ProductosController extends BaseController<Producto, String> {
                 if (!columnasResueltas.containsKey("precio")) {
                     return responseService.badRequest(
                             "El Excel debe contener la columna 'PRECIO VENTA PRINCIPAL' o 'precio'");
+                }
+
+                // Advertir si no se encuentra la columna de código de barras
+                if (!columnasResueltas.containsKey("codigobarras")) {
+                    System.out.println(
+                            "⚠️ ADVERTENCIA: No se encontró la columna 'CÓDIGO DE BARRAS'. Los códigos de barras se dejarán vacíos.");
+                    System.out.println(
+                            "   Columnas esperadas para código de barras: CÓDIGO DE BARRAS, codigobarras, codigo_de_barras, codigodebarras, barcode, ean, upc");
                 }
 
                 // Procesar cada fila (empezando después de la fila de encabezados)
@@ -1487,8 +1514,19 @@ public class ProductosController extends BaseController<Producto, String> {
                         // Información básica
                         producto.setCodigo(codigo != null ? codigo.trim() : null);
                         producto.setNombre(nombre.trim());
-                        producto.setCodigoBarras(obtenerValorCeldaSeguro(row,
-                                columnasResueltas.get("codigobarras")));
+
+                        // Asignar código de barras con validación
+                        String codigoBarras = obtenerValorCeldaSeguro(row, columnasResueltas.get("codigobarras"));
+                        producto.setCodigoBarras(codigoBarras);
+
+                        // Validar posibles problemas con códigos de barras
+                        validarCodigosBarras(codigo, codigoBarras, nombre);
+
+                        // Debug: Verificar si hay confusión entre código y código de barras
+                        if (codigoBarras != null && codigoBarras.equals(codigo)) {
+                            System.out.println("⚠️ ALERTA: Producto " + nombre + " tiene el mismo valor para código (" +
+                                    codigo + ") y código de barras (" + codigoBarras + "). Verificar Excel.");
+                        }
 
                         // Precios
                         producto.setPrecio(precio);
@@ -1796,6 +1834,36 @@ public class ProductosController extends BaseController<Producto, String> {
             }
         } catch (Exception e) {
             return responseService.internalError("Error al buscar producto: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 🔍 MÉTODO AUXILIAR - Detectar si hay posible confusión entre código y código
+     * de barras
+     * Los códigos de barras suelen ser numéricos y largos (8-14 dígitos)
+     * Los códigos de productos suelen ser alfanuméricos y más cortos
+     */
+    private void validarCodigosBarras(String codigo, String codigoBarras, String nombreProducto) {
+        if (codigoBarras == null || codigoBarras.trim().isEmpty()) {
+            return; // Es normal que algunos productos no tengan código de barras
+        }
+
+        // Detectar si el código de barras parece ser un código de producto
+        if (codigoBarras.length() <= 6 && codigoBarras.matches(".*[A-Za-z].*")) {
+            System.out.println("⚠️ POSIBLE ERROR: Producto '" + nombreProducto
+                    + "' tiene código de barras que parece código de producto: '" + codigoBarras + "'");
+        }
+
+        // Detectar si el código y código de barras son idénticos pero parece incorrecto
+        if (codigo != null && codigo.equals(codigoBarras)) {
+            System.out.println("⚠️ POSIBLE ERROR: Producto '" + nombreProducto
+                    + "' tiene código y código de barras idénticos: '" + codigo + "'");
+        }
+
+        // Detectar si el código de barras es muy corto para ser un EAN/UPC real
+        if (codigoBarras.matches("\\d+") && codigoBarras.length() < 8) {
+            System.out.println("⚠️ ADVERTENCIA: Producto '" + nombreProducto
+                    + "' tiene código de barras muy corto (menor a 8 dígitos): '" + codigoBarras + "'");
         }
     }
 

@@ -27,9 +27,16 @@ public class WebConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
-                        .allowedOriginPatterns("*") // ✅ Permite cualquier origen con credenciales
+                        .allowedOriginPatterns(
+                                        "https://vercy-motos-app.web.app",
+                                        "https://vercy-motos-app-048m.onrender.com",
+                                        "http://localhost:*",
+                                        "http://127.0.0.1:*",
+                                        "http://192.168.*.*:*") // ✅ Orígenes específicos en lugar de "*"
                         .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH")
                         .allowedHeaders("*")
-                        .exposedHeaders("*").allowCredentials(true).maxAge(3600);
+                        .exposedHeaders("*")
+                        .allowCredentials(true)
+                        .maxAge(3600);
     }
 }

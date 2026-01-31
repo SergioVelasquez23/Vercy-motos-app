@@ -31,13 +31,17 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        // ✅ CORREGIDO: Usar allowedOriginPatterns en lugar de allowedOrigins para permitir "*" con
-        // credenciales
-        config.setAllowedOriginPatterns(List.of("*")); // Permite cualquier origen
+        // ✅ SOLUCIONADO: Orígenes específicos para permitir credenciales
+        config.setAllowedOriginPatterns(List.of(
+                "https://vercy-motos-app.web.app",
+                "https://vercy-motos-app-048m.onrender.com",
+                "http://localhost:*",
+                "http://127.0.0.1:*",
+                "http://192.168.*.*:*"));
         config.addAllowedMethod("*");
         config.addAllowedHeader("*");
         config.setExposedHeaders(List.of("*"));
-        config.setAllowCredentials(true); // ✅ Ahora puede ser true con allowedOriginPatterns
+        config.setAllowCredentials(true);
         config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

@@ -12,7 +12,13 @@ import com.prog3.security.Utils.ApiResponse;
 import java.util.HashMap;
 import java.util.Map;
 
-@CrossOrigin(origins = "*")
+@CrossOrigin(originPatterns = {
+        "https://vercy-motos-app.web.app",
+        "https://vercy-motos-app-048m.onrender.com",
+        "http://localhost:*",
+        "http://127.0.0.1:*",
+        "http://192.168.*.*:*"
+}, allowCredentials = "true")
 @RestController
 public class HealthController {
     

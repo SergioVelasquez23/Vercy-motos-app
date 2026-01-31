@@ -20,7 +20,13 @@ import java.util.stream.Collectors;
  */
 @RestController
 @RequestMapping("/api/inventario/traslados")
-@CrossOrigin(origins = "*")
+@CrossOrigin(originPatterns = {
+        "https://vercy-motos-app.web.app",
+        "https://vercy-motos-app-048m.onrender.com",
+        "http://localhost:*",
+        "http://127.0.0.1:*",
+        "http://192.168.*.*:*"
+}, allowCredentials = "true")
 @Tag(name = "Traslados", description = "Gestión de traslados de productos entre bodegas")
 public class TrasladoController {
 

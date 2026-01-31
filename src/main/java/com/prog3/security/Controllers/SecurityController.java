@@ -131,15 +131,13 @@ public class SecurityController {
     }
 
     // Endpoint: /login-no-auth
-    @CrossOrigin(origins = {
-    "http://192.168.20.24:5300",
-    "http://192.168.20.24:8081",
-        "http://localhost:5300",
-        "http://127.0.0.1:5300",
-        "http://localhost:3000",
-        "http://localhost:8081",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:8081"
+    @CrossOrigin(originPatterns = {
+            "https://vercy-motos-app.web.app",
+            "https://vercy-motos-app-048m.onrender.com",
+            "http://192.168.20.24:5300",
+            "http://192.168.20.24:8081",
+            "http://localhost:*",
+            "http://127.0.0.1:*"
     }, allowCredentials = "true")
     @PostMapping("/login-no-auth")
     public HashMap<String, Object> loginNoAuth(@RequestBody User theNewUser, final HttpServletResponse response) throws IOException {

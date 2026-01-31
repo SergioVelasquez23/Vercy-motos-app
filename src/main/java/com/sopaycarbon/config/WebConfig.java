@@ -13,8 +13,12 @@ public class WebConfig {
             @Override
             public void addCorsMappings(CorsRegistry registry) {
                 registry.addMapping("/**")
-                        .allowedOriginPatterns("*") // ✅ Usar allowedOriginPatterns en lugar de
-                                                    // allowedOrigins("*")
+                        .allowedOriginPatterns(
+                                "https://vercy-motos-app.web.app",
+                                "https://vercy-motos-app-048m.onrender.com",
+                                "http://localhost:*",
+                                "http://127.0.0.1:*",
+                                "http://192.168.*.*:*") // ✅ Orígenes específicos para evitar error CORS
                         .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                         .allowedHeaders("*")
                         .allowCredentials(true);
