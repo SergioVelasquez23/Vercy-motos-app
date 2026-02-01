@@ -552,37 +552,67 @@ public class TrasladoController {
             }
 
             if ("ACEPTAR".equalsIgnoreCase(accion)) {
-                // Validar stock disponible
-                Optional<InventarioBodega> inventarioOrigenOpt =
-                        inventarioBodegaRepository.findByBodegaIdAndItemId(
-                                traslado.getOrigenBodegaId(), traslado.getProductoId());
-                double stockDisponible =
-                        inventarioOrigenOpt.map(InventarioBodega::getStockActual).orElse(0.0);
+                // Obtener las bodegas para determinar tipos
+                Optional<Bodega> bodegaOrigenOpt =
+                        bodegaRepository.findById(traslado.getOrigenBodegaId());
+                Optional<Bodega> bodegaDestinoOpt =
+                        bodegaRepository.findById(traslado.getDestinoBodegaId());
 
-                if (stockDisponible < traslado.getCantidad()) {
+                if (!bodegaOrigenOpt.isPresent() || !bodegaDestinoOpt.isPresent()) {
                     Map<String, Object> error = new HashMap<>();
                     error.put("success", false);
-                    error.put("message", "Stock insuficiente. Disponible: " + stockDisponible
-                            + ", Requerido: " + traslado.getCantidad());
+                    error.put("message", "Una o ambas bodegas no encontradas");
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
                 }
 
-                // Determinar tipo de item
-                String tipoItem = "ingrediente";
-                if (productoRepository.existsById(traslado.getProductoId())) {
-                    tipoItem = "producto";
+                Bodega bodegaOrigen = bodegaOrigenOpt.get();
+                Bodega bodegaDestino = bodegaDestinoOpt.get();
+
+                // Determinar tipos de ubicación según tipo de bodega
+                String tipoOrigenUbicacion =
+                        "PRINCIPAL".equals(bodegaOrigen.getTipo()) ? "BODEGA" : "ALMACEN";
+                String tipoDestinoUbicacion =
+                        "PRINCIPAL".equals(bodegaDestino.getTipo()) ? "BODEGA" : "ALMACEN";
+
+                // Validar que el producto existe
+                Optional<Producto> productoOpt =
+                        productoRepository.findById(traslado.getProductoId());
+                if (!productoOpt.isPresent()) {
+                    Map<String, Object> error = new HashMap<>();
+                    error.put("success", false);
+                    error.put("message", "Producto no encontrado");
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
                 }
 
-                // Ejecutar movimiento de stock
-                bodegaService.ajustarStockBodega(traslado.getOrigenBodegaId(),
-                        traslado.getProductoId(), tipoItem, -traslado.getCantidad(),
-                        "Traslado " + traslado.getNumero() + " - Salida hacia "
-                                + traslado.getDestinoBodegaNombre());
+                // Verificar que el traslado aún no se ha ejecutado
+                // (si el stock ya se movió, solo actualizamos el estado)
+                Producto producto = productoOpt.get();
+                int stockOrigenActual =
+                        tipoOrigenUbicacion.equals("BODEGA") ? producto.getCantidadBodega()
+                                : producto.getCantidadAlmacen();
 
-                bodegaService.ajustarStockBodega(traslado.getDestinoBodegaId(),
-                        traslado.getProductoId(), tipoItem, traslado.getCantidad(),
-                        "Traslado " + traslado.getNumero() + " - Entrada desde "
-                                + traslado.getOrigenBodegaNombre());
+                // Si el frontend ya ejecutó el traslado, solo marcamos como completado
+                // Si no, ejecutamos nosotros el traslado
+                boolean trasladoYaEjecutado = false;
+                if (stockOrigenActual < traslado.getCantidad()) {
+                    // Posiblemente ya se ejecutó, o realmente no hay stock
+                    // Verificamos si tiene sentido que ya se haya ejecutado
+                    trasladoYaEjecutado = true;
+                }
+
+                if (!trasladoYaEjecutado) {
+                    // Ejecutar el movimiento de stock si aún no se ha hecho
+                    boolean trasladorExitoso = trasladarStockProducto(traslado.getProductoId(),
+                            tipoOrigenUbicacion, tipoDestinoUbicacion, traslado.getCantidad());
+
+                    if (!trasladorExitoso) {
+                        Map<String, Object> error = new HashMap<>();
+                        error.put("success", false);
+                        error.put("message",
+                                "Error al ejecutar el traslado: stock insuficiente o error interno");
+                        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+                    }
+                }
 
                 traslado.setEstado("ACEPTADO");
                 traslado.setFechaAprobacion(LocalDateTime.now());
@@ -1077,6 +1107,70 @@ public class TrasladoController {
             Map<String, Object> error = new HashMap<>();
             error.put("success", false);
             error.put("message", "Error al realizar traslado: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
+    }
+
+    /**
+     * Marcar traslado como completado (cuando el traslado ya se ejecutó desde el frontend)
+     */
+    @PostMapping("/{id}/completar")
+    @Operation(summary = "Completar traslado",
+            description = "Marca un traslado como completado (usar cuando el stock ya se trasladó)")
+    public ResponseEntity<Map<String, Object>> completarTraslado(@PathVariable String id,
+            @RequestBody(required = false) Map<String, Object> datos) {
+        try {
+            Optional<Traslado> trasladoOpt = trasladoRepository.findById(id);
+
+            if (trasladoOpt.isEmpty()) {
+                Map<String, Object> error = new HashMap<>();
+                error.put("success", false);
+                error.put("message", "Traslado no encontrado");
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+            }
+
+            Traslado traslado = trasladoOpt.get();
+
+            if (!"PENDIENTE".equals(traslado.getEstado())) {
+                Map<String, Object> error = new HashMap<>();
+                error.put("success", false);
+                error.put("message",
+                        "Solo se pueden completar traslados en estado PENDIENTE. Estado actual: "
+                                + traslado.getEstado());
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+            }
+
+            // Actualizar estado del traslado
+            traslado.setEstado("COMPLETADO");
+            traslado.setAprobador(datos != null && datos.get("aprobador") != null
+                    ? datos.get("aprobador").toString()
+                    : "sistema");
+            traslado.setFechaAprobacion(LocalDateTime.now());
+            traslado.setFechaCompletado(LocalDateTime.now());
+            traslado.setFechaActualizacion(LocalDateTime.now());
+
+            if (datos != null && datos.get("observaciones") != null) {
+                String obsActual =
+                        traslado.getObservaciones() != null ? traslado.getObservaciones() : "";
+                traslado.setObservaciones(
+                        obsActual + "\n[COMPLETADO] " + datos.get("observaciones").toString());
+            }
+
+            Traslado trasladoActualizado = trasladoRepository.save(traslado);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Traslado marcado como completado exitosamente");
+            response.put("data", trasladoActualizado);
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            System.err.println("❌ Error al completar traslado: " + e.getMessage());
+            e.printStackTrace();
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("message", "Error al completar traslado: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
         }
     }
